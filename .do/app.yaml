@@ -4,7 +4,7 @@ region: sgp
 static_sites:
   - name: web
     github:
-      repo: YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME
+      repo: sagarkharal1/rajeshshoppingcenter
       branch: master
       deploy_on_push: true
     source_dir: /
@@ -17,7 +17,7 @@ static_sites:
 services:
   - name: api
     github:
-      repo: YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME
+      repo: sagarkharal1/rajeshshoppingcenter
       branch: master
       deploy_on_push: true
     source_dir: /
