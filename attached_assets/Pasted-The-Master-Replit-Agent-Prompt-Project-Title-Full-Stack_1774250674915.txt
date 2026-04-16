@@ -1,0 +1,44 @@
+The Master Replit Agent Prompt
+Project Title: Full-Stack E-Commerce & Service Platform for Rajesh Shopping Center
+
+Business Context: Build a professional, mobile-first e-commerce website for "Rajesh Shopping Center," a trusted business established in 1997 AD located in Musikot-5, Aapchaur, Gulmi, Nepal. The shop is a "one-stop-shop" where customers can "get or order anything," ranging from daily groceries to heavy construction materials and vehicle rentals.
+
+1. Main Features for Customers:
+
+Home Page: Highlight our 25+ years of service since 1997. Include a welcoming "About Us" section mentioning our location in Aapchaur, Gulmi.
+
+Categorized Catalog: Create a clean, searchable grid for:
+
+Groceries: Food, fresh vegetables, and essentials.
+
+Lifestyle: Alcohol, clothing, and shoes.
+
+Hardware: Cement, sand, stones, and rods.
+
+Services: A booking system for Jeep and Tractor services.
+
+Shopping Cart & Ordering: Let customers add/remove items and fill out a checkout form with their Name, Phone, and Address.
+
+Payment Integration: A "How to Pay" section showing Bank Details and a placeholder for a QR code image.
+
+Legal Pages: Include dedicated pages for "Terms & Conditions" and "Delivery Policy" (covering everything from perishables to heavy hardware delivery).
+
+2. Admin Management Features (The Owner Dashboard):
+
+Secure Admin Login: Only I should be able to access the backend.
+
+Inventory Manager: An easy interface to:
+
+Add/Edit/Delete items with photos, descriptions, and prices.
+
+Organize items by category.
+
+Contact & Settings Manager: A place where I can update the shop’s phone number, email, and bank payment details anytime without touching the code.
+
+3. Design & Technical Requirements:
+
+User Interface: Use a modern, easy-to-navigate design. Use a professional color scheme (e.g., Deep Blue and Gold or Green) that reflects trust and growth.
+
+Responsiveness: It must be 100% mobile-friendly for customers in Nepal using smartphones.
+
+Tech Stack: Use Python (Flask/FastAPI) or Node.js with a database (SQLite or PostgreSQL) to store products and orders. Use a simple file upload system for product images.

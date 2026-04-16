@@ -1,0 +1,65 @@
+name: rajesh-shopping-center
+region: sgp
+
+static_sites:
+  - name: web
+    github:
+      repo: YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME
+      branch: master
+      deploy_on_push: true
+    source_dir: /
+    build_command: pnpm install --frozen-lockfile && pnpm --filter @workspace/web run build
+    output_dir: artifacts/web/dist/public
+    environment_slug: node-js
+    routes:
+      - path: /
+
+services:
+  - name: api
+    github:
+      repo: YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME
+      branch: master
+      deploy_on_push: true
+    source_dir: /
+    build_command: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    run_command: pnpm --filter @workspace/api-server run start
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    http_port: 8080
+    health_check:
+      http_path: /api/healthz
+      initial_delay_seconds: 10
+      period_seconds: 15
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 5
+    envs:
+      - key: PORT
+        value: "8080"
+      - key: BASE_PATH
+        value: /
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: YOUR_DATABASE_URL
+      - key: ADMIN_JWT_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: YOUR_ADMIN_JWT_SECRET
+
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+        preserve_path_prefix: true
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+
