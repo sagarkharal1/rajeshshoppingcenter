@@ -1167,7 +1167,7 @@ function OwnerApp() {
           </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             {text.authCodeLabel}
-            <input className={inputClasses()} value={login.totp} onChange={(e) => setLogin((v) => ({ ...v, totp: e.target.value }))} placeholder={text.authCodePlaceholder} />
+            <input className={inputClasses()} value={login.otp} onChange={(e) => setLogin((v) => ({ ...v, otp: e.target.value }))} placeholder={text.authCodePlaceholder} />
           </label>
           <button className="rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 px-4 py-3.5 font-semibold text-slate-950 transition hover:from-amber-300 hover:to-amber-400">
             {text.openDashboard}

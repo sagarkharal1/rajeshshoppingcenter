@@ -152,11 +152,11 @@ export default function CheckoutModern() {
       setPlacedItems(items);
       setPlacedTotal(totalPrice);
       setOrderId(order.id);
-      setCustomerCode(order.customer?.customerCode || "");
+      setCustomerCode((order as any).customerCode || (order as any).customer?.customerCode || "");
       localStorage.setItem(
         CUSTOMER_PORTAL_STORAGE_KEY,
         JSON.stringify({
-          customerCode: order.customer?.customerCode || "",
+          customerCode: (order as any).customerCode || (order as any).customer?.customerCode || "",
           phone: cleanedPhone,
         }),
       );

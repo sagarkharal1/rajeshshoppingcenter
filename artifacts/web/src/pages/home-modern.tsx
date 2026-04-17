@@ -4,7 +4,7 @@ import { getImageUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language";
 import { ProductCard } from "@/components/product-card";
 import { CategoryIcon } from "@/components/category-icon";
-import { ArrowRight, Megaphone, MessageCircle, Phone, ShoppingBag, Truck } from "lucide-react";
+import { ArrowRight, Megaphone, MessageCircle, Phone, ShoppingBag, Star, Truck } from "lucide-react";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 

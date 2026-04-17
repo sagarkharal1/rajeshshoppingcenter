@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle, BadgeCheck, CreditCard, MapPin, ReceiptText, RefreshCcw, ShieldCheck, Truck } from "lucide-react";
 import { useGetSettings } from "@workspace/api-client-react";
 import { useLanguage } from "@/lib/language";
@@ -14,7 +15,7 @@ export default function TermsPage() {
   const shopName = settings?.shopName || "Rajesh Shopping Center";
   const shopAddress = settings?.address || "Musikot-5, Aapchaur, Gulmi, Nepal";
   const primaryPhone = settings?.phone || "+9779814401716";
-  const proprietorName = String(settings?.proprietorName || "Sandesh Kharal");
+  const proprietorName = String((settings as any)?.proprietorName || "Sandesh Kharal");
   const secondaryOwner = "Yubraj Kharel";
   const secondaryPhone = "9819499002";
   const effectiveDate = "April 16, 2026";
@@ -24,7 +25,7 @@ export default function TermsPage() {
       ? `यी सेवा सर्तहरू ${shopName} बाट वस्तु, डेलिभरी, हार्डवेयर, भुक्तानी सहयोग, र सम्बन्धित सेवाहरू प्रयोग गर्ने ग्राहकहरूमा लागू हुन्छन्। सेवा प्रयोग गर्दा तपाईं यी सर्तहरू मान्न सहमत हुनुहुन्छ।`
       : `These Terms of Service apply to customers who buy goods or use delivery, hardware, transport, payment-support, or related services from ${shopName}. By using our services, you agree to these terms.`;
 
-  const sections: Array<{ icon: JSX.Element; section: Section }> =
+  const sections: Array<{ icon: ReactNode; section: Section }> =
     lang === "ne"
       ? [
           {
