@@ -173,10 +173,10 @@ router.post("/admin/login/request-otp", async (req, res) => {
 
   res.json({
     message: hasWhatsAppDelivery
-      ? "A login code was sent to the verified owner WhatsApp number."
-      : "A login code is ready. Use the development fallback code shown here because WhatsApp delivery is not configured yet.",
+      ? "A login code was sent to the verified owner WhatsApp number. The fallback code is also shown here in case delivery is delayed."
+      : "A login code is ready. Use the fallback code shown here because WhatsApp delivery is not configured yet.",
     recoveryChannel: hasWhatsAppDelivery ? "whatsapp" : "fallback",
-    devRecoveryCode: hasWhatsAppDelivery ? undefined : otp,
+    devRecoveryCode: otp,
   });
 });
 
@@ -328,10 +328,10 @@ router.post("/admin/forgot-password", async (req, res) => {
 
   res.json({
     message: hasWhatsAppDelivery
-      ? "A password reset code was sent to the owner WhatsApp number."
-      : "A password reset code is ready. Use the development fallback code shown here because WhatsApp delivery is not configured yet.",
+      ? "A password reset code was sent to the owner WhatsApp number. The fallback code is also shown here in case delivery is delayed."
+      : "A password reset code is ready. Use the fallback code shown here because WhatsApp delivery is not configured yet.",
     recoveryChannel: hasWhatsAppDelivery ? "whatsapp" : "fallback",
-    devRecoveryCode: hasWhatsAppDelivery ? undefined : otp,
+    devRecoveryCode: otp,
   });
 });
 
