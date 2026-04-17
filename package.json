@@ -4,7 +4,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.18.3",
   "engines": {
-    "node": ">=22 <25"
+    "node": "22.x"
   },
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Warning: pnpm is recommended for this project\" >&2 ;; esac'",
