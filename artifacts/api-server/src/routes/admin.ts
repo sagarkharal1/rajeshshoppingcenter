@@ -20,6 +20,8 @@ const router: IRouter = Router();
 
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "rajesh-shopping-secret-2024";
 const ALLOWED_OWNER_IDENTIFIERS = new Set([
+  "owner",
+  "sandesh",
   "+9779814401716",
   "9814401716",
   "sandesh.kharal23@gmail.com",
@@ -181,7 +183,7 @@ router.post("/admin/login/request-otp", async (req, res) => {
 });
 
 router.post("/admin/login", async (req, res) => {
-  const { identifier, password, otp } = req.body;
+  const { identifier, password } = req.body;
 
   if (!identifier || !password) {
     return res.status(400).json({ error: "Username/email/phone and password are required" });
@@ -203,20 +205,6 @@ router.post("/admin/login", async (req, res) => {
 
   if (!passwordOk) {
     return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  if (!settings?.adminOtp || !settings?.adminOtpExpiry) {
-    return res.status(428).json({ error: "Owner OTP required. Please request a login code first.", otpRequired: true });
-  }
-  if (new Date(settings.adminOtpExpiry).getTime() < Date.now()) {
-    await upsertSettings({ adminOtp: null, adminOtpExpiry: null });
-    return res.status(400).json({ error: "Login code expired. Please request a new one." });
-  }
-  if (!otp) {
-    return res.status(428).json({ error: "Owner OTP required. Please enter the login code.", otpRequired: true });
-  }
-  if (settings.adminOtp !== String(otp).trim()) {
-    return res.status(401).json({ error: "Login code is incorrect" });
   }
 
   await upsertSettings({ adminOtp: null, adminOtpExpiry: null });

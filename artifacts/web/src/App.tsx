@@ -173,9 +173,9 @@ function OwnerApp() {
   const [token, setToken] = useState("");
   const [ownerEntryRequested, setOwnerEntryRequested] = useState(false);
   const [tab, setTab] = useState("overview");
-  const [login, setLogin] = useState({ identifier: "rajeshshoppingcenter@gmail.com", password: "admin123", otp: "" });
+  const [login, setLogin] = useState({ identifier: "owner", password: "admin123", otp: "" });
   const [forgotMode, setForgotMode] = useState(false);
-  const [forgotForm, setForgotForm] = useState({ identifier: "rajeshshoppingcenter@gmail.com", otp: "", newPassword: "", confirmPassword: "" });
+  const [forgotForm, setForgotForm] = useState({ identifier: "owner", otp: "", newPassword: "", confirmPassword: "" });
   const [recoveryInfo, setRecoveryInfo] = useState<any>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [error, setError] = useState("");

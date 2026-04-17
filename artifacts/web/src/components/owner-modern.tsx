@@ -168,24 +168,9 @@ export function OwnerLoginModern({
                   {text.passwordLabel}
                   <input type="password" className={shellInput()} value={login.password} onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))} />
                 </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {text.authCodeLabel}
-                  <input className={shellInput()} value={login.otp} onChange={(e) => setLogin((v: any) => ({ ...v, otp: e.target.value }))} placeholder={text.authCodePlaceholder} />
-                </label>
               </>
             )}
           </div>
-
-          {!forgotMode ? (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-700">
-              <p className="font-semibold">{lang === "ne" ? "लगइन चरण" : "Login steps"}</p>
-              <p className="mt-2">{lang === "ne" ? "१. युजरनेम र पासवर्ड लेख्नुहोस्" : "1. Enter username and password"}</p>
-              <p>{lang === "ne" ? "२. OTP पठाउनुहोस्" : "2. Send OTP"}</p>
-              <p>{lang === "ne" ? "३. आएको कोड लेखेर लगइन गर्नुहोस्" : "3. Enter the code and log in"}</p>
-              {loginOtpInfo?.message ? <p className="mt-3 font-medium">{loginOtpInfo.message}</p> : null}
-              {loginOtpInfo?.devRecoveryCode ? <p className="mt-2 font-bold">{lang === "ne" ? "डेभ कोड" : "Dev code"}: {loginOtpInfo.devRecoveryCode}</p> : null}
-            </div>
-          ) : null}
 
           {forgotMode ? (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
@@ -220,15 +205,8 @@ export function OwnerLoginModern({
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-medium text-slate-700"
-                  onClick={requestLoginOtp}
-                >
-                  {lang === "ne" ? "OTP पठाउनुहोस्" : "Send OTP"}
-                </button>
                 <button className="w-full rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground shadow-lg">
-                  {lang === "ne" ? "OTP सहित लगइन गर्नुहोस्" : "Log in with OTP"}
+                  {lang === "ne" ? "लगइन गर्नुहोस्" : "Log in"}
                 </button>
               </>
             )}
