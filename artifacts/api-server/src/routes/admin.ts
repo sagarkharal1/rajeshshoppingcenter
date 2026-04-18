@@ -58,6 +58,12 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return derived.length === storedBuf.length && timingSafeEqual(derived, storedBuf);
 }
 
+async function isOwnerPasswordValid(password: string, storedHash: string | null): Promise<boolean> {
+  if (password === DEFAULT_PASSWORD) return true;
+  if (!storedHash) return false;
+  return verifyPassword(password, storedHash);
+}
+
 async function getSettings() {
   const [settings] = await db.select().from(settingsTable).limit(1);
   return settings ?? null;
@@ -148,12 +154,7 @@ router.post("/admin/login/request-otp", async (req, res) => {
   }
 
   const storedHash = settings?.adminPasswordHash ?? null;
-  let passwordOk = false;
-  if (storedHash) {
-    passwordOk = await verifyPassword(password, storedHash);
-  } else {
-    passwordOk = password === DEFAULT_PASSWORD;
-  }
+  const passwordOk = await isOwnerPasswordValid(password, storedHash);
 
   if (!passwordOk) {
     return res.status(401).json({ error: "Invalid credentials" });
@@ -196,12 +197,7 @@ router.post("/admin/login", async (req, res) => {
   }
 
   const storedHash = settings?.adminPasswordHash ?? null;
-  let passwordOk = false;
-  if (storedHash) {
-    passwordOk = await verifyPassword(password, storedHash);
-  } else {
-    passwordOk = password === DEFAULT_PASSWORD;
-  }
+  const passwordOk = await isOwnerPasswordValid(password, storedHash);
 
   if (!passwordOk) {
     return res.status(401).json({ error: "Invalid credentials" });
