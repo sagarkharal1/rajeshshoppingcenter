@@ -1,5 +1,29 @@
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim() || "";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID?.trim() || "";
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return "";
+}
+
+function getTelegramBotToken(): string {
+  return firstNonEmpty(
+    process.env.TELEGRAM_BOT_TOKEN,
+    process.env.TELEGRAM_BOT_TOI,
+    process.env.TELEGRAM_BOT,
+    process.env.TELEGRAM_TOKEN,
+  );
+}
+
+function getTelegramChatId(): string {
+  return firstNonEmpty(
+    process.env.TELEGRAM_CHAT_ID,
+    process.env.TELEGRAM_CHAT_II,
+    process.env.TELEGRAM_CHAT,
+    process.env.TELEGRAM_OWNER_CHAT_ID,
+  );
+}
 
 function escapeTelegramHtml(value: string): string {
   return value
@@ -9,14 +33,20 @@ function escapeTelegramHtml(value: string): string {
 }
 
 export async function sendTelegramMessage(message: string): Promise<void> {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  const telegramBotToken = getTelegramBotToken();
+  const telegramChatId = getTelegramChatId();
+
+  if (!telegramBotToken || !telegramChatId) {
+    console.warn("[Telegram] Missing bot token or chat ID env var.");
+    return;
+  }
 
   try {
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
+        chat_id: telegramChatId,
         text: message,
         parse_mode: "HTML",
         disable_web_page_preview: true,
@@ -24,7 +54,8 @@ export async function sendTelegramMessage(message: string): Promise<void> {
     });
 
     if (!response.ok) {
-      console.warn("[Telegram] sendMessage responded with status", response.status);
+      const errorText = await response.text().catch(() => "");
+      console.warn("[Telegram] sendMessage responded with status", response.status, errorText);
     }
   } catch (error) {
     console.warn("[Telegram] Failed to send notification:", error);
@@ -72,6 +103,36 @@ export function formatTelegramOrderMessage(order: {
   if (order.notes) {
     lines.push("");
     lines.push(`<b>Note</b>: ${escapeTelegramHtml(order.notes)}`);
+  }
+
+  return lines.join("\n");
+}
+
+export function formatTelegramBookingMessage(booking: {
+  id: number;
+  serviceType: string;
+  customerName: string;
+  customerPhone: string;
+  pickupLocation: string;
+  destination: string;
+  bookingDate: string;
+  notes?: string | null;
+}): string {
+  const serviceLabel = booking.serviceType === "jeep" ? "Bolero / Jeep" : "Tractor";
+
+  const lines = [
+    "<b>New Transport Booking</b>",
+    `Booking ID: #${booking.id}`,
+    `Service: ${escapeTelegramHtml(serviceLabel)}`,
+    `Customer: ${escapeTelegramHtml(booking.customerName)}`,
+    `Phone: ${escapeTelegramHtml(booking.customerPhone)}`,
+    `Pickup: ${escapeTelegramHtml(booking.pickupLocation)}`,
+    `Destination: ${escapeTelegramHtml(booking.destination)}`,
+    `Date: ${escapeTelegramHtml(booking.bookingDate)}`,
+  ];
+
+  if (booking.notes) {
+    lines.push(`Notes: ${escapeTelegramHtml(booking.notes)}`);
   }
 
   return lines.join("\n");
