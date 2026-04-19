@@ -14,6 +14,7 @@ import { promisify } from "util";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import { sendWhatsApp, formatStatusMessage, invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
 import { z } from "zod";
+import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -65,6 +66,7 @@ async function isOwnerPasswordValid(password: string, storedHash: string | null)
 }
 
 async function getSettings() {
+  await ensureBootstrapData();
   const [settings] = await db.select().from(settingsTable).limit(1);
   return settings ?? null;
 }
@@ -517,6 +519,7 @@ router.post("/admin/products", authMiddleware, async (req, res) => {
       inStock,
       featured,
     } = req.body;
+    const resolvedCategoryId = Number(categoryId) > 0 ? Number(categoryId) : await getOrCreateDefaultCategoryId();
     const [product] = await db
       .insert(productsTable)
       .values({
@@ -531,7 +534,7 @@ router.post("/admin/products", authMiddleware, async (req, res) => {
         reorderLevel: reorderLevel ?? 0,
         unit,
         imageUrl,
-        categoryId,
+        categoryId: resolvedCategoryId,
         inStock: inStock ?? true,
         featured: featured ?? false,
       })
@@ -567,6 +570,7 @@ router.put("/admin/products/:id", authMiddleware, async (req, res) => {
       inStock,
       featured,
     } = req.body;
+    const resolvedCategoryId = Number(categoryId) > 0 ? Number(categoryId) : await getOrCreateDefaultCategoryId();
     const [product] = await db
       .update(productsTable)
       .set({
@@ -581,7 +585,7 @@ router.put("/admin/products/:id", authMiddleware, async (req, res) => {
         reorderLevel: reorderLevel ?? 0,
         unit,
         imageUrl,
-        categoryId,
+        categoryId: resolvedCategoryId,
         inStock,
         featured,
       })

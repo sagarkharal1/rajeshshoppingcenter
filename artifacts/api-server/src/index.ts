@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensureBootstrapData } from "./lib/bootstrap";
 
 const rawPort = process.env["PORT"];
 
@@ -21,11 +22,18 @@ if (!process.env.ADMIN_JWT_SECRET) {
   );
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+void ensureBootstrapData()
+  .then(() => {
+    app.listen(port, (err) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        process.exit(1);
+      }
 
-  logger.info({ port }, "Server listening");
-});
+      logger.info({ port }, "Server listening");
+    });
+  })
+  .catch((err) => {
+    logger.error({ err }, "Failed to bootstrap default database data");
+    process.exit(1);
+  });
