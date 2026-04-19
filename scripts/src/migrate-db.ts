@@ -70,6 +70,7 @@ async function truncateTargetTables(client: Client) {
 }
 
 async function copyTable(source: Client, target: Client, table: TableName) {
+  console.log(`Starting ${table}...`);
   const columns = await getTableColumns(source, table);
   if (!columns.length) {
     throw new Error(`No columns found for table ${table}`);
@@ -79,7 +80,7 @@ async function copyTable(source: Client, target: Client, table: TableName) {
   const sourceRows = await source.query(`select * from ${quoteIdent(table)}${orderBy}`);
 
   if (!sourceRows.rows.length) {
-    console.log(`${table}: 0 rows`);
+    console.log(`Finished ${table}: 0 rows`);
     return;
   }
 
@@ -106,7 +107,7 @@ async function copyTable(source: Client, target: Client, table: TableName) {
     );
   }
 
-  console.log(`${table}: ${sourceRows.rows.length} rows`);
+  console.log(`Finished ${table}: ${sourceRows.rows.length} rows`);
 }
 
 async function main() {
@@ -122,8 +123,11 @@ async function main() {
   await target.connect();
 
   try {
+    console.log("Connected to source and target databases.");
     await target.query("BEGIN");
+    console.log("Clearing target tables...");
     await truncateTargetTables(target);
+    console.log("Target tables cleared.");
 
     for (const table of TABLES_IN_COPY_ORDER) {
       await copyTable(source, target, table);
