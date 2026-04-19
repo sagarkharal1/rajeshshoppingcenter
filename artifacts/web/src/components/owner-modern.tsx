@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, CreditCard, ExternalLink, Gift, Home, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, Save, Settings2, ShieldCheck, Sparkles, Store, Upload, Users } from "lucide-react";
+import { Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
 import { DeviceCapabilityTester } from "@/components/device-capability-tester";
 import { scanBillImage } from "@/lib/bill-ocr";
 
@@ -55,6 +55,31 @@ function findCustomerIdByPhone(customers: any[], phone?: string) {
 
 function shellInput() {
   return "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200";
+}
+
+function getOwnerOrderStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "delivered") {
+    return { label: lang === "ne" ? "à¤¸à¤«à¤² à¤¡à¥‡à¤²à¤¿à¤­à¤°" : "Delivered", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  if (normalized === "cancelled") {
+    return { label: lang === "ne" ? "à¤°à¤¦à¥à¤¦" : "Rejected / Cancelled", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+  }
+  if (normalized === "dispatched") {
+    return { label: lang === "ne" ? "à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹" : "Dispatched", className: "border-sky-200 bg-sky-50 text-sky-700", icon: Truck };
+  }
+  if (normalized === "preparing") {
+    return { label: lang === "ne" ? "à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤­à¤ à¤¤à¤¯à¤¾à¤°à¥€" : "Confirmed / Preparing", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+  }
+  return { label: lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤…à¤°à¥à¤¡à¤°" : "New order", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+}
+
+function getOwnerPaymentStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid") {
+    return { label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿" : "Confirmed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  return { label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤¬à¤¾à¤à¤•à¥€" : "Pending", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
 }
 
 export function OwnerLoginModern({
@@ -249,7 +274,7 @@ export function OwnerWorkspaceModern(props: any) {
     deleteCustomer, startEditCustomer, productForm, setProductForm, createProduct,
     editingProductId, setEditingProductId, startEditProduct, deleteProduct, settingsForm,
     setSettingsForm, saveMediaSettings, settingsBusy, passwordForm, setPasswordForm, passwordBusy, changePassword, readFileAsDataUrl,
-    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus,
+    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, externalFeedback,
   } = props;
 
   const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || customers[0];
@@ -397,15 +422,18 @@ export function OwnerWorkspaceModern(props: any) {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">
-        {actionFeedback ? (
+        {(externalFeedback || actionFeedback) ? (
           <div
             className={`rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm ${
-              actionFeedback.type === "success"
+              (externalFeedback || actionFeedback).type === "success"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                 : "border-rose-200 bg-rose-50 text-rose-700"
             }`}
           >
-            {actionFeedback.message}
+            <div className="flex items-center gap-2">
+              {(externalFeedback || actionFeedback).type === "success" ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
+              <span>{(externalFeedback || actionFeedback).message}</span>
+            </div>
           </div>
         ) : null}
 
@@ -865,8 +893,24 @@ export function OwnerWorkspaceModern(props: any) {
                       </div>
                       <div className="flex flex-wrap gap-2 text-sm">
                         <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">{money(num(order.totalAmount))}</span>
-                        <span className={`rounded-full px-3 py-1.5 ${order.status === "order-received" ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700"}`}>{order.status}</span>
-                        <span className={`rounded-full px-3 py-1.5 ${order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>{order.paymentStatus}</span>
+                        {(() => {
+                          const statusMeta = getOwnerOrderStatusMeta(order.status, lang === "ne" ? "ne" : "en");
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${statusMeta.className}`}>
+                              <statusMeta.icon className="h-4 w-4" />
+                              {statusMeta.label}
+                            </span>
+                          );
+                        })()}
+                        {(() => {
+                          const paymentMeta = getOwnerPaymentStatusMeta(order.paymentStatus, lang === "ne" ? "ne" : "en");
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${paymentMeta.className}`}>
+                              <paymentMeta.icon className="h-4 w-4" />
+                              {paymentMeta.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="mt-4 grid gap-2">

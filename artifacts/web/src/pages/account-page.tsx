@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { CreditCard, FileDown, History, Search, ShieldCheck, UserRound } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, FileDown, History, Home, Search, ShieldCheck, Truck, UserRound, XCircle } from "lucide-react";
 import { useLanguage } from "@/lib/language";
-import { formatNPR } from "@/lib/utils";
+import { formatNPR, getImageUrl } from "@/lib/utils";
 
 type CustomerProfileResponse = {
   customer: {
@@ -93,9 +93,62 @@ function printVoucher(title: string, lines: string[]) {
   popup.print();
 }
 
+function getOrderStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "delivered") {
+    return {
+      label: lang === "ne" ? "à¤¸à¤«à¤² à¤¡à¥‡à¤²à¤¿à¤­à¤°" : "Delivered",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      icon: CheckCircle2,
+    };
+  }
+  if (normalized === "cancelled" || normalized === "rejected") {
+    return {
+      label: lang === "ne" ? "à¤°à¤¦à¥à¤¦ / à¤…à¤¸à¥à¤µà¥€à¤•à¥ƒà¤¤" : "Rejected / Cancelled",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+      icon: XCircle,
+    };
+  }
+  if (normalized === "dispatched") {
+    return {
+      label: lang === "ne" ? "à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹" : "On the way",
+      className: "border-sky-200 bg-sky-50 text-sky-700",
+      icon: Truck,
+    };
+  }
+  return {
+    label: lang === "ne" ? "à¤ªà¥à¤·à¥à¤Ÿà¤¿ / à¤¤à¤¯à¤¾à¤°à¥€" : "Confirmed / Preparing",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+    icon: Clock3,
+  };
+}
+
+function getPaymentStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid" || normalized === "confirmed") {
+    return {
+      label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿" : "Confirmed",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      icon: CheckCircle2,
+    };
+  }
+  if (normalized === "rejected" || normalized === "failed") {
+    return {
+      label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤…à¤¸à¥à¤µà¥€à¤•à¥ƒà¤¤" : "Rejected",
+      className: "border-rose-200 bg-rose-50 text-rose-700",
+      icon: XCircle,
+    };
+  }
+  return {
+    label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤¬à¤¾à¤à¤•à¥€" : "Pending",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+    icon: Clock3,
+  };
+}
+
 export default function AccountPage() {
   const { lang } = useLanguage();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const query = new URLSearchParams(location.split("?")[1] || "");
   const [customerCode, setCustomerCode] = useState("");
   const [phone, setPhone] = useState("");
@@ -183,6 +236,16 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-sm"
+        >
+          <Home className="h-4 w-4" />
+          {lang === "ne" ? "à¤¹à¥‹à¤®à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to home"}
+        </button>
+      </div>
       <div className="rounded-[2rem] bg-primary px-6 py-10 text-primary-foreground">
         <p className="text-sm font-bold uppercase tracking-[0.28em] text-accent">{text.title}</p>
         <h1 className="mt-3 font-serif text-4xl font-bold">{text.title}</h1>
@@ -226,7 +289,17 @@ export default function AccountPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                <UserRound className="h-5 w-5 text-primary" />
+                {profile.customer.photoPath ? (
+                  <img
+                    src={getImageUrl(profile.customer.photoPath) || profile.customer.photoPath}
+                    alt={profile.customer.name}
+                    className="h-12 w-12 rounded-full border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <UserRound className="h-5 w-5 text-primary" />
+                  </div>
+                )}
                 <p className="font-semibold text-slate-900">{profile.customer.name}</p>
               </div>
               <p className="mt-3 text-sm text-slate-500">{profile.customer.customerCode}</p>
@@ -260,10 +333,24 @@ export default function AccountPage() {
                       <p className="text-sm text-slate-500">{formatWhen(order.createdAt)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm">
-                      <span className="rounded-full bg-slate-200 px-3 py-1.5 text-slate-700">{order.status}</span>
-                      <span className={`rounded-full px-3 py-1.5 ${order.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
-                        {order.paymentStatus}
-                      </span>
+                      {(() => {
+                        const statusMeta = getOrderStatusMeta(order.status, lang === "ne" ? "ne" : "en");
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${statusMeta.className}`}>
+                            <statusMeta.icon className="h-4 w-4" />
+                            {statusMeta.label}
+                          </span>
+                        );
+                      })()}
+                      {(() => {
+                        const paymentMeta = getPaymentStatusMeta(order.paymentStatus, lang === "ne" ? "ne" : "en");
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${paymentMeta.className}`}>
+                            <paymentMeta.icon className="h-4 w-4" />
+                            {paymentMeta.label}
+                          </span>
+                        );
+                      })()}
                       <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">{formatNPR(order.totalAmount)}</span>
                     </div>
                   </div>
@@ -315,9 +402,15 @@ export default function AccountPage() {
                         <p className="font-semibold text-slate-950">{invoice.invoiceNumber}</p>
                         <p className="text-sm text-slate-500">{formatWhen(invoice.createdAt)}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1.5 text-sm ${invoice.paymentStatus === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
-                        {invoice.paymentStatus}
-                      </span>
+                      {(() => {
+                        const paymentMeta = getPaymentStatusMeta(invoice.paymentStatus, lang === "ne" ? "ne" : "en");
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${paymentMeta.className}`}>
+                            <paymentMeta.icon className="h-4 w-4" />
+                            {paymentMeta.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-2xl bg-white px-4 py-3">Total: <strong>{formatNPR(invoice.totalAmount)}</strong></div>

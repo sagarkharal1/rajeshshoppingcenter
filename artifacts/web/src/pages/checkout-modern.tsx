@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { Building2, CheckCircle2, ChevronRight, MessageCircle, Phone, Printer, Search, Store } from "lucide-react";
+import { ArrowLeft, Building2, CheckCircle2, ChevronRight, Home, MessageCircle, Phone, Printer, Search, Store } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
@@ -350,6 +350,24 @@ export default function CheckoutModern() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-sm"
+        >
+          <Home className="w-4 h-4" />
+          {lang === "ne" ? "à¤¹à¥‹à¤®à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to home"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setLocation("/cart")}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t.checkout.cart}
+        </button>
+      </div>
       <div className="flex items-center text-sm text-muted-foreground mb-10 font-bold">
         <span className="cursor-pointer hover:text-primary" onClick={() => setLocation("/cart")}>{t.checkout.cart}</span>
         <ChevronRight className="w-4 h-4 mx-2" />

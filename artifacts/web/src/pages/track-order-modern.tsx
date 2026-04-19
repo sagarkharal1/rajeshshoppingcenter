@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, PackageCheck, PhoneCall, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Clock3, Home, PackageCheck, PhoneCall, Search, Truck, XCircle } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { formatNPR } from "@/lib/utils";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
@@ -67,12 +67,34 @@ function humanizeOrderStatus(status: TrackOrderResponse["status"], lang: "en" | 
   return map[status]?.[lang] ?? status;
 }
 
+function getOrderStatusMeta(status: TrackOrderResponse["status"], lang: "en" | "ne") {
+  const label = humanizeOrderStatus(status, lang);
+  if (status === "delivered") {
+    return { label, className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  if (status === "cancelled") {
+    return { label, className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+  }
+  if (status === "dispatched") {
+    return { label, className: "border-sky-200 bg-sky-50 text-sky-700", icon: Truck };
+  }
+  return { label, className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+}
+
 function humanizePaymentStatus(status: TrackOrderResponse["paymentStatus"], lang: "en" | "ne") {
   const map = {
     unpaid: { en: "Payment pending", ne: "भुक्तानी बाँकी" },
     paid: { en: "Payment completed", ne: "भुक्तानी पूरा भयो" },
   } as const;
   return map[status]?.[lang] ?? status;
+}
+
+function getPaymentStatusMeta(status: TrackOrderResponse["paymentStatus"], lang: "en" | "ne") {
+  const label = humanizePaymentStatus(status, lang);
+  if (status === "paid") {
+    return { label, className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  return { label, className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
 }
 
 export default function TrackOrderModern() {
@@ -86,6 +108,8 @@ export default function TrackOrderModern() {
   const [result, setResult] = useState<TrackOrderResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const orderStatusMeta = result ? getOrderStatusMeta(result.status, currentLang) : null;
+  const paymentStatusMeta = result ? getPaymentStatusMeta(result.paymentStatus, currentLang) : null;
 
   const handleTrack = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -115,6 +139,24 @@ export default function TrackOrderModern() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-sm"
+        >
+          <Home className="h-4 w-4" />
+          {currentLang === "ne" ? "à¤¹à¥‹à¤®à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to home"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setLocation("/checkout")}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {labels.back}
+        </button>
+      </div>
       <div className="flex items-center text-sm text-muted-foreground mb-10 font-bold">
         <span className="cursor-pointer hover:text-primary" onClick={() => setLocation("/checkout")}>{labels.back}</span>
         <ChevronRight className="w-4 h-4 mx-2" />
@@ -151,11 +193,21 @@ export default function TrackOrderModern() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl bg-muted/40 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{labels.orderStatus}</p>
-                <p className="mt-2 font-bold text-foreground">{humanizeOrderStatus(result.status, currentLang)}</p>
+                {orderStatusMeta ? (
+                  <div className={`mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${orderStatusMeta.className}`}>
+                    <orderStatusMeta.icon className="h-4 w-4" />
+                    {orderStatusMeta.label}
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-2xl bg-muted/40 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{labels.paymentStatus}</p>
-                <p className="mt-2 font-bold text-foreground">{humanizePaymentStatus(result.paymentStatus, currentLang)}</p>
+                {paymentStatusMeta ? (
+                  <div className={`mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${paymentStatusMeta.className}`}>
+                    <paymentStatusMeta.icon className="h-4 w-4" />
+                    {paymentStatusMeta.label}
+                  </div>
+                ) : null}
               </div>
               <div className="rounded-2xl bg-muted/40 p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{labels.total}</p>

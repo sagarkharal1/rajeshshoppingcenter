@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { useCreateBooking } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
-import { Truck, Tractor, MapPin, Calendar, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Calendar, CheckCircle2, Home, MapPin, Tractor, Truck, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function BookService() {
   const { t } = useLanguage();
-  const { mutateAsync: createBooking, isPending } = useCreateBooking();
+  const [, setLocation] = useLocation();
 
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [formData, setFormData] = useState({
     serviceType: "jeep" as "jeep" | "tractor",
     customerName: "",
@@ -22,15 +24,25 @@ export default function BookService() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setFeedback(null);
       const dateObj = new Date(formData.bookingDate);
       if (isNaN(dateObj.getTime())) {
-        alert(t.book.invalidDate);
+        setFeedback({ type: "error", message: t.book.invalidDate });
         return;
       }
-      await createBooking({ data: { ...formData, bookingDate: dateObj.toISOString() } });
+      setIsPending(true);
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, bookingDate: dateObj.toISOString() }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || t.book.failedMsg);
       setIsSuccess(true);
-    } catch {
-      alert(t.book.failedMsg);
+    } catch (error) {
+      setFeedback({ type: "error", message: error instanceof Error ? error.message : t.book.failedMsg });
+    } finally {
+      setIsPending(false);
     }
   };
 
@@ -47,7 +59,19 @@ export default function BookService() {
         <h1 className="text-4xl font-serif font-bold text-foreground mb-4">{t.book.successTitle}</h1>
         <p className="text-xl text-muted-foreground mb-8">{t.book.successDesc}</p>
         <button
-          onClick={() => { setIsSuccess(false); setFormData({...formData, customerName: "", notes: ""}); }}
+          onClick={() => {
+            setIsSuccess(false);
+            setFeedback(null);
+            setFormData({
+              serviceType: formData.serviceType,
+              customerName: "",
+              customerPhone: "",
+              pickupLocation: "",
+              destination: "",
+              bookingDate: "",
+              notes: "",
+            });
+          }}
           className="px-8 py-4 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
         >
           {t.book.bookAnother}
@@ -58,6 +82,17 @@ export default function BookService() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="mb-6 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => setLocation("/")}
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <Home className="h-4 w-4" />
+          Home
+        </button>
+      </div>
       <div className="text-center mb-12">
         <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground mb-4">{t.book.title}</h1>
         <p className="text-lg text-muted-foreground">{t.book.subtitle}</p>
@@ -65,6 +100,18 @@ export default function BookService() {
 
       <div className="bg-card p-6 sm:p-10 rounded-3xl shadow-xl border border-border/60">
         <form onSubmit={handleSubmit} className="space-y-8">
+          {feedback ? (
+            <div
+              className={`flex items-center gap-3 rounded-2xl border px-4 py-4 text-sm font-semibold ${
+                feedback.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-rose-200 bg-rose-50 text-rose-700"
+              }`}
+            >
+              {feedback.type === "success" ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
+              <span>{feedback.message}</span>
+            </div>
+          ) : null}
 
           {/* Service Type */}
           <div>

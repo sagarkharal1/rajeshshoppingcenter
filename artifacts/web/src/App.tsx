@@ -225,11 +225,12 @@ function OwnerApp() {
     announcements: [],
     featuredMedia: [],
   });
-  const [settingsBusy, setSettingsBusy] = useState(false);
-  const [seedingProducts, setSeedingProducts] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
-  const [passwordBusy, setPasswordBusy] = useState(false);
-  const [loginOtpInfo, setLoginOtpInfo] = useState<any>(null);
+const [settingsBusy, setSettingsBusy] = useState(false);
+const [seedingProducts, setSeedingProducts] = useState(false);
+const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+const [passwordBusy, setPasswordBusy] = useState(false);
+const [loginOtpInfo, setLoginOtpInfo] = useState<any>(null);
+const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const { lang, toggleLanguage } = useLanguage();
 
   useEffect(() => {
@@ -674,6 +675,13 @@ function OwnerApp() {
     event.target.value = "";
   };
 
+  const showOwnerFeedback = (type: "success" | "error", message: string) => {
+    setOwnerFeedback({ type, message });
+    window.setTimeout(() => {
+      setOwnerFeedback((current) => (current?.message === message ? null : current));
+    }, 3500);
+  };
+
   const submitLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
@@ -763,19 +771,19 @@ function OwnerApp() {
   const changePassword = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      setError(lang === "ne" ? "हालको र नयाँ पासवर्ड दुबै चाहिन्छ।" : "Both current and new passwords are required.");
+      showOwnerFeedback("error", lang === "ne" ? "हालको र नयाँ पासवर्ड दुबै चाहिन्छ।" : "Both current and new passwords are required.");
       return;
     }
     if (passwordForm.newPassword.length < 6) {
-      setError(lang === "ne" ? "नयाँ पासवर्ड कम्तीमा ६ अक्षरको हुनुपर्छ।" : "New password must be at least 6 characters.");
+      showOwnerFeedback("error", lang === "ne" ? "नयाँ पासवर्ड कम्तीमा ६ अक्षरको हुनुपर्छ।" : "New password must be at least 6 characters.");
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setError(lang === "ne" ? "नयाँ पासवर्ड र पुष्टि पासवर्ड मिलेन।" : "New password and confirm password do not match.");
+      showOwnerFeedback("error", lang === "ne" ? "नयाँ पासवर्ड र पुष्टि पासवर्ड मिलेन।" : "New password and confirm password do not match.");
       return;
     }
     setPasswordBusy(true);
-    setError("");
+    setOwnerFeedback(null);
     try {
       await api("/admin/change-password", {
         method: "POST",
@@ -785,9 +793,9 @@ function OwnerApp() {
         }),
       });
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      setError(lang === "ne" ? "पासवर्ड सफलतापूर्वक परिवर्तन भयो।" : "Password changed successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "पासवर्ड सफलतापूर्वक परिवर्तन भयो।" : "Password changed successfully.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password change failed");
+      showOwnerFeedback("error", err instanceof Error ? err.message : "Password change failed");
     } finally {
       setPasswordBusy(false);
     }
@@ -796,23 +804,36 @@ function OwnerApp() {
 
   const createCustomer = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (editingCustomerId) {
-      await api(`/admin/customers/${editingCustomerId}`, { method: "PUT", body: JSON.stringify(customerForm) });
-    } else {
-      await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) });
+    setOwnerFeedback(null);
+    try {
+      if (editingCustomerId) {
+        await api(`/admin/customers/${editingCustomerId}`, { method: "PUT", body: JSON.stringify(customerForm) });
+      } else {
+        await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) });
+      }
+      setEditingCustomerId(null);
+      setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
+      await load();
+      showOwnerFeedback("success", editingCustomerId ? (lang === "ne" ? "ग्राहक अपडेट गरियो।" : "Customer updated successfully.") : (lang === "ne" ? "ग्राहक थपियो।" : "Customer created successfully."));
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "ग्राहक सेभ गर्न सकिएन।" : "Could not save the customer."));
     }
-    setEditingCustomerId(null);
-    setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-    await load();
   };
   const recordPayment = async (event: React.FormEvent) => {
     event.preventDefault();
-    await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
-    setPaymentForm((current) => ({ ...current, amount: "", referenceNote: "" }));
-    await load();
+    setOwnerFeedback(null);
+    try {
+      await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
+      setPaymentForm((current) => ({ ...current, amount: "", referenceNote: "" }));
+      await load();
+      showOwnerFeedback("success", lang === "ne" ? "भुक्तानी सफलतापूर्वक राखियो।" : "Payment recorded successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "भुक्तानी राख्न सकिएन।" : "Could not record the payment."));
+    }
   };
   const createProduct = async (event: React.FormEvent) => {
     event.preventDefault();
+    setOwnerFeedback(null);
     const payload = {
       ...productForm,
       categoryId: Number(productForm.categoryId),
@@ -826,37 +847,54 @@ function OwnerApp() {
       featured: Boolean((productForm as any).featured),
       imageUrl: (productForm as any).imageUrl || null,
     };
-    if (editingProductId) {
-      await api(`/admin/products/${editingProductId}`, { method: "PUT", body: JSON.stringify(payload) });
-    } else {
-      await api("/admin/products", { method: "POST", body: JSON.stringify(payload) });
+    try {
+      if (editingProductId) {
+        await api(`/admin/products/${editingProductId}`, { method: "PUT", body: JSON.stringify(payload) });
+      } else {
+        await api("/admin/products", { method: "POST", body: JSON.stringify(payload) });
+      }
+      setEditingProductId(null);
+      setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
+      await load();
+      showOwnerFeedback("success", editingProductId ? (lang === "ne" ? "सामान अपडेट गरियो।" : "Product updated successfully.") : (lang === "ne" ? "सामान थपियो।" : "Product created successfully."));
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "सामान सेभ गर्न सकिएन।" : "Could not save the product."));
     }
-    setEditingProductId(null);
-    setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
-    await load();
   };
   const createCategory = async (event?: React.FormEvent) => {
     event?.preventDefault();
+    setOwnerFeedback(null);
     const payload = {
       ...categoryForm,
       sortOrder: Number(categoryForm.sortOrder || 0),
     };
-    if (editingCategoryId) {
-      await api(`/admin/categories/${editingCategoryId}`, { method: "PUT", body: JSON.stringify(payload) });
-    } else {
-      await api("/admin/categories", { method: "POST", body: JSON.stringify(payload) });
+    try {
+      if (editingCategoryId) {
+        await api(`/admin/categories/${editingCategoryId}`, { method: "PUT", body: JSON.stringify(payload) });
+      } else {
+        await api("/admin/categories", { method: "POST", body: JSON.stringify(payload) });
+      }
+      setEditingCategoryId(null);
+      setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
+      await load();
+      showOwnerFeedback("success", editingCategoryId ? (lang === "ne" ? "श्रेणी अपडेट गरियो।" : "Category updated successfully.") : (lang === "ne" ? "श्रेणी थपियो।" : "Category created successfully."));
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "श्रेणी सेभ गर्न सकिएन।" : "Could not save the category."));
     }
-    setEditingCategoryId(null);
-    setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
-    await load();
   };
   const createInvoice = async (event: React.FormEvent) => {
     event.preventDefault();
-    const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, items: lines }) });
-    setLastInvoice(result);
-    setInvoiceForm((current) => ({ ...current, amountPaid: "", note: "", paymentMethod: "cash" }));
-    setLines(products[0] ? [{ productId: products[0].id, quantity: 1 }] : []);
-    await load();
+    setOwnerFeedback(null);
+    try {
+      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, items: lines }) });
+      setLastInvoice(result);
+      setInvoiceForm((current) => ({ ...current, amountPaid: "", note: "", paymentMethod: "cash" }));
+      setLines(products[0] ? [{ productId: products[0].id, quantity: 1 }] : []);
+      await load();
+      showOwnerFeedback("success", lang === "ne" ? "बिल सफलतापूर्वक सेभ भयो।" : "Invoice saved successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "बिल सेभ गर्न सकिएन।" : "Could not save the invoice."));
+    }
   };
 
   const startEditProduct = (product: any) => {
@@ -976,6 +1014,7 @@ function OwnerApp() {
   const saveMediaSettings = async (event: React.FormEvent) => {
     event.preventDefault();
     setSettingsBusy(true);
+    setOwnerFeedback(null);
     try {
       await api("/admin/settings", {
         method: "PUT",
@@ -1012,6 +1051,9 @@ function OwnerApp() {
       await load();
       const latest = await publicApi<any>("/settings");
       setPublicSettings(latest);
+      showOwnerFeedback("success", lang === "ne" ? "फोटो र मिडिया सफलतापूर्वक सेभ भयो।" : "Photos and media settings saved successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "मिडिया सेभ गर्न सकिएन।" : "Could not save media settings."));
     } finally {
       setSettingsBusy(false);
     }
@@ -1106,6 +1148,7 @@ function OwnerApp() {
       setToken={setToken}
       setOwnerEntryRequested={setOwnerEntryRequested}
       updateOrderStatus={updateOrderStatus}
+      externalFeedback={ownerFeedback}
     />
   );
 

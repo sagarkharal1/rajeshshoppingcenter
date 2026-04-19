@@ -7,6 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getImageUrl(path?: string | null) {
   if (!path) return null;
+  if (/^(data:|blob:|https?:\/\/)/i.test(path)) return path;
   // Ensure we don't double up on slashes if path comes with a leading slash
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `/api/storage/objects/${cleanPath}`;
