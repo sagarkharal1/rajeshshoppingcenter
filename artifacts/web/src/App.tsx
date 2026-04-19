@@ -686,7 +686,22 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     event.preventDefault();
     setError("");
     try {
-      const result = await api<{ token: string }>("/admin/login", { method: "POST", body: JSON.stringify(login) });
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: login.identifier.trim(),
+          password: login.password,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (result as any)?.error ||
+          (result as any)?.message ||
+          (lang === "ne" ? "लगइन असफल भयो।" : "Login failed."),
+        );
+      }
       setToken(result.token);
       setForgotMode(false);
       setRecoveryInfo(null);
@@ -704,10 +719,19 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     }
     setError("");
     try {
-      const result = await api<any>("/admin/login/request-otp", {
+      const response = await fetch("/api/admin/login/request-otp", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: login.identifier.trim(), password: login.password }),
       });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          (result as any)?.error ||
+          (result as any)?.message ||
+          (lang === "ne" ? "लगइन कोड पठाउन सकिएन।" : "Failed to send login code."),
+        );
+      }
       setLoginOtpInfo(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send login OTP");
@@ -930,21 +954,33 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   };
 
   const deleteProduct = async (productId: number) => {
-    await api(`/admin/products/${productId}`, { method: "DELETE" });
-    if (editingProductId === productId) {
-      setEditingProductId(null);
-      setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
+    setOwnerFeedback(null);
+    try {
+      await api(`/admin/products/${productId}`, { method: "DELETE" });
+      if (editingProductId === productId) {
+        setEditingProductId(null);
+        setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
+      }
+      await load();
+      showOwnerFeedback("success", lang === "ne" ? "सामान हटाइयो।" : "Product deleted successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "सामान हटाउन सकिएन।" : "Could not delete the product."));
     }
-    await load();
   };
 
   const deleteCategory = async (categoryId: number) => {
-    await api(`/admin/categories/${categoryId}`, { method: "DELETE" });
-    if (editingCategoryId === categoryId) {
-      setEditingCategoryId(null);
-      setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
+    setOwnerFeedback(null);
+    try {
+      await api(`/admin/categories/${categoryId}`, { method: "DELETE" });
+      if (editingCategoryId === categoryId) {
+        setEditingCategoryId(null);
+        setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
+      }
+      await load();
+      showOwnerFeedback("success", lang === "ne" ? "श्रेणी हटाइयो।" : "Category deleted successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "श्रेणी हटाउन सकिएन।" : "Could not delete the category."));
     }
-    await load();
   };
 
   const startEditCustomer = (customer: any) => {
@@ -961,12 +997,18 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   };
 
   const deleteCustomer = async (customerId: number) => {
-    await api(`/admin/customers/${customerId}`, { method: "DELETE" });
-    if (editingCustomerId === customerId) {
-      setEditingCustomerId(null);
-      setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
+    setOwnerFeedback(null);
+    try {
+      await api(`/admin/customers/${customerId}`, { method: "DELETE" });
+      if (editingCustomerId === customerId) {
+        setEditingCustomerId(null);
+        setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
+      }
+      await load();
+      showOwnerFeedback("success", lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.");
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer."));
     }
-    await load();
   };
 
   const updateOrderStatus = async (orderId: number, status: string, paymentStatus?: string) => {

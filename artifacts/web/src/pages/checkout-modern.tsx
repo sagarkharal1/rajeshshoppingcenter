@@ -5,7 +5,7 @@ import { ArrowLeft, Building2, CheckCircle2, ChevronRight, Home, MessageCircle, 
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
-import { useCreateOrder, useGetSettings } from "@workspace/api-client-react";
+import { useGetSettings } from "@workspace/api-client-react";
 
 const CUSTOMER_PORTAL_STORAGE_KEY = "rajesh_customer_portal";
 
@@ -26,7 +26,6 @@ export default function CheckoutModern() {
   const { items, totalPrice, clearCart } = useCart();
   const [, setLocation] = useLocation();
   const { data: settings } = useGetSettings();
-  const { mutateAsync: createOrder, isPending } = useCreateOrder();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -38,6 +37,7 @@ export default function CheckoutModern() {
   });
   const [paymentMethod, setPaymentMethod] = useState<"bank" | "esewa" | "khalti">("bank");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isPending, setIsPending] = useState(false);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string>("");
   const [placedItems, setPlacedItems] = useState<typeof items>([]);
@@ -136,8 +136,11 @@ export default function CheckoutModern() {
     }
 
     try {
-      const order = await createOrder({
-        data: {
+      setIsPending(true);
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           customerName: cleanedName,
           customerPhone: cleanedPhone,
           customerEmail: cleanedEmail || undefined,
@@ -147,8 +150,12 @@ export default function CheckoutModern() {
           paymentMethod,
           paymentStatus: "unpaid",
           items: validItems,
-        } as any,
+        }),
       });
+      const order = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((order as any)?.error || t.checkout.failedMsg);
+      }
       setPlacedItems(items);
       setPlacedTotal(totalPrice);
       setOrderId(order.id);
@@ -175,6 +182,8 @@ export default function CheckoutModern() {
         error?.message ||
         t.checkout.failedMsg;
       setSubmitError(String(message));
+    } finally {
+      setIsPending(false);
     }
   };
 
