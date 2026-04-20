@@ -1,1222 +1,1510 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import {
-  BadgeIndianRupee,
-  Boxes,
-  CreditCard,
-  Gift,
-  ImagePlus,
-  Languages,
-  LayoutDashboard,
-  Megaphone,
-  Pencil,
-  PackagePlus,
-  ReceiptText,
-  Trash2,
-  Users,
-} from "lucide-react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Route, Switch } from "wouter";
-import { PublicLayoutModern } from "@/components/public-layout-modern";
-import { Toaster } from "@/components/ui/toaster";
-import { CartProvider } from "@/lib/cart";
-import { LanguageProvider, useLanguage } from "@/lib/language";
-import AboutPage from "@/pages/about-page";
-import AccountPage from "@/pages/account-page";
-import BookService from "@/pages/book";
-import CartPage from "@/pages/cart-modern";
-import Catalog from "@/pages/catalog-modern";
-import Checkout from "@/pages/checkout-modern";
-import Home from "@/pages/home-modern";
-import NotFound from "@/pages/not-found";
-import ProductDetail from "@/pages/product-detail";
-import TermsPage from "@/pages/terms-page";
-import TrackOrderPage from "@/pages/track-order-modern";
-import { OwnerLoginModern, OwnerWorkspaceModern } from "@/components/owner-modern";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, Route, Switch, useLocation } from "wouter";
 
-const money = (value: number) =>
-  new Intl.NumberFormat("en-NP", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(value);
-const when = (value: string) =>
-  new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-const num = (value: unknown) => Number(value ?? 0);
-const queryClient = new QueryClient();
-const OWNER_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+type PublicSettings = {
+  shopName?: string | null;
+  proprietorName?: string | null;
+  phone?: string | null;
+  panNumber?: string | null;
+  email?: string | null;
+  address?: string | null;
+  aboutText?: string | null;
+  termsConditions?: string | null;
+  deliveryPolicy?: string | null;
+  shopPhotoPath?: string | null;
+  ownerPhotoPath?: string | null;
+  homeBannerPath?: string | null;
+};
 
-function shellCard(classes = "") {
-  return `rounded-[1.75rem] border border-slate-200/80 bg-white/95 shadow-[0_18px_60px_-30px_rgba(15,23,42,0.45)] ${classes}`;
-}
+type Category = {
+  id: number;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  sortOrder?: number;
+};
 
-function inputClasses() {
-  return "rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200";
-}
+type Product = {
+  id: number;
+  name: string;
+  description?: string | null;
+  sku?: string | null;
+  price: number | string;
+  stockQuantity?: number;
+  unit?: string | null;
+  imageUrl?: string | null;
+  categoryId?: number;
+  categoryName?: string | null;
+  featured?: boolean;
+};
 
-function buildProductImage(label: string, accent: string, subtext: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 420">
-    <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${accent}" />
-        <stop offset="100%" stop-color="#0f172a" />
-      </linearGradient>
-    </defs>
-    <rect width="600" height="420" rx="36" fill="url(#g)"/>
-    <circle cx="500" cy="95" r="74" fill="rgba(255,255,255,0.12)"/>
-    <circle cx="110" cy="330" r="88" fill="rgba(255,255,255,0.08)"/>
-    <text x="48" y="200" fill="white" font-size="48" font-family="DM Sans, Arial, sans-serif" font-weight="700">${label}</text>
-    <text x="48" y="252" fill="rgba(255,255,255,0.82)" font-size="24" font-family="DM Sans, Arial, sans-serif">${subtext}</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
+type CartItem = {
+  product: Product;
+  quantity: number;
+};
 
-const shopCategories = [
-  { name: "Fruits", description: "Fresh seasonal fruits and family fruit packs.", icon: "fruits", sortOrder: 1 },
-  { name: "Vegetables", description: "Daily fresh vegetables for home kitchens and hotels.", icon: "vegetables", sortOrder: 2 },
-  { name: "Food Items", description: "Rice, dal, oil, spices, noodles, and daily food staples.", icon: "foods", sortOrder: 3 },
-  { name: "Groceries", description: "Soap, detergent, biscuits, snacks, and daily household goods.", icon: "grocery", sortOrder: 4 },
-  { name: "LPG Cylinder", description: "Cooking LPG cylinders and LPG accessories.", icon: "gas", sortOrder: 5 },
-  { name: "Hardware", description: "Cement, rods, tools, fittings, and building materials.", icon: "hardware", sortOrder: 6 },
-  { name: "Beverages", description: "Soft drinks, juice, water, and cold beverages.", icon: "beverages", sortOrder: 7 },
-  { name: "Smoke & Tobacco", description: "Cigarettes, tobacco, and smoking accessories.", icon: "smoke", sortOrder: 8 },
-  { name: "Remittance", description: "Money transfer and remittance support service.", icon: "remittance", sortOrder: 9 },
-  { name: "Transport Services", description: "Bolero, tractor, delivery, and travel service booking.", icon: "transport", sortOrder: 10 },
-  { name: "Clothes", description: "Daily wear, school wear, and family clothing items.", icon: "clothes", sortOrder: 11 },
-  { name: "Shoes and Slippers", description: "Shoes, sandals, slippers, and school footwear.", icon: "shoes", sortOrder: 12 },
-] as const;
+type ShopOrder = {
+  id: number;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  totalAmount: number | string;
+  status: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  createdAt?: string;
+  items?: Array<{ productName: string; quantity: number; price: number; unit?: string }>;
+};
 
-function makeSampleProduct(
-  name: string,
-  categoryName: (typeof shopCategories)[number]["name"],
-  sku: string,
-  price: number,
-  buyingPrice: number,
-  transportationCost: number,
-  extraCost: number,
-  stockQuantity: number,
-  reorderLevel: number,
-  unit: string,
-  accent: string,
-  subtext: string,
-  description: string,
-  featured = false,
-) {
-  return {
-    name,
-    categoryName,
-    description,
-    sku,
-    price,
-    buyingPrice,
-    transportationCost,
-    extraCost,
-    stockQuantity,
-    reorderLevel,
-    unit,
-    imageUrl: buildProductImage(name, accent, subtext),
-    inStock: stockQuantity > 0,
-    featured,
+type Booking = {
+  id: number;
+  serviceType: string;
+  customerName: string;
+  customerPhone: string;
+  pickupLocation: string;
+  destination: string;
+  bookingDate: string;
+  status: string;
+  notes?: string | null;
+  createdAt?: string;
+};
+
+type Customer = {
+  id: number;
+  name: string;
+  customerCode?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  photoPath?: string | null;
+  creditBalance?: number | string;
+  totalSpent?: number | string;
+  notes?: string | null;
+};
+
+type DashboardSummary = {
+  totals?: {
+    totalProducts?: number;
+    lowStockProducts?: number;
+    inventoryRevenue?: number;
+    totalCustomers?: number;
+    totalCreditBalance?: number;
   };
+  recentInvoices?: Array<{
+    id: number;
+    invoiceNumber: string;
+    customerName: string;
+    totalAmount: number;
+    dueAmount: number;
+    createdAt: string;
+  }>;
+};
+
+type AlertState = { type: "success" | "error"; message: string } | null;
+
+const API_BASE = "/api";
+const OWNER_TOKEN_KEY = "rajesh-owner-token";
+
+const FALLBACK_SETTINGS: Required<Pick<PublicSettings, "shopName" | "phone" | "address" | "aboutText">> = {
+  shopName: "Rajesh Shopping Center",
+  phone: "9814401716",
+  address: "Musikot-5, Aapchaur, Gulmi",
+  aboutText:
+    "Rajesh Shopping Center is built for daily village business: groceries, hardware, delivery, booking services, and owner-side billing.",
+};
+
+function cn(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
 
-const sampleCatalogProducts = [
-  makeSampleProduct("Fresh Apple", "Fruits", "RSC-FRU-001", 280, 225, 10, 5, 32, 10, "kg", "#DC2626", "Sweet fruit", "Fresh apples popular in Nepali homes for snacks, puja, and family fruit bowls.", true),
-  makeSampleProduct("Banana Dozen", "Fruits", "RSC-FRU-002", 140, 110, 6, 4, 26, 8, "dozen", "#F59E0B", "Morning energy", "Locally sold banana bunch for daily breakfast, children, and travel snacks."),
-  makeSampleProduct("Fresh Tomato", "Vegetables", "RSC-VEG-001", 95, 70, 5, 3, 72, 18, "kg", "#E11D48", "Daily kitchen", "Clean ripe tomatoes for curry, achar, salad, and daily home cooking.", true),
-  makeSampleProduct("Cauliflower", "Vegetables", "RSC-VEG-002", 110, 82, 6, 4, 24, 8, "kg", "#F8FAFC", "Seasonal fresh", "Fresh cauliflower for tarkari, mixed vegetable dishes, and hotel cooking."),
-  makeSampleProduct("Sona Masuli Rice 25kg", "Food Items", "RSC-FOOD-001", 1850, 1610, 65, 20, 26, 8, "bag", "#C18F2D", "Family rice pack", "Soft fragrant rice suitable for daily meals, family feasts, and guest hospitality.", true),
-  makeSampleProduct("Masoor Dal", "Food Items", "RSC-FOOD-002", 225, 190, 7, 4, 48, 12, "kg", "#C2410C", "Daily dal", "Reliable red lentils for everyday dal, soups, and family cooking."),
-  makeSampleProduct("Wai Wai Noodles Pack", "Food Items", "RSC-FOOD-003", 30, 23, 2, 1, 120, 30, "packet", "#B91C1C", "Popular snack", "Quick noodles for tea-time, tiffin, and emergency snacks."),
-  makeSampleProduct("Sunflower Oil 1L", "Groceries", "RSC-GRO-001", 290, 248, 8, 5, 35, 10, "bottle", "#FBBF24", "Cooking oil", "Refined oil used for daily frying, cooking, and household grocery stock."),
-  makeSampleProduct("Laundry Soap", "Groceries", "RSC-GRO-002", 45, 32, 2, 1, 80, 20, "piece", "#2563EB", "Household use", "Affordable washing soap for home laundry and everyday cleaning."),
-  makeSampleProduct("Biscuit Family Pack", "Groceries", "RSC-GRO-003", 120, 92, 4, 2, 42, 12, "packet", "#A16207", "Tea snack", "Popular biscuit pack for tea shops, homes, and school snacks."),
-  makeSampleProduct("LPG Cylinder Refill", "LPG Cylinder", "RSC-GAS-001", 1950, 1810, 40, 15, 12, 4, "cylinder", "#64748B", "Cooking LPG", "Cooking LPG refill service for homes, tea shops, and small hotels.", true),
-  makeSampleProduct("LPG Regulator", "LPG Cylinder", "RSC-GAS-002", 850, 720, 18, 8, 14, 5, "piece", "#475569", "Safe fitting", "Useful LPG regulator spare for secure kitchen connection and replacement."),
-  makeSampleProduct("PPC Cement Bag", "Hardware", "RSC-HRD-001", 970, 830, 55, 12, 34, 10, "bag", "#78716C", "Construction item", "Quality cement for building work, plaster, and small house construction.", true),
-  makeSampleProduct("Steel Rod Bundle", "Hardware", "RSC-HRD-002", 1320, 1160, 55, 18, 12, 5, "bundle", "#4B5563", "Building support", "Strong construction rod bundle suitable for home, shop, and local building work."),
-  makeSampleProduct("GI Pipe", "Hardware", "RSC-HRD-003", 640, 525, 28, 10, 20, 6, "piece", "#334155", "Plumbing use", "Galvanized pipe for water line, plumbing repair, and hardware supply."),
-  makeSampleProduct("Mineral Water 1L", "Beverages", "RSC-BEV-001", 35, 24, 2, 1, 96, 24, "bottle", "#0284C7", "Cold refreshment", "Safe bottled drinking water for travel, school, and shop customers."),
-  makeSampleProduct("Cold Drink Bottle", "Beverages", "RSC-BEV-002", 185, 145, 6, 2, 18, 10, "bottle", "#1D4ED8", "Family beverage", "Popular cold drink for guests, celebrations, and family meals."),
-  makeSampleProduct("Energy Drink Can", "Beverages", "RSC-BEV-003", 140, 108, 4, 2, 22, 8, "can", "#7C3AED", "Quick energy", "Energy drink can for travel, work, and youth customers."),
-  makeSampleProduct("Surya Cigarette", "Smoke & Tobacco", "RSC-SMK-001", 25, 20, 1, 1, 180, 50, "piece", "#6B7280", "Popular smoke", "Widely sold cigarette item for tobacco customers.", false),
-  makeSampleProduct("Khaini Pack", "Smoke & Tobacco", "RSC-SMK-002", 35, 28, 1, 1, 90, 20, "packet", "#92400E", "Tobacco pack", "Chewing tobacco pack commonly sold in local markets.", false),
-  makeSampleProduct("IME Remit Service", "Remittance", "RSC-REM-001", 0, 0, 0, 0, 999, 0, "service", "#0F766E", "Money transfer", "Remittance assistance for sending and receiving money through supported service desks.", true),
-  makeSampleProduct("eSewa Cash In Support", "Remittance", "RSC-REM-002", 0, 0, 0, 0, 999, 0, "service", "#16A34A", "Wallet support", "Support service for wallet payment help, cash in guidance, and digital transfer assistance.", false),
-  makeSampleProduct("Bolero Delivery Booking", "Transport Services", "RSC-TRN-001", 2500, 1900, 180, 90, 12, 0, "trip", "#1E3A8A", "Local trip", "Bolero double cab booking for village delivery, tours, and transport needs.", true),
-  makeSampleProduct("Tractor Sand Delivery", "Transport Services", "RSC-TRN-002", 4500, 3700, 250, 120, 8, 0, "trip", "#92400E", "Construction transport", "Tractor delivery service for sand, stones, cement support, and hardware transport."),
-  makeSampleProduct("Ladies Kurta Set", "Clothes", "RSC-CLT-001", 1650, 1380, 42, 16, 16, 5, "set", "#DB2777", "Festive wear", "Simple and attractive kurta set for daily wear, gatherings, and festivals."),
-  makeSampleProduct("School Uniform Shirt", "Clothes", "RSC-CLT-002", 780, 630, 25, 10, 22, 8, "piece", "#2563EB", "School wear", "School shirt item for students and uniform shopping."),
-  makeSampleProduct("Walking Shoes", "Shoes and Slippers", "RSC-SHO-001", 1650, 1390, 40, 15, 14, 6, "pair", "#0F766E", "Comfortable pair", "Comfortable shoes for market, school, work, and daily outside movement."),
-  makeSampleProduct("Rubber Slippers", "Shoes and Slippers", "RSC-SHO-002", 320, 240, 10, 5, 40, 12, "pair", "#0891B2", "Daily home use", "Affordable slippers for home use, bathing area, and daily quick wear."),
-] as const;
+function asMoney(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("en-NP", {
+    style: "currency",
+    currency: "NPR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
-function PublicApp({ onOwnerAccessRequest }: { onOwnerAccessRequest: () => void }) {
+function asDate(value?: string | null) {
+  if (!value) return "-";
+  try {
+    return new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function getErrorMessage(err: unknown) {
+  if (err instanceof Error) return err.message;
+  return "Request failed";
+}
+
+async function readFileAsDataUrl(file: File) {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function api<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    const details = Array.isArray(data?.details) ? ` ${data.details.join(", ")}` : "";
+    throw new Error(data?.error ? `${data.error}${details}` : `Request failed (${response.status})`);
+  }
+
+  return data as T;
+}
+
+function StatusBadge({ value }: { value: string }) {
+  const normalized = value.toLowerCase();
+  const positive = ["confirmed", "paid", "delivered", "completed", "order-received", "dispatched"].some((item) =>
+    normalized.includes(item),
+  );
+  const negative = ["rejected", "cancelled", "failed", "unpaid"].some((item) => normalized.includes(item));
   return (
-    <>
-      <PublicLayoutModern onOwnerAccessRequest={onOwnerAccessRequest}>
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/catalog" component={Catalog} />
-          <Route path="/cart" component={CartPage} />
-          <Route path="/checkout" component={Checkout} />
-          <Route path="/track-order" component={TrackOrderPage} />
-          <Route path="/about" component={AboutPage} />
-          <Route path="/account" component={AccountPage} />
-          <Route path="/terms" component={TermsPage} />
-          <Route path="/book" component={BookService} />
-          <Route path="/product/:id" component={ProductDetail} />
-          <Route component={NotFound} />
-        </Switch>
-      </PublicLayoutModern>
-      <Toaster />
-    </>
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
+        positive && "bg-emerald-100 text-emerald-700",
+        negative && "bg-rose-100 text-rose-700",
+        !positive && !negative && "bg-slate-100 text-slate-700",
+      )}
+    >
+      <span>{positive ? "✓" : negative ? "✕" : "•"}</span>
+      <span className="capitalize">{value.replaceAll("-", " ")}</span>
+    </span>
   );
 }
 
-function OwnerApp() {
-  const [token, setToken] = useState("");
-  const [ownerEntryRequested, setOwnerEntryRequested] = useState(false);
-  const [tab, setTab] = useState("overview");
-  const [login, setLogin] = useState({ identifier: "owner", password: "admin123", otp: "" });
-  const [forgotMode, setForgotMode] = useState(false);
-  const [forgotForm, setForgotForm] = useState({ identifier: "owner", otp: "", newPassword: "", confirmPassword: "" });
-  const [recoveryInfo, setRecoveryInfo] = useState<any>(null);
-  const [resetBusy, setResetBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [summary, setSummary] = useState<any>(null);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>(null);
-  const [publicSettings, setPublicSettings] = useState<any>(null);
-  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-  const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
-  const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "" });
-  const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
-  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "" });
-  const [lines, setLines] = useState<Array<{ productId: number; quantity: number }>>([]);
-  const [lastInvoice, setLastInvoice] = useState<any>(null);
-  const [editingProductId, setEditingProductId] = useState<number | null>(null);
-  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
-  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
-  const [settingsForm, setSettingsForm] = useState<any>({
-    shopName: "",
-    proprietorName: "",
-    phone: "",
-    email: "",
-    address: "",
-    bankName: "",
-    bankBranch: "",
-    accountName: "",
-    accountNumber: "",
-    whatsappPhone: "",
-    whatsappApiKey: "",
-    bankQrPath: "",
-    esewaId: "",
-    esewaQrPath: "",
-    khaltiId: "",
-    khaltiQrPath: "",
-    rewardRate: 1,
-    rewardUnitAmount: "100",
-    invoiceFooter: "",
-    aboutText: "",
-    deliveryPolicy: "",
-    termsConditions: "",
-    shopPhotoPath: "",
-    ownerPhotoPath: "",
-    homeBannerPath: "",
-    announcements: [],
-    featuredMedia: [],
+function Notice({ notice }: { notice: AlertState }) {
+  if (!notice) return null;
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border px-4 py-3 text-sm font-medium",
+        notice.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700",
+      )}
+    >
+      {notice.message}
+    </div>
+  );
+}
+
+function Shell({
+  settings,
+  children,
+}: {
+  settings: PublicSettings;
+  children: React.ReactNode;
+}) {
+  const merged = { ...FALLBACK_SETTINGS, ...settings };
+
+  return (
+    <div className="min-h-screen bg-stone-100 text-slate-900">
+      <header className="border-b border-stone-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+          <div className="space-y-1">
+            <Link href="/" className="block text-2xl font-bold tracking-tight text-slate-900">
+              {merged.shopName}
+            </Link>
+            <div className="text-sm text-slate-600">{merged.address}</div>
+            <div className="text-sm font-medium text-slate-700">{merged.phone}</div>
+          </div>
+          <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            <NavLink href="/">Home</NavLink>
+            <NavLink href="/catalog">Products</NavLink>
+            <NavLink href="/book">Bookings</NavLink>
+            <NavLink href="/checkout">Checkout</NavLink>
+            <NavLink href="/track-order">Track Order</NavLink>
+            <NavLink href="/account">Customer Account</NavLink>
+            <NavLink href="/about">About</NavLink>
+          </nav>
+        </div>
+      </header>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</main>
+      <footer className="border-t border-stone-200 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm text-slate-600 sm:px-6">
+          <div>{merged.shopName}</div>
+          <div className="flex items-center gap-3">
+            <Link href="/terms" className="hover:text-slate-900">
+              Terms
+            </Link>
+            <Link href="/owner" className="hover:text-slate-900">
+              Owner
+            </Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const [location] = useLocation();
+  const active = location === href;
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-full px-3 py-2 transition",
+        active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-stone-100 hover:text-slate-900",
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function Card({ title, children, action }: { title?: string; children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+      {(title || action) && (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          {title ? <h2 className="text-lg font-semibold text-slate-900">{title}</h2> : <div />}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function textInputClasses() {
+  return "w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-slate-500";
+}
+
+function buttonClasses(kind: "primary" | "secondary" | "danger" = "primary") {
+  return cn(
+    "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition",
+    kind === "primary" && "bg-slate-900 text-white hover:bg-slate-800",
+    kind === "secondary" && "border border-stone-300 bg-white text-slate-900 hover:bg-stone-50",
+    kind === "danger" && "bg-rose-600 text-white hover:bg-rose-700",
+  );
+}
+
+function HomePage({ settings }: { settings: PublicSettings }) {
+  const merged = { ...FALLBACK_SETTINGS, ...settings };
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-4">
+            <div className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Since 1997</div>
+            <h1 className="text-4xl font-bold tracking-tight text-slate-900">{merged.shopName}</h1>
+            <p className="max-w-3xl text-lg leading-8 text-slate-700">{merged.aboutText}</p>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/catalog" className={buttonClasses("primary")}>
+                View Products
+              </Link>
+              <Link href="/book" className={buttonClasses("secondary")}>
+                Book Bolero / Tractor
+              </Link>
+              <Link href="/track-order" className={buttonClasses("secondary")}>
+                Track Order
+              </Link>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-3xl bg-stone-100">
+            {merged.homeBannerPath || merged.shopPhotoPath ? (
+              <img
+                src={String(merged.homeBannerPath || merged.shopPhotoPath)}
+                alt={merged.shopName}
+                className="h-full min-h-[280px] w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full min-h-[280px] items-center justify-center px-8 text-center text-slate-500">
+                Add your shop photo from owner settings to show it here.
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card title="Phone">
+          <div className="text-lg font-semibold text-slate-900">{merged.phone}</div>
+        </Card>
+        <Card title="Address">
+          <div className="text-slate-700">{merged.address}</div>
+        </Card>
+        <Card title="PAN">
+          <div className="text-slate-700">{merged.panNumber || "Add PAN in owner settings"}</div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function CatalogPage({
+  products,
+  categories,
+  addToCart,
+}: {
+  products: Product[];
+  categories: Category[];
+  addToCart: (product: Product) => void;
+}) {
+  const [selectedCategory, setSelectedCategory] = useState<number | "all">("all");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    return products.filter((product) => {
+      const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory;
+      const matchesSearch =
+        search.trim().length === 0 ||
+        product.name.toLowerCase().includes(search.trim().toLowerCase()) ||
+        (product.description || "").toLowerCase().includes(search.trim().toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, search, selectedCategory]);
+
+  return (
+    <div className="space-y-6">
+      <Card title="Products">
+        <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+          <div className="space-y-4">
+            <input
+              className={textInputClasses()}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search products"
+            />
+            <div className="space-y-2">
+              <button className={cn(buttonClasses("secondary"), "w-full", selectedCategory === "all" && "bg-slate-900 text-white")} onClick={() => setSelectedCategory("all")}>
+                All categories
+              </button>
+              {categories.map((category) => (
+                <button
+                  key={category.id}
+                  className={cn(buttonClasses("secondary"), "w-full", selectedCategory === category.id && "bg-slate-900 text-white")}
+                  onClick={() => setSelectedCategory(category.id)}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((product) => (
+              <Card key={product.id}>
+                <div className="space-y-4">
+                  <div className="overflow-hidden rounded-2xl bg-stone-100">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="h-44 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-44 items-center justify-center text-sm text-slate-500">No image</div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{product.categoryName || "General"}</div>
+                    <h3 className="text-lg font-semibold text-slate-900">{product.name}</h3>
+                    <p className="min-h-[48px] text-sm text-slate-600">{product.description || "No description added."}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="text-lg font-bold text-slate-900">{asMoney(product.price)}</div>
+                      <div className="text-xs text-slate-500">
+                        Stock {product.stockQuantity ?? 0} {product.unit || "pcs"}
+                      </div>
+                    </div>
+                  </div>
+                  <button className={cn(buttonClasses("primary"), "w-full")} onClick={() => addToCart(product)}>
+                    Add to order
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function CheckoutPage({
+  cart,
+  setCart,
+}: {
+  cart: CartItem[];
+  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+}) {
+  const [notice, setNotice] = useState<AlertState>(null);
+  const [busy, setBusy] = useState(false);
+  const [orderInfo, setOrderInfo] = useState<any>(null);
+  const [form, setForm] = useState({
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    customerAddress: "",
+    notes: "",
+    paymentMethod: "bank",
   });
-const [settingsBusy, setSettingsBusy] = useState(false);
-const [seedingProducts, setSeedingProducts] = useState(false);
-const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
-const [passwordBusy, setPasswordBusy] = useState(false);
-const [loginOtpInfo, setLoginOtpInfo] = useState<any>(null);
-const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const { lang, toggleLanguage } = useLanguage();
 
-  useEffect(() => {
-    localStorage.removeItem("biz-owner-token");
-  }, []);
+  const total = cart.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
 
-  useEffect(() => {
-    if (!token) return;
-
-    let lastActivity = Date.now();
-    const touch = () => {
-      lastActivity = Date.now();
-    };
-
-    const check = window.setInterval(() => {
-      if (Date.now() - lastActivity > OWNER_SESSION_TIMEOUT_MS) {
-        setToken("");
-        setOwnerEntryRequested(false);
-        setError(lang === "ne" ? "सुरक्षाका लागि मालिक सेसन स्वतः बन्द गरियो। फेरि लगइन गर्नुहोस्।" : "Owner session was locked for safety. Please log in again.");
-      }
-    }, 30000);
-
-    window.addEventListener("pointerdown", touch);
-    window.addEventListener("keydown", touch);
-    window.addEventListener("touchstart", touch);
-
-    return () => {
-      window.clearInterval(check);
-      window.removeEventListener("pointerdown", touch);
-      window.removeEventListener("keydown", touch);
-      window.removeEventListener("touchstart", touch);
-    };
-  }, [token, lang]);
-
-  const text = lang === "ne"
-    ? {
-        ownerWorkspace: "मालिक कार्यक्षेत्र",
-        ownerLogin: "मालिक लगइन",
-        openDashboard: "ड्यासबोर्ड खोल्नुहोस्",
-        businessCockpit: "व्यवसाय नियन्त्रण",
-        createBill: "बिल बनाउनुहोस्",
-        customerLedger: "ग्राहक लेजर",
-        productCosts: "मालिकका लागि लागत विवरण",
-        addCustomer: "ग्राहक थप्नुहोस्",
-        addProduct: "उत्पादन थप्नुहोस्",
-        recordPayment: "पुरानो भुक्तानी राख्नुहोस्",
-        print: "प्रिन्ट",
-        logout: "लगआउट",
-        customerPreview: "ग्राहक दृश्य",
-        backToOwner: "मालिक लगइनमा फर्कनुहोस्",
-        customerWelcome: "ग्राहक दृश्य",
-        browseProducts: "उत्पादन र भुक्तानी विवरण",
-        publicHero: "ग्राहकले हेर्ने सार्वजनिक दृश्य जहाँ उत्पादन, पसल विवरण र QR भुक्तानी जानकारी देखिन्छ।",
-        simpleProductView: "ग्राहकले देख्ने साधारण उत्पादन सूची",
-        inStock: "स्टकमा",
-        outOfStock: "स्टक छैन",
-        per: "प्रति",
-        overview: "सारांश",
-        billing: "बिलिङ",
-        customers: "ग्राहक",
-        products: "उत्पादन",
-        branding: "मिडिया र सूचना",
-        ownerOnlyNote: "यो भाग मालिकका लागि मात्र हो। यहाँ लागत, नाफा, ग्राहक उधारो र रिवार्ड विवरण देखिन्छ।",
-        ownerHero: "स्टक, बिलिङ, उधारो हिसाब, QR भुक्तानी र नाफा विवरणका लागि निजी मालिक ड्यासबोर्ड।",
-        stockIntelligence: "स्टक जानकारी",
-        stockIntelligenceDesc: "किन्ने मूल्य, ढुवानी, अतिरिक्त खर्च, स्टक र नाफा।",
-        ledgerBilling: "लेजर बिलिङ",
-        ledgerBillingDesc: "पुरानो बाँकी, नयाँ खरिद, भुक्तानी र बाँकी रकम एउटै बिलमा।",
-        customerRewards: "ग्राहक रिवार्ड",
-        customerRewardsDesc: "खरिदसँगै रिवार्ड अंक बढ्छ।",
-        privateOwnerText: "यो निजी मालिक पक्ष हो। यहाँको लागत, नाफा र ग्राहक उधारो विवरण ग्राहकले देख्दैनन्।",
-        usernameLabel: "युजरनेम / फोन / इमेल",
-        passwordLabel: "पासवर्ड",
-        authCodeLabel: "मालिक OTP कोड",
-        authCodePlaceholder: "पहिले OTP पठाउनुहोस्",
-        recentInvoices: "हालका बिलहरू",
-        recentInvoicesDesc: "हालै बनेका बिल र तिनको भुक्तानी अवस्था।",
-        paid: "भुक्तानी",
-        due: "बाँकी",
-        currentSaleNote: "पुरानो बाकी र नयाँ खरिद एउटै बिलमा।",
-        totalPreview: "जम्मा",
-        addLineItem: "उत्पादन थप्नुहोस्",
-        amountReceivedNow: "अहिले लिएको रकम",
-        billNote: "बिल नोट",
-        saveBill: "बिल सेभ गर्नुहोस्",
-        invoicePreview: "बिल पूर्वावलोकन",
-        previousDue: "पुरानो बाकी",
-        currentBill: "हालको बिल",
-        paidNow: "अहिले भुक्तानी",
-        remainingDue: "बाँकी रकम",
-        payment: "भुक्तानी",
-        rewardEarned: "रिवार्ड",
-        lastInvoice: "अन्तिम बिल",
-        customerLedgerDesc: "ग्राहकको बाँकी, रिवार्ड र हालका हिसाब चलनहरू।",
-        noPhoneSaved: "फोन छैन",
-        noAddressSaved: "ठेगाना छैन",
-        spent: "जम्मा खरिद",
-        amount: "रकम",
-        note: "नोट",
-        saveRepayment: "भुक्तानी सेभ गर्नुहोस्",
-        notes: "नोटहरू",
-        createCustomerButton: "ग्राहक सिर्जना गर्नुहोस्",
-        productCostsDesc: "यो निजी भागले प्रत्येक वस्तुको वास्तविक नाफा देखाउँछ।",
-        saveProduct: "उत्पादन सेभ गर्नुहोस्",
-        updateProduct: "उत्पादन अपडेट गर्नुहोस्",
-        sampleProducts: "नमुना उत्पादन हाल्नुहोस्",
-        edit: "सम्पादन",
-        delete: "हटाउनुहोस्",
-        mediaCenter: "मिडिया र सूचना",
-        mediaCenterDesc: "पसलका फोटो, प्रोफाइल फोटो, ब्याकग्राउन्ड, सूचना, विशेष अवसर र भिडियो सामग्री मिलाउनुहोस्।",
-        shopPhoto: "पसल फोटो",
-        ownerPhoto: "प्रोफाइल फोटो",
-        bannerPhoto: "ब्याकग्राउन्ड फोटो",
-        uploadImage: "तस्बिर अपलोड / क्यामेरा",
-        uploadVideo: "भिडियो अपलोड",
-        pasteVideoUrl: "भिडियो लिंक",
-        announcements: "सूचना र खबर",
-        featuredMedia: "विशेष मिडिया",
-        addAnnouncement: "सूचना थप्नुहोस्",
-        addMedia: "मिडिया थप्नुहोस्",
-        saveMediaSettings: "मिडिया विवरण सेभ गर्नुहोस्",
-        titleLabel: "शीर्षक",
-        bodyLabel: "विवरण",
-        statusLabel: "स्थिति",
-        activeStatus: "सक्रिय",
-        draftStatus: "ड्राफ्ट",
-        occasionLabel: "अवसर / प्रकार",
-        imageLabel: "तस्बिर",
-        videoLabel: "भिडियो",
-        featuredLabel: "विशेष",
-        noProductsYet: "अहिलेसम्म उत्पादन थपिएको छैन।",
-        totalProducts: "उत्पादन",
-        totalProductsDesc: "सिस्टममा रहेका स्टक रेकर्ड",
-        lowStock: "कम स्टक",
-        lowStockDesc: "रिअर्डर नजिकका वस्तु",
-        inventoryCost: "स्टक लागत",
-        inventoryCostDesc: "स्टकमा अड्किएको वास्तविक लागत",
-        projectedSales: "प्रक्षेपित बिक्री",
-        projectedSalesDesc: "हालको बिक्री मूल्यमा अनुमान",
-        totalCustomers: "ग्राहक",
-        totalCustomersDesc: "सेभ भएका ग्राहक",
-        creditDue: "उधारो",
-        creditDueDesc: "सबै ग्राहकको बाकी रकम",
-        rewardPoints: "रिवार्ड अंक",
-        rewardPointsDesc: "जारी भएको कुल अंक",
-        remove: "हटाउनुहोस्",
-        left: "बाँकी",
-        balanceShort: "ब्यालेन्स",
-      }
-    : {
-        ownerWorkspace: "Owner workspace",
-        ownerLogin: "Owner Login",
-        openDashboard: "Open owner dashboard",
-        businessCockpit: "Business cockpit",
-        createBill: "Create bill",
-        customerLedger: "Customer ledger",
-        productCosts: "Owner-only product costs",
-        addCustomer: "Add customer",
-        addProduct: "Add product",
-        recordPayment: "Record old payment",
-        print: "Print",
-        logout: "Log out",
-        customerPreview: "Customer preview",
-        backToOwner: "Back to owner login",
-        customerWelcome: "Customer view",
-        browseProducts: "Browse products and payment details",
-        publicHero: "A customer-facing view for browsing products, seeing shop details, and checking available payment options.",
-        simpleProductView: "A simple product view like customers would see.",
-        inStock: "In Stock",
-        outOfStock: "Out",
-        per: "per",
-        overview: "Overview",
-        billing: "Billing",
-        customers: "Customers",
-        products: "Products",
-        branding: "Media & updates",
-        ownerOnlyNote: "Private Rajesh Shopping Center owner panel for stock cost, customer credit, billing, delivery tracking, and business records.",
-        ownerHero: "Private dashboard for Rajesh Shopping Center owner operations, billing, credit control, QR payment follow-up, and profit visibility.",
-        stockIntelligence: "Stock Intelligence",
-        stockIntelligenceDesc: "Buying cost, transport, extra cost, stock, and profit across groceries, clothing, and hardware items.",
-        ledgerBilling: "Ledger Billing",
-        ledgerBillingDesc: "Previous due, current purchase, payment, and remaining balance in one bill for daily customers and credit customers.",
-        customerRewards: "Customer Rewards",
-        customerRewardsDesc: "Reward points grow automatically as customers buy from your shop.",
-        privateOwnerText: "Private owner login for Rajesh Shopping Center. This area is only for Sandesh Kharal and authorized business use.",
-        usernameLabel: "Username / phone / email",
-        passwordLabel: "Password",
-        authCodeLabel: "Owner OTP code",
-        authCodePlaceholder: "Send OTP first",
-        recentInvoices: "Recent invoices",
-        recentInvoicesDesc: "Latest bills and their payment status.",
-        paid: "Paid",
-        due: "Due",
-        currentSaleNote: "Current sale plus previous due in one printable invoice.",
-        totalPreview: "Total",
-        addLineItem: "Add product",
-        amountReceivedNow: "Amount received now",
-        billNote: "Bill note",
-        saveBill: "Save bill",
-        invoicePreview: "Invoice preview",
-        previousDue: "Previous due",
-        currentBill: "Current bill",
-        paidNow: "Paid now",
-        remainingDue: "Remaining due",
-        payment: "Payment",
-        rewardEarned: "Reward",
-        lastInvoice: "Last invoice",
-        customerLedgerDesc: "Customer balances, rewards, and recent ledger activity.",
-        noPhoneSaved: "No phone saved",
-        noAddressSaved: "No address saved",
-        spent: "Spent",
-        amount: "Amount",
-        note: "Note",
-        saveRepayment: "Save repayment",
-        notes: "Notes",
-        createCustomerButton: "Create customer",
-        productCostsDesc: "This private section shows the true margin behind each item.",
-        saveProduct: "Save product",
-        updateProduct: "Update product",
-        sampleProducts: "Load sample products",
-        edit: "Edit",
-        delete: "Delete",
-        mediaCenter: "Media and announcements",
-        mediaCenterDesc: "Manage shop photos, owner profile, app background, announcements, special occasions, featured images, and video content.",
-        shopPhoto: "Shop photo",
-        ownerPhoto: "Owner profile photo",
-        bannerPhoto: "Background banner",
-        uploadImage: "Upload image / use camera",
-        uploadVideo: "Upload video",
-        pasteVideoUrl: "Video URL",
-        announcements: "Announcements",
-        featuredMedia: "Featured media",
-        addAnnouncement: "Add announcement",
-        addMedia: "Add media",
-        saveMediaSettings: "Save media settings",
-        titleLabel: "Title",
-        bodyLabel: "Description",
-        statusLabel: "Status",
-        activeStatus: "Active",
-        draftStatus: "Draft",
-        occasionLabel: "Occasion / type",
-        imageLabel: "Image",
-        videoLabel: "Video",
-        featuredLabel: "Featured",
-        noProductsYet: "No products added yet.",
-        totalProducts: "Products",
-        totalProductsDesc: "Visible stock records in the system",
-        lowStock: "Low stock",
-        lowStockDesc: "Items close to reorder level",
-        inventoryCost: "Inventory cost",
-        inventoryCostDesc: "Your true cost locked in stock",
-        projectedSales: "Projected sales",
-        projectedSalesDesc: "Sales value at current selling price",
-        totalCustomers: "Customers",
-        totalCustomersDesc: "Saved people with billing history",
-        creditDue: "Credit due",
-        creditDueDesc: "Total unpaid balance across customers",
-        rewardPoints: "Reward points",
-        rewardPointsDesc: "Active reward points issued",
-        remove: "Remove",
-        left: "left",
-        balanceShort: "Bal",
-      };
-
-  const api = async <T,>(path: string, init?: RequestInit) => {
-    let response: Response;
-    try {
-      response = await fetch(`/api${path}`, {
-        ...init,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-    } catch {
-      throw new Error(
-        lang === "ne"
-          ? "सर्भर चलिरहेको छैन। कृपया स्थानीय API फेरि सुरु गर्नुहोस्।"
-          : "The app server is not running. Please start the local API again."
-      );
+  const placeOrder = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!cart.length) {
+      setNotice({ type: "error", message: "Add products before placing an order." });
+      return;
     }
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "Request failed");
-    return body as T;
+
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await api<any>("/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          paymentStatus: "unpaid",
+          items: cart.map((item) => ({
+            productId: item.product.id,
+            productName: item.product.name,
+            price: Number(item.product.price),
+            quantity: item.quantity,
+            unit: item.product.unit || "piece",
+          })),
+        }),
+      });
+      setOrderInfo(result);
+      setCart([]);
+      setNotice({ type: "success", message: `Order created successfully. Order ID: ${result.id}` });
+      setForm({
+        customerName: "",
+        customerPhone: "",
+        customerEmail: "",
+        customerAddress: "",
+        notes: "",
+        paymentMethod: "bank",
+      });
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const publicApi = async <T,>(path: string) => {
-    const response = await fetch(`/api${path}`);
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "Request failed");
-    return body as T;
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <Card title="Customer details">
+        <form className="space-y-4" onSubmit={placeOrder}>
+          <Notice notice={notice} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Customer name">
+              <input className={textInputClasses()} value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
+            </Field>
+            <Field label="Phone number">
+              <input className={textInputClasses()} value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Email">
+            <input className={textInputClasses()} value={form.customerEmail} onChange={(e) => setForm({ ...form, customerEmail: e.target.value })} />
+          </Field>
+          <Field label="Address">
+            <textarea className={cn(textInputClasses(), "min-h-[110px]")} value={form.customerAddress} onChange={(e) => setForm({ ...form, customerAddress: e.target.value })} />
+          </Field>
+          <Field label="Notes">
+            <textarea className={cn(textInputClasses(), "min-h-[110px]")} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </Field>
+          <Field label="Payment method">
+            <select className={textInputClasses()} value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}>
+              <option value="bank">Bank</option>
+              <option value="esewa">eSewa</option>
+              <option value="khalti">Khalti</option>
+            </select>
+          </Field>
+          <button className={cn(buttonClasses("primary"), "w-full")} disabled={busy}>
+            {busy ? "Creating order..." : "Create order"}
+          </button>
+          {orderInfo && (
+            <div className="rounded-2xl bg-stone-50 p-4 text-sm text-slate-700">
+              <div className="font-semibold text-slate-900">Order created</div>
+              <div>Order ID: {orderInfo.id}</div>
+              <div>Customer code: {orderInfo.customer?.customerCode || "-"}</div>
+            </div>
+          )}
+        </form>
+      </Card>
+
+      <Card title="Order summary" action={<Link href="/catalog" className={buttonClasses("secondary")}>Back to products</Link>}>
+        <div className="space-y-3">
+          {cart.length === 0 ? (
+            <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No products added yet.</div>
+          ) : (
+            cart.map((item, index) => (
+              <div key={item.product.id} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 p-3">
+                <div>
+                  <div className="font-semibold text-slate-900">{item.product.name}</div>
+                  <div className="text-sm text-slate-600">{asMoney(item.product.price)} x {item.quantity}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button className={buttonClasses("secondary")} onClick={() => setCart((current) => current.map((entry, i) => i === index ? { ...entry, quantity: Math.max(1, entry.quantity - 1) } : entry))}>-</button>
+                  <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                  <button className={buttonClasses("secondary")} onClick={() => setCart((current) => current.map((entry, i) => i === index ? { ...entry, quantity: entry.quantity + 1 } : entry))}>+</button>
+                  <button className={buttonClasses("danger")} onClick={() => setCart((current) => current.filter((_, i) => i !== index))}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+          <div className="rounded-2xl bg-slate-900 p-4 text-white">
+            <div className="text-sm uppercase tracking-[0.2em] text-slate-300">Total</div>
+            <div className="mt-1 text-3xl font-bold">{asMoney(total)}</div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function TrackOrderPage() {
+  const [form, setForm] = useState({ id: "", phone: "" });
+  const [result, setResult] = useState<ShopOrder | null>(null);
+  const [notice, setNotice] = useState<AlertState>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setNotice(null);
+    try {
+      const data = await api<ShopOrder>(`/orders/${form.id}/track?phone=${encodeURIComponent(form.phone)}`);
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
   };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <Card title="Track your order">
+        <form className="space-y-4" onSubmit={submit}>
+          <Notice notice={notice} />
+          <Field label="Order ID">
+            <input className={textInputClasses()} value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} />
+          </Field>
+          <Field label="Phone number">
+            <input className={textInputClasses()} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Field>
+          <button className={cn(buttonClasses("primary"), "w-full")}>Track order</button>
+          <Link href="/" className={cn(buttonClasses("secondary"), "w-full")}>Back to home</Link>
+        </form>
+      </Card>
+      <Card title="Order status">
+        {!result ? (
+          <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">Track an order to see its current status here.</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <StatusBadge value={result.status} />
+              <StatusBadge value={result.paymentStatus || "unpaid"} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Info label="Customer" value={result.customerName} />
+              <Info label="Phone" value={result.customerPhone} />
+              <Info label="Payment" value={result.paymentMethod || "-"} />
+              <Info label="Created" value={asDate(result.createdAt)} />
+            </div>
+            <Info label="Address" value={result.customerAddress} />
+            <div className="space-y-2">
+              {result.items?.map((item, index) => (
+                <div key={`${item.productName}-${index}`} className="flex items-center justify-between rounded-2xl border border-stone-200 px-4 py-3">
+                  <div>
+                    <div className="font-semibold">{item.productName}</div>
+                    <div className="text-sm text-slate-600">{item.quantity} {item.unit || "piece"}</div>
+                  </div>
+                  <div className="font-semibold">{asMoney(item.price * item.quantity)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl bg-slate-900 p-4 text-white">
+              <div className="text-sm text-slate-300">Total</div>
+              <div className="text-2xl font-bold">{asMoney(result.totalAmount)}</div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function BookPage() {
+  const [form, setForm] = useState({
+    serviceType: "jeep",
+    customerName: "",
+    customerPhone: "",
+    pickupLocation: "",
+    destination: "",
+    bookingDate: "",
+    notes: "",
+  });
+  const [notice, setNotice] = useState<AlertState>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      await api("/bookings", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      setNotice({ type: "success", message: "Booking created successfully." });
+      setForm({
+        serviceType: "jeep",
+        customerName: "",
+        customerPhone: "",
+        pickupLocation: "",
+        destination: "",
+        bookingDate: "",
+        notes: "",
+      });
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+      <Card title="Book transport service">
+        <form className="space-y-4" onSubmit={submit}>
+          <Notice notice={notice} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Service">
+              <select className={textInputClasses()} value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })}>
+                <option value="jeep">Bolero double cab</option>
+                <option value="tractor">Tractor</option>
+              </select>
+            </Field>
+            <Field label="Booking date">
+              <input className={textInputClasses()} value={form.bookingDate} onChange={(e) => setForm({ ...form, bookingDate: e.target.value })} placeholder="Example: 2026-04-20 or tomorrow morning" />
+            </Field>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Customer name">
+              <input className={textInputClasses()} value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
+            </Field>
+            <Field label="Phone number">
+              <input className={textInputClasses()} value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Pickup location">
+            <input className={textInputClasses()} value={form.pickupLocation} onChange={(e) => setForm({ ...form, pickupLocation: e.target.value })} />
+          </Field>
+          <Field label="Destination">
+            <input className={textInputClasses()} value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} />
+          </Field>
+          <Field label="Notes">
+            <textarea className={cn(textInputClasses(), "min-h-[100px]")} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </Field>
+          <div className="flex flex-wrap gap-3">
+            <button className={buttonClasses("primary")} disabled={busy}>
+              {busy ? "Saving..." : "Create booking"}
+            </button>
+            <Link href="/" className={buttonClasses("secondary")}>
+              Back to home
+            </Link>
+          </div>
+        </form>
+      </Card>
+      <Card title="Service notes">
+        <div className="space-y-3 text-slate-700">
+          <p>Use this page for Bolero double cab and tractor service booking.</p>
+          <p>After booking, the owner side should show the request clearly so it can be confirmed or rejected.</p>
+          <p>Customers should not be confused about where to go next, so the back-to-home button is always visible.</p>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function AccountPage() {
+  const [form, setForm] = useState({ customerCode: "", phone: "" });
+  const [result, setResult] = useState<any>(null);
+  const [notice, setNotice] = useState<AlertState>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setNotice(null);
+    try {
+      const data = await api<any>(`/customer-portal/profile?customerCode=${encodeURIComponent(form.customerCode)}&phone=${encodeURIComponent(form.phone)}`);
+      setResult(data);
+    } catch (err) {
+      setResult(null);
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+      <Card title="Customer account">
+        <form className="space-y-4" onSubmit={submit}>
+          <Notice notice={notice} />
+          <Field label="Customer code">
+            <input className={textInputClasses()} value={form.customerCode} onChange={(e) => setForm({ ...form, customerCode: e.target.value })} />
+          </Field>
+          <Field label="Phone number">
+            <input className={textInputClasses()} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Field>
+          <button className={cn(buttonClasses("primary"), "w-full")}>Open account</button>
+        </form>
+      </Card>
+      <Card title="History and balances">
+        {!result ? (
+          <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">Open your account to see orders, invoices, payments, and balance.</div>
+        ) : (
+          <div className="space-y-5">
+            <div className="flex items-center gap-4">
+              {result.customer.photoPath ? (
+                <img src={result.customer.photoPath} alt={result.customer.name} className="h-16 w-16 rounded-2xl object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-stone-100 text-slate-500">No photo</div>
+              )}
+              <div>
+                <div className="text-lg font-semibold">{result.customer.name}</div>
+                <div className="text-sm text-slate-600">{result.customer.customerCode}</div>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Info label="Credit balance" value={asMoney(result.customer.creditBalance)} />
+              <Info label="Total spent" value={asMoney(result.customer.totalSpent)} />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold">Recent orders</h3>
+              {result.orders?.length ? result.orders.map((order: any) => (
+                <div key={order.id} className="rounded-2xl border border-stone-200 p-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                    <div className="font-semibold">Order #{order.id}</div>
+                    <div className="flex gap-2">
+                      <StatusBadge value={order.status} />
+                      <StatusBadge value={order.paymentStatus} />
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600">{asDate(order.createdAt)}</div>
+                </div>
+              )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No orders yet.</div>}
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function AboutPage({ settings }: { settings: PublicSettings }) {
+  return (
+    <Card title="About the shop">
+      <div className="space-y-4 text-slate-700">
+        <p>{settings.aboutText || FALLBACK_SETTINGS.aboutText}</p>
+        <p>Phone: {settings.phone || FALLBACK_SETTINGS.phone}</p>
+        <p>Address: {settings.address || FALLBACK_SETTINGS.address}</p>
+        <p>Email: {settings.email || "rajeshshoppingcenter@gmail.com"}</p>
+      </div>
+    </Card>
+  );
+}
+
+function TermsPage({ settings }: { settings: PublicSettings }) {
+  return (
+    <Card title="Terms and service">
+      <div className="space-y-4 whitespace-pre-wrap text-slate-700">
+        {settings.termsConditions || settings.deliveryPolicy || "Terms have not been added yet."}
+      </div>
+    </Card>
+  );
+}
+
+function OwnerLoginPage({ onLogin }: { onLogin: (token: string) => void }) {
+  const [, navigate] = useLocation();
+  const [form, setForm] = useState({ identifier: "owner", password: "admin123" });
+  const [notice, setNotice] = useState<AlertState>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await api<{ token: string }>("/admin/login", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      onLogin(result.token);
+      navigate("/owner");
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-xl space-y-6">
+      <Card title="Owner login">
+        <form className="space-y-4" onSubmit={submit}>
+          <Notice notice={notice} />
+          <Field label="Username / email / phone">
+            <input className={textInputClasses()} value={form.identifier} onChange={(e) => setForm({ ...form, identifier: e.target.value })} />
+          </Field>
+          <Field label="Password">
+            <input className={textInputClasses()} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          </Field>
+          <button className={cn(buttonClasses("primary"), "w-full")} disabled={busy}>
+            {busy ? "Signing in..." : "Log in"}
+          </button>
+          <Link href="/" className={cn(buttonClasses("secondary"), "w-full")}>
+            Back to home
+          </Link>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout: () => void; settings: PublicSettings }) {
+  const [tab, setTab] = useState<"overview" | "customers" | "products" | "orders" | "bookings" | "settings">("overview");
+  const [notice, setNotice] = useState<AlertState>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "", address: "", notes: "", customerCode: "", photoPath: "" });
+  const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
+  const [productForm, setProductForm] = useState({
+    name: "",
+    sku: "",
+    description: "",
+    price: "",
+    buyingPrice: "0",
+    transportationCost: "0",
+    extraCost: "0",
+    stockQuantity: "0",
+    reorderLevel: "0",
+    unit: "piece",
+    categoryId: "",
+    imageUrl: "",
+    featured: false,
+  });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [settingsForm, setSettingsForm] = useState({
+    shopName: settings.shopName || "",
+    proprietorName: settings.proprietorName || "",
+    phone: settings.phone || "",
+    email: settings.email || "",
+    address: settings.address || "",
+    aboutText: settings.aboutText || "",
+    termsConditions: settings.termsConditions || "",
+    deliveryPolicy: settings.deliveryPolicy || "",
+    shopPhotoPath: settings.shopPhotoPath || "",
+    homeBannerPath: settings.homeBannerPath || "",
+  });
 
   const load = async () => {
-    if (!token) return;
-    const [summaryData, customersData, productsData, categoriesData, settingsData, ordersData] = await Promise.all([
-      api<any>("/admin/dashboard-summary"),
-      api<any[]>("/admin/customers"),
-      api<any[]>("/admin/products"),
-      api<any[]>("/admin/categories"),
-      api<any>("/settings"),
-      api<any[]>("/admin/orders"),
-    ]);
-    setSummary(summaryData);
-    setCustomers(customersData);
-    setProducts(productsData);
-    setCategories(categoriesData);
-    setOrders(ordersData);
-    setSettings(settingsData);
-    setSettingsForm({
-      shopName: settingsData?.shopName ?? "",
-      proprietorName: settingsData?.proprietorName ?? "",
-      phone: settingsData?.phone ?? "",
-      email: settingsData?.email ?? "",
-      address: settingsData?.address ?? "",
-      bankName: settingsData?.bankName ?? "",
-      bankBranch: settingsData?.bankBranch ?? "",
-      accountName: settingsData?.accountName ?? "",
-      accountNumber: settingsData?.accountNumber ?? "",
-      whatsappPhone: settingsData?.whatsappPhone ?? "",
-      whatsappApiKey: settingsData?.whatsappApiKey ?? "",
-      bankQrPath: settingsData?.bankQrPath ?? "",
-      esewaId: settingsData?.esewaId ?? "",
-      esewaQrPath: settingsData?.esewaQrPath ?? "",
-      khaltiId: settingsData?.khaltiId ?? "",
-      khaltiQrPath: settingsData?.khaltiQrPath ?? "",
-      rewardRate: settingsData?.rewardRate ?? 1,
-      rewardUnitAmount: String(settingsData?.rewardUnitAmount ?? "100"),
-      invoiceFooter: settingsData?.invoiceFooter ?? "",
-      aboutText: settingsData?.aboutText ?? "",
-      deliveryPolicy: settingsData?.deliveryPolicy ?? "",
-      termsConditions: settingsData?.termsConditions ?? "",
-      shopPhotoPath: settingsData?.shopPhotoPath ?? "",
-      ownerPhotoPath: settingsData?.ownerPhotoPath ?? "",
-      homeBannerPath: settingsData?.homeBannerPath ?? "",
-      announcements: Array.isArray(settingsData?.announcements) ? settingsData.announcements : [],
-      featuredMedia: Array.isArray(settingsData?.featuredMedia) ? settingsData.featuredMedia : [],
-    });
-    setPaymentForm((current) => ({ ...current, customerId: current.customerId || customersData[0]?.id || 0 }));
-    setInvoiceForm((current) => ({ ...current, customerId: current.customerId || customersData[0]?.id || 0 }));
-    setLines((current) => (current.length ? current : productsData[0] ? [{ productId: productsData[0].id, quantity: 1 }] : []));
-    setProductForm((current: any) => ({
-      ...current,
-      categoryId: current.categoryId && current.categoryId !== "1"
-        ? current.categoryId
-        : String(categoriesData[0]?.id ?? 1),
-    }));
+    setLoading(true);
+    try {
+      const [summaryData, customerData, categoryData, productData, orderData, bookingData, publicSettings] = await Promise.all([
+        api<DashboardSummary>("/admin/dashboard-summary", undefined, token),
+        api<Customer[]>("/admin/customers", undefined, token),
+        api<Category[]>("/admin/categories", undefined, token),
+        api<Product[]>("/admin/products", undefined, token),
+        api<ShopOrder[]>("/admin/orders", undefined, token),
+        api<Booking[]>("/admin/bookings", undefined, token),
+        api<PublicSettings>("/settings"),
+      ]);
+      setSummary(summaryData);
+      setCustomers(customerData);
+      setCategories(categoryData);
+      setProducts(productData);
+      setOrders(orderData);
+      setBookings(bookingData);
+      setSettingsForm({
+        shopName: publicSettings.shopName || "",
+        proprietorName: publicSettings.proprietorName || "",
+        phone: publicSettings.phone || "",
+        email: publicSettings.email || "",
+        address: publicSettings.address || "",
+        aboutText: publicSettings.aboutText || "",
+        termsConditions: publicSettings.termsConditions || "",
+        deliveryPolicy: publicSettings.deliveryPolicy || "",
+        shopPhotoPath: publicSettings.shopPhotoPath || "",
+        homeBannerPath: publicSettings.homeBannerPath || "",
+      });
+      if (!productForm.categoryId && categoryData[0]) {
+        setProductForm((current) => ({ ...current, categoryId: String(categoryData[0].id) }));
+      }
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    void load();
   }, [token]);
 
-  useEffect(() => {
-    publicApi<any>("/settings")
-      .then((settingsData) => {
-        setPublicSettings(settingsData);
-      })
-      .catch(() => {});
-  }, []);
-
-  const currentCustomer = customers.find((item) => item.id === invoiceForm.customerId) || customers[0];
-  const preview = useMemo(() => {
-    const items = lines.map((line) => {
-      const product = products.find((entry) => entry.id === line.productId);
-      return product ? { ...line, name: product.name, unit: product.unit, price: num(product.price), total: num(product.price) * line.quantity } : null;
-    }).filter(Boolean) as Array<{ productId: number; quantity: number; name: string; unit: string; price: number; total: number }>;
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const previousDue = num(currentCustomer?.creditBalance);
-    const total = subtotal + previousDue;
-    const amountPaid = invoiceForm.amountPaid === "" ? (invoiceForm.paymentMethod === "credit" ? 0 : total) : num(invoiceForm.amountPaid);
-    const due = Math.max(total - amountPaid, 0);
-    const rewardRate = Number(settings?.rewardRate ?? 1);
-    const rewardUnitAmount = Number(settings?.rewardUnitAmount ?? 100);
-    const rewardPoints = rewardUnitAmount > 0 ? Math.floor(subtotal / rewardUnitAmount) * rewardRate : 0;
-    return { items, subtotal, previousDue, total, amountPaid, due, rewardPoints };
-  }, [currentCustomer, invoiceForm.amountPaid, invoiceForm.paymentMethod, lines, products, settings]);
-
-  const paymentMethodLabel = useMemo(() => {
-    const labels = lang === "ne"
-      ? {
-          cash: "नगद",
-          credit: "उधारो",
-          esewa: "eSewa",
-          khalti: "Khalti",
-          bank: "बैंक QR",
-        }
-      : {
-          cash: "Cash",
-          credit: "Credit",
-          esewa: "eSewa",
-          khalti: "Khalti",
-          bank: "Bank QR",
-        };
-    return labels[invoiceForm.paymentMethod as keyof typeof labels] ?? invoiceForm.paymentMethod;
-  }, [invoiceForm.paymentMethod, lang]);
-
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-
-  const handleSettingsMediaUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-    field: "shopPhotoPath" | "ownerPhotoPath" | "homeBannerPath",
+  const uploadInto = async (
+    event: ChangeEvent<HTMLInputElement>,
+    setter: (value: string) => void,
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    setSettingsForm((current: any) => ({ ...current, [field]: dataUrl }));
-    event.target.value = "";
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setter(dataUrl);
+      setNotice({ type: "success", message: "Image loaded successfully." });
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
   };
 
-  const handleAnnouncementImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    setSettingsForm((current: any) => ({
-      ...current,
-      announcements: current.announcements.map((item: any, itemIndex: number) =>
-        itemIndex === index ? { ...item, imageUrl: dataUrl } : item,
-      ),
-    }));
-    event.target.value = "";
-  };
-
-  const handleFeaturedMediaUpload = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const dataUrl = await readFileAsDataUrl(file);
-    setSettingsForm((current: any) => ({
-      ...current,
-      featuredMedia: current.featuredMedia.map((item: any, itemIndex: number) =>
-        itemIndex === index
-          ? { ...item, url: dataUrl, mediaType: file.type.startsWith("video/") ? "video" : "image" }
-          : item,
-      ),
-    }));
-    event.target.value = "";
-  };
-
-  const showOwnerFeedback = (type: "success" | "error", message: string) => {
-    setOwnerFeedback({ type, message });
-    window.setTimeout(() => {
-      setOwnerFeedback((current) => (current?.message === message ? null : current));
-    }, 3500);
-  };
-
-  const submitLogin = async (event: React.FormEvent) => {
+  const saveCustomer = async (event: FormEvent) => {
     event.preventDefault();
-    setError("");
     try {
-      const response = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identifier: login.identifier.trim(),
-          password: login.password,
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          (result as any)?.error ||
-          (result as any)?.message ||
-          (lang === "ne" ? "लगइन असफल भयो।" : "Login failed."),
-        );
-      }
-      setToken(result.token);
-      setForgotMode(false);
-      setRecoveryInfo(null);
-      setLoginOtpInfo(null);
-      setLogin((current) => ({ ...current, password: "", otp: "" }));
+      await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) }, token);
+      setCustomerForm({ name: "", phone: "", email: "", address: "", notes: "", customerCode: "", photoPath: "" });
+      setNotice({ type: "success", message: "Customer added successfully." });
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
   };
 
-  const requestLoginOtp = async () => {
-    if (!login.identifier.trim() || !login.password) {
-      setError(lang === "ne" ? "पहिले युजरनेम र पासवर्ड लेख्नुहोस्।" : "Enter username and password first.");
-      return;
-    }
-    setError("");
-    try {
-      const response = await fetch("/api/admin/login/request-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: login.identifier.trim(), password: login.password }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          (result as any)?.error ||
-          (result as any)?.message ||
-          (lang === "ne" ? "लगइन कोड पठाउन सकिएन।" : "Failed to send login code."),
-        );
-      }
-      setLoginOtpInfo(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send login OTP");
-    }
-  };
-
-  const requestPasswordReset = async () => {
-    if (!forgotForm.identifier.trim()) {
-      setError(lang === "ne" ? "पहिले अनुमति दिइएको युजरनेम राख्नुहोस्।" : "Enter an allowed owner username first.");
-      return;
-    }
-    setResetBusy(true);
-    setError("");
-    try {
-      const result = await api<any>("/admin/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ identifier: forgotForm.identifier.trim() }),
-      });
-      setRecoveryInfo(result);
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Password reset request failed");
-    } finally {
-      setResetBusy(false);
-    }
-  };
-
-  const resetPassword = async (event: React.FormEvent) => {
+  const saveCategory = async (event: FormEvent) => {
     event.preventDefault();
-    if (!forgotForm.identifier.trim() || !forgotForm.otp.trim() || !forgotForm.newPassword) {
-      setError(lang === "ne" ? "युजरनेम, रिसेट कोड र नयाँ पासवर्ड चाहिन्छ।" : "Identifier, reset code, and new password are required.");
-      return;
-    }
-    if (forgotForm.newPassword !== forgotForm.confirmPassword) {
-      setError(lang === "ne" ? "नयाँ पासवर्ड र पुष्टि पासवर्ड मिलेन।" : "New password and confirm password do not match.");
-      return;
-    }
-    setResetBusy(true);
-    setError("");
     try {
-      const result = await api<any>("/admin/reset-password", {
+      await api("/admin/categories", {
         method: "POST",
         body: JSON.stringify({
-          identifier: forgotForm.identifier.trim(),
-          otp: forgotForm.otp.trim(),
-          newPassword: forgotForm.newPassword,
+          ...categoryForm,
+          sortOrder: Number(categoryForm.sortOrder || 0),
         }),
-      });
-      setRecoveryInfo(result);
-      setForgotMode(false);
-      setLogin((current) => ({ ...current, identifier: forgotForm.identifier.trim(), password: "", otp: "" }));
-      setForgotForm((current) => ({ ...current, otp: "", newPassword: "", confirmPassword: "" }));
-      setError(lang === "ne" ? "पासवर्ड रिसेट भयो। अब नयाँ पासवर्डले लगइन गर्नुहोस्।" : "Password reset completed. Log in with the new password now.");
+      }, token);
+      setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder || 0) + 1) });
+      setNotice({ type: "success", message: "Category added successfully." });
+      await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password reset failed");
-    } finally {
-      setResetBusy(false);
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
   };
 
-  const changePassword = async (event: React.FormEvent) => {
+  const saveProduct = async (event: FormEvent) => {
     event.preventDefault();
-    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      showOwnerFeedback("error", lang === "ne" ? "हालको र नयाँ पासवर्ड दुबै चाहिन्छ।" : "Both current and new passwords are required.");
-      return;
+    try {
+      await api("/admin/products", {
+        method: "POST",
+        body: JSON.stringify({
+          ...productForm,
+          price: Number(productForm.price || 0),
+          buyingPrice: Number(productForm.buyingPrice || 0),
+          transportationCost: Number(productForm.transportationCost || 0),
+          extraCost: Number(productForm.extraCost || 0),
+          stockQuantity: Number(productForm.stockQuantity || 0),
+          reorderLevel: Number(productForm.reorderLevel || 0),
+          categoryId: Number(productForm.categoryId || 0),
+        }),
+      }, token);
+      setProductForm({
+        name: "",
+        sku: "",
+        description: "",
+        price: "",
+        buyingPrice: "0",
+        transportationCost: "0",
+        extraCost: "0",
+        stockQuantity: "0",
+        reorderLevel: "0",
+        unit: "piece",
+        categoryId: String(categories[0]?.id || ""),
+        imageUrl: "",
+        featured: false,
+      });
+      setNotice({ type: "success", message: "Product added successfully." });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
-    if (passwordForm.newPassword.length < 6) {
-      showOwnerFeedback("error", lang === "ne" ? "नयाँ पासवर्ड कम्तीमा ६ अक्षरको हुनुपर्छ।" : "New password must be at least 6 characters.");
-      return;
+  };
+
+  const saveSettings = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      await api("/admin/settings", { method: "PUT", body: JSON.stringify(settingsForm) }, token);
+      setNotice({ type: "success", message: "Settings saved successfully." });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
+  };
+
+  const changePassword = async (event: FormEvent) => {
+    event.preventDefault();
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      showOwnerFeedback("error", lang === "ne" ? "नयाँ पासवर्ड र पुष्टि पासवर्ड मिलेन।" : "New password and confirm password do not match.");
+      setNotice({ type: "error", message: "New password and confirm password do not match." });
       return;
     }
-    setPasswordBusy(true);
-    setOwnerFeedback(null);
     try {
-      await api("/admin/change-password", {
-        method: "POST",
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        }),
-      });
+      await api("/admin/change-password", { method: "POST", body: JSON.stringify({ currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword }) }, token);
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      showOwnerFeedback("success", lang === "ne" ? "पासवर्ड सफलतापूर्वक परिवर्तन भयो।" : "Password changed successfully.");
+      setNotice({ type: "success", message: "Password changed successfully." });
     } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : "Password change failed");
-    } finally {
-      setPasswordBusy(false);
-    }
-  };
-
-
-  const createCustomer = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setOwnerFeedback(null);
-    try {
-      if (editingCustomerId) {
-        await api(`/admin/customers/${editingCustomerId}`, { method: "PUT", body: JSON.stringify(customerForm) });
-      } else {
-        await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) });
-      }
-      setEditingCustomerId(null);
-      setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-      await load();
-      showOwnerFeedback("success", editingCustomerId ? (lang === "ne" ? "ग्राहक अपडेट गरियो।" : "Customer updated successfully.") : (lang === "ne" ? "ग्राहक थपियो।" : "Customer created successfully."));
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "ग्राहक सेभ गर्न सकिएन।" : "Could not save the customer."));
-    }
-  };
-  const recordPayment = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setOwnerFeedback(null);
-    try {
-      await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
-      setPaymentForm((current) => ({ ...current, amount: "", referenceNote: "" }));
-      await load();
-      showOwnerFeedback("success", lang === "ne" ? "भुक्तानी सफलतापूर्वक राखियो।" : "Payment recorded successfully.");
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "भुक्तानी राख्न सकिएन।" : "Could not record the payment."));
-    }
-  };
-  const createProduct = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setOwnerFeedback(null);
-    const payload = {
-      ...productForm,
-      categoryId: Number(productForm.categoryId),
-      price: num(productForm.price),
-      buyingPrice: num(productForm.buyingPrice),
-      transportationCost: num(productForm.transportationCost),
-      extraCost: num(productForm.extraCost),
-      stockQuantity: Number(productForm.stockQuantity || 0),
-      reorderLevel: Number(productForm.reorderLevel || 0),
-      inStock: Number(productForm.stockQuantity || 0) > 0,
-      featured: Boolean((productForm as any).featured),
-      imageUrl: (productForm as any).imageUrl || null,
-    };
-    try {
-      if (editingProductId) {
-        await api(`/admin/products/${editingProductId}`, { method: "PUT", body: JSON.stringify(payload) });
-      } else {
-        await api("/admin/products", { method: "POST", body: JSON.stringify(payload) });
-      }
-      setEditingProductId(null);
-      setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
-      await load();
-      showOwnerFeedback("success", editingProductId ? (lang === "ne" ? "सामान अपडेट गरियो।" : "Product updated successfully.") : (lang === "ne" ? "सामान थपियो।" : "Product created successfully."));
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "सामान सेभ गर्न सकिएन।" : "Could not save the product."));
-    }
-  };
-  const createCategory = async (event?: React.FormEvent) => {
-    event?.preventDefault();
-    setOwnerFeedback(null);
-    const payload = {
-      ...categoryForm,
-      sortOrder: Number(categoryForm.sortOrder || 0),
-    };
-    try {
-      if (editingCategoryId) {
-        await api(`/admin/categories/${editingCategoryId}`, { method: "PUT", body: JSON.stringify(payload) });
-      } else {
-        await api("/admin/categories", { method: "POST", body: JSON.stringify(payload) });
-      }
-      setEditingCategoryId(null);
-      setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
-      await load();
-      showOwnerFeedback("success", editingCategoryId ? (lang === "ne" ? "श्रेणी अपडेट गरियो।" : "Category updated successfully.") : (lang === "ne" ? "श्रेणी थपियो।" : "Category created successfully."));
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "श्रेणी सेभ गर्न सकिएन।" : "Could not save the category."));
-    }
-  };
-  const createInvoice = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setOwnerFeedback(null);
-    try {
-      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, items: lines }) });
-      setLastInvoice(result);
-      setInvoiceForm((current) => ({ ...current, amountPaid: "", note: "", paymentMethod: "cash" }));
-      setLines(products[0] ? [{ productId: products[0].id, quantity: 1 }] : []);
-      await load();
-      showOwnerFeedback("success", lang === "ne" ? "बिल सफलतापूर्वक सेभ भयो।" : "Invoice saved successfully.");
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "बिल सेभ गर्न सकिएन।" : "Could not save the invoice."));
-    }
-  };
-
-  const startEditProduct = (product: any) => {
-    setEditingProductId(product.id);
-    setProductForm({
-      name: product.name ?? "",
-      sku: product.sku ?? "",
-      description: product.description ?? "",
-      price: String(num(product.price)),
-      buyingPrice: String(num(product.buyingPrice)),
-      transportationCost: String(num(product.transportationCost)),
-      extraCost: String(num(product.extraCost)),
-      stockQuantity: String(product.stockQuantity ?? 0),
-      reorderLevel: String(product.reorderLevel ?? 0),
-      unit: product.unit ?? "piece",
-      categoryId: String(product.categoryId ?? 1),
-      imageUrl: product.imageUrl ?? "",
-      featured: Boolean(product.featured),
-      inStock: Boolean(product.inStock),
-    } as any);
-    setTab("products");
-  };
-
-  const startEditCategory = (category: any) => {
-    setEditingCategoryId(category.id);
-    setCategoryForm({
-      name: category.name ?? "",
-      description: category.description ?? "",
-      icon: category.icon ?? "grocery",
-      sortOrder: String(category.sortOrder ?? 0),
-    });
-    setTab("products");
-  };
-
-  const deleteProduct = async (productId: number) => {
-    setOwnerFeedback(null);
-    try {
-      await api(`/admin/products/${productId}`, { method: "DELETE" });
-      if (editingProductId === productId) {
-        setEditingProductId(null);
-        setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
-      }
-      await load();
-      showOwnerFeedback("success", lang === "ne" ? "सामान हटाइयो।" : "Product deleted successfully.");
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "सामान हटाउन सकिएन।" : "Could not delete the product."));
-    }
-  };
-
-  const deleteCategory = async (categoryId: number) => {
-    setOwnerFeedback(null);
-    try {
-      await api(`/admin/categories/${categoryId}`, { method: "DELETE" });
-      if (editingCategoryId === categoryId) {
-        setEditingCategoryId(null);
-        setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
-      }
-      await load();
-      showOwnerFeedback("success", lang === "ne" ? "श्रेणी हटाइयो।" : "Category deleted successfully.");
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "श्रेणी हटाउन सकिएन।" : "Could not delete the category."));
-    }
-  };
-
-  const startEditCustomer = (customer: any) => {
-    setEditingCustomerId(customer.id);
-    setCustomerForm({
-      name: customer.name ?? "",
-      phone: customer.phone ?? "",
-      address: customer.address ?? "",
-      notes: customer.notes ?? "",
-      customerCode: customer.customerCode ?? "",
-      photoPath: customer.photoPath ?? "",
-    });
-    setTab("customers");
-  };
-
-  const deleteCustomer = async (customerId: number) => {
-    setOwnerFeedback(null);
-    try {
-      await api(`/admin/customers/${customerId}`, { method: "DELETE" });
-      if (editingCustomerId === customerId) {
-        setEditingCustomerId(null);
-        setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-      }
-      await load();
-      showOwnerFeedback("success", lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.");
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer."));
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
   };
 
   const updateOrderStatus = async (orderId: number, status: string, paymentStatus?: string) => {
-    await api(`/admin/orders/${orderId}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status, ...(paymentStatus ? { paymentStatus } : {}) }),
-    });
-    await load();
-  };
-
-  const seedSampleProducts = async () => {
-    setSeedingProducts(true);
     try {
-      const existingCategories = await api<any[]>("/admin/categories");
-      const categoryMap = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
-
-      for (const category of shopCategories) {
-        if (!categoryMap.has(category.name.toLowerCase())) {
-          const created = await api<any>("/admin/categories", { method: "POST", body: JSON.stringify(category) });
-          categoryMap.set(category.name.toLowerCase(), created.id);
-        }
-      }
-
-      const existingProducts = await api<any[]>("/admin/products");
-      const existingSkus = new Set(existingProducts.map((product) => String(product.sku || "")));
-
-      for (const product of sampleCatalogProducts) {
-        if (existingSkus.has(product.sku)) continue;
-        const categoryId = categoryMap.get(product.categoryName.toLowerCase());
-        if (!categoryId) continue;
-        await api("/admin/products", {
-          method: "POST",
-          body: JSON.stringify({
-            ...product,
-            categoryId,
-          }),
-        });
-      }
+      await api(`/admin/orders/${orderId}/status`, { method: "PUT", body: JSON.stringify({ status, ...(paymentStatus ? { paymentStatus } : {}) }) }, token);
+      setNotice({ type: "success", message: "Order updated successfully." });
       await load();
-    } finally {
-      setSeedingProducts(false);
-    }
-  };
-
-  const saveMediaSettings = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSettingsBusy(true);
-    setOwnerFeedback(null);
-    try {
-      await api("/admin/settings", {
-        method: "PUT",
-        body: JSON.stringify({
-          shopName: settingsForm.shopName || null,
-          proprietorName: settingsForm.proprietorName || null,
-          phone: settingsForm.phone || null,
-          email: settingsForm.email || null,
-          address: settingsForm.address || null,
-          bankName: settingsForm.bankName || null,
-          bankBranch: settingsForm.bankBranch || null,
-          accountName: settingsForm.accountName || null,
-          accountNumber: settingsForm.accountNumber || null,
-          whatsappPhone: settingsForm.whatsappPhone || null,
-          whatsappApiKey: settingsForm.whatsappApiKey || null,
-          bankQrPath: settingsForm.bankQrPath || null,
-          esewaId: settingsForm.esewaId || null,
-          esewaQrPath: settingsForm.esewaQrPath || null,
-          khaltiId: settingsForm.khaltiId || null,
-          khaltiQrPath: settingsForm.khaltiQrPath || null,
-          rewardRate: Number(settingsForm.rewardRate || 1),
-          rewardUnitAmount: String(settingsForm.rewardUnitAmount || "100"),
-          invoiceFooter: settingsForm.invoiceFooter || null,
-          aboutText: settingsForm.aboutText || null,
-          deliveryPolicy: settingsForm.deliveryPolicy || null,
-          termsConditions: settingsForm.termsConditions || null,
-          shopPhotoPath: settingsForm.shopPhotoPath || null,
-          ownerPhotoPath: settingsForm.ownerPhotoPath || null,
-          homeBannerPath: settingsForm.homeBannerPath || null,
-          announcements: settingsForm.announcements || [],
-          featuredMedia: settingsForm.featuredMedia || [],
-        }),
-      });
-      await load();
-      const latest = await publicApi<any>("/settings");
-      setPublicSettings(latest);
-      showOwnerFeedback("success", lang === "ne" ? "फोटो र मिडिया सफलतापूर्वक सेभ भयो।" : "Photos and media settings saved successfully.");
     } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "मिडिया सेभ गर्न सकिएन।" : "Could not save media settings."));
-    } finally {
-      setSettingsBusy(false);
+      setNotice({ type: "error", message: getErrorMessage(err) });
     }
   };
 
-  const shopInfo = settings || publicSettings || {};
-  const shopName = String(shopInfo?.shopName ?? "Rajesh Shopping Center");
-  const shopAddress = String(shopInfo?.address ?? "Musikot-5, Anpchaur, Gulmi, Nepal");
-  const shopPhone = String(shopInfo?.phone ?? "+977-XXXXXXXXXX");
-  const shopEmail = String(shopInfo?.email ?? "rajeshshoppingcenter@gmail.com");
-  if (!token && !ownerEntryRequested) {
-    return <PublicApp onOwnerAccessRequest={() => { setError(""); setOwnerEntryRequested(true); }} />;
-  }
+  const updateBookingStatus = async (bookingId: number, status: string) => {
+    try {
+      await api(`/admin/bookings/${bookingId}/status`, { method: "PUT", body: JSON.stringify({ status }) }, token);
+      setNotice({ type: "success", message: "Booking updated successfully." });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
+  };
 
-  if (!token) {
-    return (
-        <OwnerLoginModern
-          shopName={shopName}
-          text={text}
-          lang={lang}
-          login={login}
-          setLogin={setLogin}
-          submitLogin={submitLogin}
-          requestLoginOtp={requestLoginOtp}
-          forgotMode={forgotMode}
-          setForgotMode={setForgotMode}
-          forgotForm={forgotForm}
-          setForgotForm={setForgotForm}
-          requestPasswordReset={requestPasswordReset}
-          resetPassword={resetPassword}
-          resetBusy={resetBusy}
-          recoveryInfo={recoveryInfo}
-          toggleLanguage={toggleLanguage}
-          setOwnerEntryRequested={setOwnerEntryRequested}
-          setError={setError}
-          loginOtpInfo={loginOtpInfo}
-          error={error}
-        />
-    );
-  }
+  const removeCustomer = async (id: number) => {
+    try {
+      await api(`/admin/customers/${id}`, { method: "DELETE" }, token);
+      setNotice({ type: "success", message: "Customer deleted successfully." });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
+  };
+
+  const removeProduct = async (id: number) => {
+    try {
+      await api(`/admin/products/${id}`, { method: "DELETE" }, token);
+      setNotice({ type: "success", message: "Product deleted successfully." });
+      await load();
+    } catch (err) {
+      setNotice({ type: "error", message: getErrorMessage(err) });
+    }
+  };
+
+  const mergedSettings = { ...FALLBACK_SETTINGS, ...settingsForm };
 
   return (
-    <OwnerWorkspaceModern
-      tab={tab}
-      setTab={setTab}
-      text={text}
-      lang={lang}
-      toggleLanguage={toggleLanguage}
-      shopName={shopName}
-      shopAddress={shopAddress}
-      shopPhone={shopPhone}
-      settings={settings}
-      summary={summary}
-      orders={orders}
-      customers={customers}
-      products={products}
-      preview={preview}
-      invoiceForm={invoiceForm}
-      setInvoiceForm={setInvoiceForm}
-      lines={lines}
-      setLines={setLines}
-      createInvoice={createInvoice}
-      lastInvoice={lastInvoice}
-      paymentMethodLabel={paymentMethodLabel}
-      paymentForm={paymentForm}
-      setPaymentForm={setPaymentForm}
-      recordPayment={recordPayment}
-      customerForm={customerForm}
-      setCustomerForm={setCustomerForm}
-      createCustomer={createCustomer}
-      editingCustomerId={editingCustomerId}
-      setEditingCustomerId={setEditingCustomerId}
-      deleteCustomer={deleteCustomer}
-      startEditCustomer={startEditCustomer}
-      productForm={productForm}
-      setProductForm={setProductForm}
-      createProduct={createProduct}
-      editingProductId={editingProductId}
-      setEditingProductId={setEditingProductId}
-      startEditProduct={startEditProduct}
-      deleteProduct={deleteProduct}
-      settingsForm={settingsForm}
-      setSettingsForm={setSettingsForm}
-      saveMediaSettings={saveMediaSettings}
-      settingsBusy={settingsBusy}
-      passwordForm={passwordForm}
-      setPasswordForm={setPasswordForm}
-      passwordBusy={passwordBusy}
-      changePassword={changePassword}
-      readFileAsDataUrl={readFileAsDataUrl}
-      handleSettingsMediaUpload={handleSettingsMediaUpload}
-      setToken={setToken}
-      setOwnerEntryRequested={setOwnerEntryRequested}
-      updateOrderStatus={updateOrderStatus}
-      externalFeedback={ownerFeedback}
-    />
-  );
+    <div className="space-y-6">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="text-sm uppercase tracking-[0.2em] text-slate-500">Owner workspace</div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">{mergedSettings.shopName}</h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/" className={buttonClasses("secondary")}>Back to home</Link>
+            <button className={buttonClasses("danger")} onClick={onLogout}>Logout</button>
+          </div>
+        </div>
+      </Card>
 
+      <Notice notice={notice} />
+
+      <div className="flex flex-wrap gap-2">
+        {(["overview", "customers", "products", "orders", "bookings", "settings"] as const).map((item) => (
+          <button key={item} className={cn(buttonClasses(tab === item ? "primary" : "secondary"))} onClick={() => setTab(item)}>
+            {item[0].toUpperCase() + item.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <Card><div className="text-slate-600">Loading owner workspace...</div></Card>
+      ) : null}
+
+      {tab === "overview" && (
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Metric title="Products" value={String(summary?.totals?.totalProducts || 0)} />
+            <Metric title="Low stock" value={String(summary?.totals?.lowStockProducts || 0)} />
+            <Metric title="Customers" value={String(summary?.totals?.totalCustomers || 0)} />
+            <Metric title="Credit balance" value={asMoney(summary?.totals?.totalCreditBalance || 0)} />
+          </div>
+          <Card title="Recent invoices">
+            <div className="space-y-3">
+              {summary?.recentInvoices?.length ? summary.recentInvoices.map((invoice) => (
+                <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 p-4">
+                  <div>
+                    <div className="font-semibold">{invoice.invoiceNumber}</div>
+                    <div className="text-sm text-slate-600">{invoice.customerName}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">{asMoney(invoice.totalAmount)}</div>
+                    <div className="text-sm text-slate-600">Due {asMoney(invoice.dueAmount)}</div>
+                  </div>
+                </div>
+              )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No invoices yet.</div>}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "customers" && (
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card title="Add customer">
+            <form className="space-y-4" onSubmit={saveCustomer}>
+              <Field label="Name"><input className={textInputClasses()} value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} /></Field>
+              <Field label="Phone"><input className={textInputClasses()} value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} /></Field>
+              <Field label="Email"><input className={textInputClasses()} value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} /></Field>
+              <Field label="Address"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} /></Field>
+              <Field label="Notes"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={customerForm.notes} onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })} /></Field>
+              <Field label="Photo">
+                <input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setCustomerForm((current) => ({ ...current, photoPath: value })))} />
+              </Field>
+              <button className={cn(buttonClasses("primary"), "w-full")}>Save customer</button>
+            </form>
+          </Card>
+          <Card title="Customers">
+            <div className="space-y-3">
+              {customers.length ? customers.map((customer) => (
+                <div key={customer.id} className="rounded-2xl border border-stone-200 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="flex gap-3">
+                      {customer.photoPath ? (
+                        <img src={customer.photoPath} alt={customer.name} className="h-14 w-14 rounded-2xl object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-xs text-slate-500">No photo</div>
+                      )}
+                      <div>
+                        <div className="font-semibold">{customer.name}</div>
+                        <div className="text-sm text-slate-600">{customer.customerCode || "No code"}</div>
+                        <div className="text-sm text-slate-600">{customer.phone || "-"}</div>
+                      </div>
+                    </div>
+                    <button className={buttonClasses("danger")} onClick={() => void removeCustomer(customer.id)}>Delete</button>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Info label="Credit" value={asMoney(customer.creditBalance)} />
+                    <Info label="Total spent" value={asMoney(customer.totalSpent)} />
+                  </div>
+                </div>
+              )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No customers yet.</div>}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "products" && (
+        <div className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[0.42fr_0.58fr]">
+            <Card title="Add category">
+              <form className="space-y-4" onSubmit={saveCategory}>
+                <Field label="Name"><input className={textInputClasses()} value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} /></Field>
+                <Field label="Description"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} /></Field>
+                <button className={cn(buttonClasses("primary"), "w-full")}>Save category</button>
+              </form>
+            </Card>
+            <Card title="Add product">
+              <form className="grid gap-4 md:grid-cols-2" onSubmit={saveProduct}>
+                <Field label="Name"><input className={textInputClasses()} value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></Field>
+                <Field label="SKU"><input className={textInputClasses()} value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></Field>
+                <Field label="Price"><input className={textInputClasses()} value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></Field>
+                <Field label="Stock quantity"><input className={textInputClasses()} value={productForm.stockQuantity} onChange={(e) => setProductForm({ ...productForm, stockQuantity: e.target.value })} /></Field>
+                <Field label="Buying price"><input className={textInputClasses()} value={productForm.buyingPrice} onChange={(e) => setProductForm({ ...productForm, buyingPrice: e.target.value })} /></Field>
+                <Field label="Unit"><input className={textInputClasses()} value={productForm.unit} onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })} /></Field>
+                <Field label="Category">
+                  <select className={textInputClasses()} value={productForm.categoryId} onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}>
+                    <option value="">Select category</option>
+                    {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Featured">
+                  <select className={textInputClasses()} value={productForm.featured ? "yes" : "no"} onChange={(e) => setProductForm({ ...productForm, featured: e.target.value === "yes" })}>
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </Field>
+                <div className="md:col-span-2">
+                  <Field label="Description"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} /></Field>
+                </div>
+                <div className="md:col-span-2">
+                  <Field label="Product image">
+                    <input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setProductForm((current) => ({ ...current, imageUrl: value })))} />
+                  </Field>
+                </div>
+                <div className="md:col-span-2">
+                  <button className={cn(buttonClasses("primary"), "w-full")}>Save product</button>
+                </div>
+              </form>
+            </Card>
+          </div>
+
+          <Card title="Products">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {products.length ? products.map((product) => (
+                <div key={product.id} className="rounded-2xl border border-stone-200 p-4">
+                  <div className="mb-3 overflow-hidden rounded-2xl bg-stone-100">
+                    {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="h-40 w-full object-cover" /> : <div className="flex h-40 items-center justify-center text-sm text-slate-500">No image</div>}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-slate-500">{product.categoryName || "General"}</div>
+                    <div className="text-lg font-semibold">{product.name}</div>
+                    <div className="text-sm text-slate-600">{product.description || "No description."}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold">{asMoney(product.price)}</div>
+                      <div className="text-sm text-slate-600">Stock {product.stockQuantity ?? 0}</div>
+                    </div>
+                    <button className={cn(buttonClasses("danger"), "w-full")} onClick={() => void removeProduct(product.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No products yet.</div>}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "orders" && (
+        <Card title="Orders">
+          <div className="space-y-4">
+            {orders.length ? orders.map((order) => (
+              <div key={order.id} className="rounded-2xl border border-stone-200 p-4">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold">Order #{order.id}</div>
+                    <div className="text-sm text-slate-600">{order.customerName} • {order.customerPhone}</div>
+                    <div className="text-sm text-slate-600">{order.customerAddress}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge value={order.status} />
+                    <StatusBadge value={order.paymentStatus || "unpaid"} />
+                  </div>
+                </div>
+                <div className="mb-3 text-sm text-slate-600">{asDate(order.createdAt)}</div>
+                <div className="mb-4 text-lg font-bold">{asMoney(order.totalAmount)}</div>
+                <div className="flex flex-wrap gap-2">
+                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "confirmed")}>Confirm</button>
+                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "dispatched")}>Dispatch</button>
+                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "delivered", "paid")}>Deliver</button>
+                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, order.status, "paid")}>Confirm payment</button>
+                  <button className={buttonClasses("danger")} onClick={() => void updateOrderStatus(order.id, "cancelled")}>Reject</button>
+                </div>
+              </div>
+            )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No orders yet.</div>}
+          </div>
+        </Card>
+      )}
+
+      {tab === "bookings" && (
+        <Card title="Transport bookings">
+          <div className="space-y-4">
+            {bookings.length ? bookings.map((booking) => (
+              <div key={booking.id} className="rounded-2xl border border-stone-200 p-4">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold">{booking.serviceType === "tractor" ? "Tractor" : "Bolero"} booking #{booking.id}</div>
+                    <div className="text-sm text-slate-600">{booking.customerName} • {booking.customerPhone}</div>
+                    <div className="text-sm text-slate-600">{booking.pickupLocation} → {booking.destination}</div>
+                  </div>
+                  <StatusBadge value={booking.status} />
+                </div>
+                <div className="mb-4 text-sm text-slate-600">For {booking.bookingDate}</div>
+                <div className="flex flex-wrap gap-2">
+                  <button className={buttonClasses("secondary")} onClick={() => void updateBookingStatus(booking.id, "confirmed")}>Confirm</button>
+                  <button className={buttonClasses("secondary")} onClick={() => void updateBookingStatus(booking.id, "completed")}>Complete</button>
+                  <button className={buttonClasses("danger")} onClick={() => void updateBookingStatus(booking.id, "rejected")}>Reject</button>
+                </div>
+              </div>
+            )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No bookings yet.</div>}
+          </div>
+        </Card>
+      )}
+
+      {tab === "settings" && (
+        <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+          <Card title="Business settings">
+            <form className="space-y-4" onSubmit={saveSettings}>
+              <Field label="Shop name"><input className={textInputClasses()} value={settingsForm.shopName} onChange={(e) => setSettingsForm({ ...settingsForm, shopName: e.target.value })} /></Field>
+              <Field label="Proprietor name"><input className={textInputClasses()} value={settingsForm.proprietorName} onChange={(e) => setSettingsForm({ ...settingsForm, proprietorName: e.target.value })} /></Field>
+              <Field label="Phone"><input className={textInputClasses()} value={settingsForm.phone} onChange={(e) => setSettingsForm({ ...settingsForm, phone: e.target.value })} /></Field>
+              <Field label="Email"><input className={textInputClasses()} value={settingsForm.email} onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })} /></Field>
+              <Field label="Address"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={settingsForm.address} onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })} /></Field>
+              <Field label="About text"><textarea className={cn(textInputClasses(), "min-h-[120px]")} value={settingsForm.aboutText} onChange={(e) => setSettingsForm({ ...settingsForm, aboutText: e.target.value })} /></Field>
+              <Field label="Terms"><textarea className={cn(textInputClasses(), "min-h-[120px]")} value={settingsForm.termsConditions} onChange={(e) => setSettingsForm({ ...settingsForm, termsConditions: e.target.value })} /></Field>
+              <Field label="Shop photo"><input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setSettingsForm((current) => ({ ...current, shopPhotoPath: value })))} /></Field>
+              <Field label="Home banner"><input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setSettingsForm((current) => ({ ...current, homeBannerPath: value })))} /></Field>
+              <button className={cn(buttonClasses("primary"), "w-full")}>Save settings</button>
+            </form>
+          </Card>
+
+          <div className="space-y-6">
+            <Card title="Preview">
+              <div className="space-y-4">
+                <div className="text-2xl font-bold">{mergedSettings.shopName}</div>
+                <div className="text-slate-600">{mergedSettings.address}</div>
+                <div className="font-medium">{mergedSettings.phone}</div>
+                {mergedSettings.shopPhotoPath ? (
+                  <img src={mergedSettings.shopPhotoPath} alt="Shop" className="h-56 w-full rounded-2xl object-cover" />
+                ) : (
+                  <div className="flex h-56 items-center justify-center rounded-2xl bg-stone-100 text-slate-500">No photo yet</div>
+                )}
+              </div>
+            </Card>
+            <Card title="Change password">
+              <form className="space-y-4" onSubmit={changePassword}>
+                <Field label="Current password"><input className={textInputClasses()} type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} /></Field>
+                <Field label="New password"><input className={textInputClasses()} type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} /></Field>
+                <Field label="Confirm new password"><input className={textInputClasses()} type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} /></Field>
+                <button className={cn(buttonClasses("primary"), "w-full")}>Change password</button>
+              </form>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ title, value }: { title: string; value: string }) {
+  return (
+    <Card>
+      <div className="text-sm uppercase tracking-[0.2em] text-slate-500">{title}</div>
+      <div className="mt-2 text-3xl font-bold text-slate-900">{value}</div>
+    </Card>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-stone-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</div>
+      <div className="mt-1 text-slate-900">{value}</div>
+    </div>
+  );
 }
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem(OWNER_TOKEN_KEY) || "");
+  const [settings, setSettings] = useState<PublicSettings>({});
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [settingsData, categoryData, productData] = await Promise.all([
+          api<PublicSettings>("/settings"),
+          api<Category[]>("/categories"),
+          api<Product[]>("/products"),
+        ]);
+        setSettings(settingsData);
+        setCategories(categoryData);
+        setProducts(productData);
+      } catch {
+        // Keep the public shell usable even if one call fails.
+      }
+    })();
+  }, []);
+
+  const addToCart = (product: Product) => {
+    setCart((current) => {
+      const existing = current.find((item) => item.product.id === product.id);
+      if (existing) {
+        return current.map((item) => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...current, { product, quantity: 1 }];
+    });
+  };
+
+  const handleLogin = (nextToken: string) => {
+    localStorage.setItem(OWNER_TOKEN_KEY, nextToken);
+    setToken(nextToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(OWNER_TOKEN_KEY);
+    setToken("");
+  };
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <LanguageProvider>
-        <CartProvider>
-          <OwnerApp />
-        </CartProvider>
-      </LanguageProvider>
-    </QueryClientProvider>
+    <Shell settings={settings}>
+      <Switch>
+        <Route path="/">
+          <HomePage settings={settings} />
+        </Route>
+        <Route path="/catalog">
+          <CatalogPage products={products} categories={categories} addToCart={addToCart} />
+        </Route>
+        <Route path="/checkout">
+          <CheckoutPage cart={cart} setCart={setCart} />
+        </Route>
+        <Route path="/track-order">
+          <TrackOrderPage />
+        </Route>
+        <Route path="/book">
+          <BookPage />
+        </Route>
+        <Route path="/account">
+          <AccountPage />
+        </Route>
+        <Route path="/about">
+          <AboutPage settings={settings} />
+        </Route>
+        <Route path="/terms">
+          <TermsPage settings={settings} />
+        </Route>
+        <Route path="/owner">
+          {token ? <OwnerDashboard token={token} onLogout={handleLogout} settings={settings} /> : <OwnerLoginPage onLogin={handleLogin} />}
+        </Route>
+        <Route>
+          <Card title="Page not found">
+            <div className="space-y-4">
+              <div className="text-slate-600">This page does not exist.</div>
+              <Link href="/" className={buttonClasses("primary")}>
+                Back to home
+              </Link>
+            </div>
+          </Card>
+        </Route>
+      </Switch>
+    </Shell>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

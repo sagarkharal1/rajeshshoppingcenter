@@ -673,6 +673,35 @@ router.get("/admin/bookings", authMiddleware, async (_req, res) => {
   }
 });
 
+router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  const { status } = req.body ?? {};
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid booking ID" });
+  }
+
+  if (typeof status !== "string" || status.trim().length === 0) {
+    return res.status(400).json({ error: "Booking status is required" });
+  }
+
+  try {
+    const [updated] = await db
+      .update(bookingsTable)
+      .set({ status: status.trim() } as any)
+      .where(eq(bookingsTable.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: "Failed to update booking status" });
+  }
+});
+
 router.put("/admin/settings", authMiddleware, async (req, res) => {
   try {
     const settings = req.body;
