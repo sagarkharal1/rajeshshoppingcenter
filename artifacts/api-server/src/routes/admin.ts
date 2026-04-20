@@ -622,7 +622,7 @@ router.get("/admin/orders", authMiddleware, async (_req, res) => {
   }
 });
 
-const ALLOWED_ORDER_STATUSES = ["order-received", "preparing", "dispatched", "delivered", "cancelled"] as const;
+const ALLOWED_ORDER_STATUSES = ["order-received", "confirmed", "preparing", "dispatched", "delivered", "cancelled"] as const;
 const ALLOWED_PAYMENT_STATUSES = ["paid", "unpaid"] as const;
 
 router.put("/admin/orders/:id/status", authMiddleware, async (req, res) => {

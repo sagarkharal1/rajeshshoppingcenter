@@ -30,14 +30,25 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+const optionalTrimmedString = (max: number) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().max(max).optional());
+
 const customerSchema = z.object({
   name: z.string().min(1).max(120).transform((value) => value.trim()),
-  phone: z.string().max(30).optional(),
-  email: z.string().email().max(200).optional(),
-  address: z.string().max(400).optional(),
-  notes: z.string().max(1000).optional(),
-  photoPath: z.string().max(500000).optional(),
-  customerCode: z.string().max(40).optional(),
+  phone: optionalTrimmedString(30),
+  email: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim().toLowerCase();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().email().max(200).optional()),
+  address: optionalTrimmedString(400),
+  notes: optionalTrimmedString(1000),
+  photoPath: optionalTrimmedString(500000),
+  customerCode: optionalTrimmedString(40),
 });
 
 const invoiceItemSchema = z.object({

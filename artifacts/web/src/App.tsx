@@ -140,6 +140,11 @@ function getErrorMessage(err: unknown) {
   return "Request failed";
 }
 
+function cleanOptionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 async function readFileAsDataUrl(file: File) {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -996,7 +1001,22 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
   const saveCustomer = async (event: FormEvent) => {
     event.preventDefault();
     try {
-      await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) }, token);
+      await api(
+        "/admin/customers",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: customerForm.name.trim(),
+            phone: cleanOptionalText(customerForm.phone),
+            email: cleanOptionalText(customerForm.email),
+            address: cleanOptionalText(customerForm.address),
+            notes: cleanOptionalText(customerForm.notes),
+            customerCode: cleanOptionalText(customerForm.customerCode),
+            photoPath: cleanOptionalText(customerForm.photoPath),
+          }),
+        },
+        token,
+      );
       setCustomerForm({ name: "", phone: "", email: "", address: "", notes: "", customerCode: "", photoPath: "" });
       setNotice({ type: "success", message: "Customer added successfully." });
       await load();
