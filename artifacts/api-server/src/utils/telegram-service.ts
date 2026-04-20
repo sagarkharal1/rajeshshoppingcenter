@@ -16,12 +16,24 @@ function getTelegramBotToken(): string {
   );
 }
 
-function getTelegramChatId(): string {
-  return firstNonEmpty(
+function getTelegramChatIds(): string[] {
+  const combined = [
+    process.env.TELEGRAM_CHAT_IDS,
     process.env.TELEGRAM_CHAT_ID,
     process.env.TELEGRAM_CHAT_II,
     process.env.TELEGRAM_CHAT,
     process.env.TELEGRAM_OWNER_CHAT_ID,
+  ]
+    .filter(Boolean)
+    .join(",");
+
+  return Array.from(
+    new Set(
+      combined
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
   );
 }
 
@@ -34,9 +46,9 @@ function escapeTelegramHtml(value: string): string {
 
 export async function sendTelegramMessage(message: string): Promise<void> {
   const telegramBotToken = getTelegramBotToken();
-  const telegramChatId = getTelegramChatId();
+  const telegramChatIds = getTelegramChatIds();
 
-  if (!telegramBotToken || !telegramChatId) {
+  if (!telegramBotToken || !telegramChatIds.length) {
     console.warn("[Telegram] Missing bot token or chat ID env var.");
     return;
   }
@@ -44,48 +56,51 @@ export async function sendTelegramMessage(message: string): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
   const plainTextMessage = message.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[^>]+>/g, "");
 
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: telegramChatId,
-        text: message,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    });
+  for (const telegramChatId of telegramChatIds) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: telegramChatId,
+          text: message,
+          parse_mode: "HTML",
+          disable_web_page_preview: true,
+        }),
+      });
 
-    if (response.ok) {
-      return;
+      if (response.ok) {
+        console.info("[Telegram] HTML notification sent successfully.", telegramChatId);
+        continue;
+      }
+
+      const errorText = await response.text().catch(() => "");
+      console.warn("[Telegram] HTML sendMessage responded with status", response.status, telegramChatId, errorText);
+    } catch (error) {
+      console.warn("[Telegram] Failed HTML notification attempt:", telegramChatId, error);
     }
 
-    const errorText = await response.text().catch(() => "");
-    console.warn("[Telegram] HTML sendMessage responded with status", response.status, errorText);
-  } catch (error) {
-    console.warn("[Telegram] Failed HTML notification attempt:", error);
-  }
+    try {
+      const fallbackResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: telegramChatId,
+          text: plainTextMessage,
+          disable_web_page_preview: true,
+        }),
+      });
 
-  try {
-    const fallbackResponse = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: telegramChatId,
-        text: plainTextMessage,
-        disable_web_page_preview: true,
-      }),
-    });
+      if (!fallbackResponse.ok) {
+        const fallbackErrorText = await fallbackResponse.text().catch(() => "");
+        console.warn("[Telegram] Plain text sendMessage responded with status", fallbackResponse.status, telegramChatId, fallbackErrorText);
+        continue;
+      }
 
-    if (!fallbackResponse.ok) {
-      const fallbackErrorText = await fallbackResponse.text().catch(() => "");
-      console.warn("[Telegram] Plain text sendMessage responded with status", fallbackResponse.status, fallbackErrorText);
-      return;
+      console.info("[Telegram] Plain text fallback notification sent successfully.", telegramChatId);
+    } catch (error) {
+      console.warn("[Telegram] Failed plain text notification attempt:", telegramChatId, error);
     }
-
-    console.info("[Telegram] Plain text fallback notification sent successfully.");
-  } catch (error) {
-    console.warn("[Telegram] Failed plain text notification attempt:", error);
   }
 }
 
@@ -145,7 +160,12 @@ export function formatTelegramBookingMessage(booking: {
   bookingDate: string;
   notes?: string | null;
 }): string {
-  const serviceLabel = booking.serviceType === "jeep" ? "Bolero / Jeep" : "Tractor";
+  const serviceLabel =
+    booking.serviceType === "jeep"
+      ? "Bolero / Jeep"
+      : booking.serviceType === "telcoline"
+        ? "Tata Telcoline"
+        : "Tractor";
 
   const lines = [
     "<b>New Transport Booking</b>",
