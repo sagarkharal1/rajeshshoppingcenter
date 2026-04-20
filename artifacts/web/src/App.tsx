@@ -210,6 +210,11 @@ function Notice({ notice }: { notice: AlertState }) {
   );
 }
 
+function InlineNotice({ notice }: { notice: AlertState }) {
+  if (!notice) return null;
+  return <Notice notice={notice} />;
+}
+
 function Shell({
   settings,
   children,
@@ -521,7 +526,6 @@ function CheckoutPage({
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
       <Card title="Customer details">
         <form className="space-y-4" onSubmit={placeOrder}>
-          <Notice notice={notice} />
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Customer name">
               <input className={textInputClasses()} value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} />
@@ -549,6 +553,7 @@ function CheckoutPage({
           <button className={cn(buttonClasses("primary"), "w-full")} disabled={busy}>
             {busy ? "Creating order..." : "Create order"}
           </button>
+          <InlineNotice notice={notice} />
           {orderInfo && (
             <div className="rounded-2xl bg-stone-50 p-4 text-sm text-slate-700">
               <div className="font-semibold text-slate-900">Order created</div>
@@ -612,7 +617,6 @@ function TrackOrderPage() {
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <Card title="Track your order">
         <form className="space-y-4" onSubmit={submit}>
-          <Notice notice={notice} />
           <Field label="Order ID">
             <input className={textInputClasses()} value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} />
           </Field>
@@ -620,6 +624,7 @@ function TrackOrderPage() {
             <input className={textInputClasses()} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </Field>
           <button className={cn(buttonClasses("primary"), "w-full")}>Track order</button>
+          <InlineNotice notice={notice} />
           <Link href="/" className={cn(buttonClasses("secondary"), "w-full")}>Back to home</Link>
         </form>
       </Card>
@@ -704,7 +709,6 @@ function BookPage() {
     <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
       <Card title="Book transport service">
         <form className="space-y-4" onSubmit={submit}>
-          <Notice notice={notice} />
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Service">
               <select className={textInputClasses()} value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })}>
@@ -741,6 +745,7 @@ function BookPage() {
               Back to home
             </Link>
           </div>
+          <InlineNotice notice={notice} />
         </form>
       </Card>
       <Card title="Service notes">
@@ -878,7 +883,6 @@ function OwnerLoginPage({ onLogin }: { onLogin: (token: string) => void }) {
     <div className="mx-auto max-w-xl space-y-6">
       <Card title="Owner login">
         <form className="space-y-4" onSubmit={submit}>
-          <Notice notice={notice} />
           <Field label="Username / email / phone">
             <input className={textInputClasses()} value={form.identifier} onChange={(e) => setForm({ ...form, identifier: e.target.value })} />
           </Field>
@@ -888,6 +892,7 @@ function OwnerLoginPage({ onLogin }: { onLogin: (token: string) => void }) {
           <button className={cn(buttonClasses("primary"), "w-full")} disabled={busy}>
             {busy ? "Signing in..." : "Log in"}
           </button>
+          <InlineNotice notice={notice} />
           <Link href="/" className={cn(buttonClasses("secondary"), "w-full")}>
             Back to home
           </Link>
@@ -907,6 +912,8 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionNotices, setActionNotices] = useState<Record<string, AlertState | undefined>>({});
+  const [actionBusy, setActionBusy] = useState<Record<string, boolean | undefined>>({});
 
   const [customerForm, setCustomerForm] = useState({ name: "", phone: "", email: "", address: "", notes: "", customerCode: "", photoPath: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
@@ -983,6 +990,18 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
     void load();
   }, [token]);
 
+  const startAction = (key: string) => {
+    setActionBusy((current) => ({ ...current, [key]: true }));
+    setActionNotices((current) => ({ ...current, [key]: null }));
+  };
+
+  const finishAction = (key: string, nextNotice: AlertState) => {
+    setActionBusy((current) => ({ ...current, [key]: false }));
+    setActionNotices((current) => ({ ...current, [key]: nextNotice }));
+  };
+
+  const isActionBusy = (key: string) => Boolean(actionBusy[key]);
+
   const uploadInto = async (
     event: ChangeEvent<HTMLInputElement>,
     setter: (value: string) => void,
@@ -1000,6 +1019,8 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
 
   const saveCustomer = async (event: FormEvent) => {
     event.preventDefault();
+    const actionKey = "customer-form";
+    startAction(actionKey);
     try {
       await api(
         "/admin/customers",
@@ -1019,14 +1040,18 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
       );
       setCustomerForm({ name: "", phone: "", email: "", address: "", notes: "", customerCode: "", photoPath: "" });
       setNotice({ type: "success", message: "Customer added successfully." });
+      finishAction(actionKey, { type: "success", message: "Customer saved successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const saveCategory = async (event: FormEvent) => {
     event.preventDefault();
+    const actionKey = "category-form";
+    startAction(actionKey);
     try {
       await api("/admin/categories", {
         method: "POST",
@@ -1037,14 +1062,18 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
       }, token);
       setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder || 0) + 1) });
       setNotice({ type: "success", message: "Category added successfully." });
+      finishAction(actionKey, { type: "success", message: "Category saved successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const saveProduct = async (event: FormEvent) => {
     event.preventDefault();
+    const actionKey = "product-form";
+    startAction(actionKey);
     try {
       await api("/admin/products", {
         method: "POST",
@@ -1075,75 +1104,103 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
         featured: false,
       });
       setNotice({ type: "success", message: "Product added successfully." });
+      finishAction(actionKey, { type: "success", message: "Product saved successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const saveSettings = async (event: FormEvent) => {
     event.preventDefault();
+    const actionKey = "settings-form";
+    startAction(actionKey);
     try {
       await api("/admin/settings", { method: "PUT", body: JSON.stringify(settingsForm) }, token);
       setNotice({ type: "success", message: "Settings saved successfully." });
+      finishAction(actionKey, { type: "success", message: "Settings saved successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const changePassword = async (event: FormEvent) => {
     event.preventDefault();
+    const actionKey = "password-form";
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setNotice({ type: "error", message: "New password and confirm password do not match." });
+      const mismatch = { type: "error", message: "New password and confirm password do not match." } as const;
+      setNotice(mismatch);
+      finishAction(actionKey, mismatch);
       return;
     }
+    startAction(actionKey);
     try {
       await api("/admin/change-password", { method: "POST", body: JSON.stringify({ currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword }) }, token);
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setNotice({ type: "success", message: "Password changed successfully." });
+      finishAction(actionKey, { type: "success", message: "Password changed successfully." });
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const updateOrderStatus = async (orderId: number, status: string, paymentStatus?: string) => {
+    const actionKey = `order-${orderId}`;
+    startAction(actionKey);
     try {
       await api(`/admin/orders/${orderId}/status`, { method: "PUT", body: JSON.stringify({ status, ...(paymentStatus ? { paymentStatus } : {}) }) }, token);
       setNotice({ type: "success", message: "Order updated successfully." });
+      finishAction(actionKey, { type: "success", message: `Order #${orderId} updated successfully.` });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const updateBookingStatus = async (bookingId: number, status: string) => {
+    const actionKey = `booking-${bookingId}`;
+    startAction(actionKey);
     try {
       await api(`/admin/bookings/${bookingId}/status`, { method: "PUT", body: JSON.stringify({ status }) }, token);
       setNotice({ type: "success", message: "Booking updated successfully." });
+      finishAction(actionKey, { type: "success", message: `Booking #${bookingId} updated successfully.` });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const removeCustomer = async (id: number) => {
+    const actionKey = `customer-${id}`;
+    startAction(actionKey);
     try {
       await api(`/admin/customers/${id}`, { method: "DELETE" }, token);
       setNotice({ type: "success", message: "Customer deleted successfully." });
+      finishAction(actionKey, { type: "success", message: "Customer deleted successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
   const removeProduct = async (id: number) => {
+    const actionKey = `product-${id}`;
+    startAction(actionKey);
     try {
       await api(`/admin/products/${id}`, { method: "DELETE" }, token);
       setNotice({ type: "success", message: "Product deleted successfully." });
+      finishAction(actionKey, { type: "success", message: "Product deleted successfully." });
       await load();
     } catch (err) {
       setNotice({ type: "error", message: getErrorMessage(err) });
+      finishAction(actionKey, { type: "error", message: getErrorMessage(err) });
     }
   };
 
@@ -1217,7 +1274,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
               <Field label="Photo">
                 <input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setCustomerForm((current) => ({ ...current, photoPath: value })))} />
               </Field>
-              <button className={cn(buttonClasses("primary"), "w-full")}>Save customer</button>
+              <button className={cn(buttonClasses("primary"), "w-full")} disabled={isActionBusy("customer-form")}>
+                {isActionBusy("customer-form") ? "Saving customer..." : "Save customer"}
+              </button>
+              <InlineNotice notice={actionNotices["customer-form"] ?? null} />
             </form>
           </Card>
           <Card title="Customers">
@@ -1237,8 +1297,11 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                         <div className="text-sm text-slate-600">{customer.phone || "-"}</div>
                       </div>
                     </div>
-                    <button className={buttonClasses("danger")} onClick={() => void removeCustomer(customer.id)}>Delete</button>
+                    <button className={buttonClasses("danger")} disabled={isActionBusy(`customer-${customer.id}`)} onClick={() => void removeCustomer(customer.id)}>
+                      {isActionBusy(`customer-${customer.id}`) ? "Deleting..." : "Delete"}
+                    </button>
                   </div>
+                  <InlineNotice notice={actionNotices[`customer-${customer.id}`] ?? null} />
                   <div className="grid gap-3 md:grid-cols-2">
                     <Info label="Credit" value={asMoney(customer.creditBalance)} />
                     <Info label="Total spent" value={asMoney(customer.totalSpent)} />
@@ -1257,7 +1320,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
               <form className="space-y-4" onSubmit={saveCategory}>
                 <Field label="Name"><input className={textInputClasses()} value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} /></Field>
                 <Field label="Description"><textarea className={cn(textInputClasses(), "min-h-[90px]")} value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} /></Field>
-                <button className={cn(buttonClasses("primary"), "w-full")}>Save category</button>
+                <button className={cn(buttonClasses("primary"), "w-full")} disabled={isActionBusy("category-form")}>
+                  {isActionBusy("category-form") ? "Saving category..." : "Save category"}
+                </button>
+                <InlineNotice notice={actionNotices["category-form"] ?? null} />
               </form>
             </Card>
             <Card title="Add product">
@@ -1289,7 +1355,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                   </Field>
                 </div>
                 <div className="md:col-span-2">
-                  <button className={cn(buttonClasses("primary"), "w-full")}>Save product</button>
+                  <button className={cn(buttonClasses("primary"), "w-full")} disabled={isActionBusy("product-form")}>
+                    {isActionBusy("product-form") ? "Saving product..." : "Save product"}
+                  </button>
+                  <InlineNotice notice={actionNotices["product-form"] ?? null} />
                 </div>
               </form>
             </Card>
@@ -1310,9 +1379,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                       <div className="font-semibold">{asMoney(product.price)}</div>
                       <div className="text-sm text-slate-600">Stock {product.stockQuantity ?? 0}</div>
                     </div>
-                    <button className={cn(buttonClasses("danger"), "w-full")} onClick={() => void removeProduct(product.id)}>
-                      Delete
+                    <button className={cn(buttonClasses("danger"), "w-full")} disabled={isActionBusy(`product-${product.id}`)} onClick={() => void removeProduct(product.id)}>
+                      {isActionBusy(`product-${product.id}`) ? "Deleting..." : "Delete"}
                     </button>
+                    <InlineNotice notice={actionNotices[`product-${product.id}`] ?? null} />
                   </div>
                 </div>
               )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No products yet.</div>}
@@ -1340,12 +1410,13 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                 <div className="mb-3 text-sm text-slate-600">{asDate(order.createdAt)}</div>
                 <div className="mb-4 text-lg font-bold">{asMoney(order.totalAmount)}</div>
                 <div className="flex flex-wrap gap-2">
-                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "confirmed")}>Confirm</button>
-                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "dispatched")}>Dispatch</button>
-                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, "delivered", "paid")}>Deliver</button>
-                  <button className={buttonClasses("secondary")} onClick={() => void updateOrderStatus(order.id, order.status, "paid")}>Confirm payment</button>
-                  <button className={buttonClasses("danger")} onClick={() => void updateOrderStatus(order.id, "cancelled")}>Reject</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`order-${order.id}`)} onClick={() => void updateOrderStatus(order.id, "confirmed")}>Confirm</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`order-${order.id}`)} onClick={() => void updateOrderStatus(order.id, "dispatched")}>Dispatch</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`order-${order.id}`)} onClick={() => void updateOrderStatus(order.id, "delivered", "paid")}>Deliver</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`order-${order.id}`)} onClick={() => void updateOrderStatus(order.id, order.status, "paid")}>Confirm payment</button>
+                  <button className={buttonClasses("danger")} disabled={isActionBusy(`order-${order.id}`)} onClick={() => void updateOrderStatus(order.id, "cancelled")}>Reject</button>
                 </div>
+                <InlineNotice notice={actionNotices[`order-${order.id}`] ?? null} />
               </div>
             )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No orders yet.</div>}
           </div>
@@ -1367,10 +1438,11 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                 </div>
                 <div className="mb-4 text-sm text-slate-600">For {booking.bookingDate}</div>
                 <div className="flex flex-wrap gap-2">
-                  <button className={buttonClasses("secondary")} onClick={() => void updateBookingStatus(booking.id, "confirmed")}>Confirm</button>
-                  <button className={buttonClasses("secondary")} onClick={() => void updateBookingStatus(booking.id, "completed")}>Complete</button>
-                  <button className={buttonClasses("danger")} onClick={() => void updateBookingStatus(booking.id, "rejected")}>Reject</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`booking-${booking.id}`)} onClick={() => void updateBookingStatus(booking.id, "confirmed")}>Confirm</button>
+                  <button className={buttonClasses("secondary")} disabled={isActionBusy(`booking-${booking.id}`)} onClick={() => void updateBookingStatus(booking.id, "completed")}>Complete</button>
+                  <button className={buttonClasses("danger")} disabled={isActionBusy(`booking-${booking.id}`)} onClick={() => void updateBookingStatus(booking.id, "rejected")}>Reject</button>
                 </div>
+                <InlineNotice notice={actionNotices[`booking-${booking.id}`] ?? null} />
               </div>
             )) : <div className="rounded-2xl bg-stone-50 p-4 text-slate-600">No bookings yet.</div>}
           </div>
@@ -1390,7 +1462,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
               <Field label="Terms"><textarea className={cn(textInputClasses(), "min-h-[120px]")} value={settingsForm.termsConditions} onChange={(e) => setSettingsForm({ ...settingsForm, termsConditions: e.target.value })} /></Field>
               <Field label="Shop photo"><input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setSettingsForm((current) => ({ ...current, shopPhotoPath: value })))} /></Field>
               <Field label="Home banner"><input type="file" accept="image/*" onChange={(event) => void uploadInto(event, (value) => setSettingsForm((current) => ({ ...current, homeBannerPath: value })))} /></Field>
-              <button className={cn(buttonClasses("primary"), "w-full")}>Save settings</button>
+              <button className={cn(buttonClasses("primary"), "w-full")} disabled={isActionBusy("settings-form")}>
+                {isActionBusy("settings-form") ? "Saving settings..." : "Save settings"}
+              </button>
+              <InlineNotice notice={actionNotices["settings-form"] ?? null} />
             </form>
           </Card>
 
@@ -1412,7 +1487,10 @@ function OwnerDashboard({ token, onLogout, settings }: { token: string; onLogout
                 <Field label="Current password"><input className={textInputClasses()} type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })} /></Field>
                 <Field label="New password"><input className={textInputClasses()} type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} /></Field>
                 <Field label="Confirm new password"><input className={textInputClasses()} type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} /></Field>
-                <button className={cn(buttonClasses("primary"), "w-full")}>Change password</button>
+                <button className={cn(buttonClasses("primary"), "w-full")} disabled={isActionBusy("password-form")}>
+                  {isActionBusy("password-form") ? "Changing password..." : "Change password"}
+                </button>
+                <InlineNotice notice={actionNotices["password-form"] ?? null} />
               </form>
             </Card>
           </div>
