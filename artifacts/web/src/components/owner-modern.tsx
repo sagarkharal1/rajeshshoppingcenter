@@ -1376,18 +1376,33 @@ export function OwnerWorkspaceModern(props: any) {
                     {lang === "ne" ? "à¤¹à¥‹à¤®à¤ªà¥‡à¤œà¤®à¤¾ à¤¦à¥‡à¤–à¤¿à¤¨à¥‡ à¤¸à¥‚à¤šà¤¨à¤¾ à¤¯à¤¹à¥€à¤à¤¬à¤¾à¤Ÿ à¤°à¤¾à¤–à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤" : "Manage the notices shown on the homepage here."}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSettingsForm((current: any) => ({
-                      ...current,
-                      announcements: [...(current.announcements || []), { title: "", body: "", status: "active", type: "news", imageUrl: "" }],
-                    }))
-                  }
-                  className="rounded-2xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900"
-                >
-                  {lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¥à¤ªà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Add notice"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSettingsForm((current: any) => ({
+                        ...current,
+                        announcements: [...(current.announcements || []), { title: "", body: "", status: "active", type: "news", imageUrl: "" }],
+                      }))
+                    }
+                    className="rounded-2xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900"
+                  >
+                    {lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¥à¤ªà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Add notice"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runOwnerAction(
+                        () => saveMediaSettings(),
+                        lang === "ne" ? "सूचना सेभ भयो" : "Notices saved",
+                        lang === "ne" ? "सूचना सेभ गर्न सकिएन।" : "Could not save notices.",
+                      )
+                    }
+                    className="rounded-2xl border border-primary bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  >
+                    {lang === "ne" ? "सूचना सेभ गर्नुहोस्" : "Save notices"}
+                  </button>
+                </div>
               </div>
               <div className="mt-4 grid gap-4">
                 {(settingsForm.announcements || []).length ? (

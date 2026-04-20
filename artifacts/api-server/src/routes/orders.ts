@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "@workspace/db";
 import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, rewardTransactionsTable, settingsTable } from "@workspace/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { sendWhatsApp, formatOrderMessage, formatBookingMessage } from "../utils/whatsapp-service.js";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
@@ -195,19 +194,6 @@ router.post("/orders", async (req, res) => {
 
       return { order, customer, rewardPointsEarned };
     });
-
-    sendWhatsApp(formatOrderMessage({
-      id: result.order.id,
-      customerName: result.order.customerName,
-      customerPhone: result.order.customerPhone,
-      customerEmail: (result.order as any).customerEmail ?? null,
-      customerAddress: result.order.customerAddress,
-      totalAmount: Number(result.order.totalAmount),
-      paymentMethod: result.order.paymentMethod,
-      paymentStatus: (result.order as any).paymentStatus ?? "unpaid",
-      notes: result.order.notes,
-      items: result.order.items as Array<{ productName: string; quantity: number; price: number; unit?: string }>,
-    })).catch(() => {});
 
     sendTelegramMessage(formatTelegramOrderMessage({
       id: result.order.id,
@@ -419,17 +405,6 @@ router.post("/bookings", async (req, res) => {
         notes: notes || null,
       })
       .returning();
-
-    sendWhatsApp(formatBookingMessage({
-      id: booking.id,
-      serviceType: booking.serviceType,
-      customerName: booking.customerName,
-      customerPhone: booking.customerPhone,
-      pickupLocation: booking.pickupLocation,
-      destination: booking.destination,
-      bookingDate: booking.bookingDate,
-      notes: booking.notes,
-    })).catch(() => {});
 
     sendTelegramMessage(formatTelegramBookingMessage({
       id: booking.id,

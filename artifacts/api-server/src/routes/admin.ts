@@ -12,7 +12,7 @@ import jwt from "jsonwebtoken";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { generateSecret, generateURI, verifySync } from "otplib";
-import { sendWhatsApp, formatStatusMessage, invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
+import { sendWhatsApp, invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 
@@ -647,16 +647,6 @@ router.put("/admin/orders/:id/status", authMiddleware, async (req, res) => {
       .set({ status, ...(paymentStatus ? { paymentStatus } : {}) })
       .where(eq(ordersTable.id, id))
       .returning();
-
-    if (["preparing", "dispatched", "delivered", "cancelled"].includes(status) || paymentStatus) {
-      sendWhatsApp(formatStatusMessage({
-        id: order.id,
-        customerName: order.customerName,
-        status: order.status,
-        paymentStatus: (order as any).paymentStatus ?? "unpaid",
-        totalAmount: Number(order.totalAmount),
-      })).catch(() => {});
-    }
 
     res.json({ ...order, totalAmount: Number(order.totalAmount) });
   } catch {

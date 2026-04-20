@@ -217,11 +217,14 @@ export default function CheckoutModern() {
           </h2>
           <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800">
             {lang === "ne"
-              ? "अर्डर विवरण पसलको WhatsApp नम्बरमा स्वतः पठाइयो। ग्राहकले थप कुनै WhatsApp विन्डो खोल्नुपर्दैन।"
-              : "Order details were sent automatically to the shop WhatsApp number. Customers do not need to open any extra WhatsApp window."}
+              ? "अर्डर सफल भयो। अब ट्र्याक वा भुक्तानी पुष्टि गर्न सकिन्छ।"
+              : "Order placed successfully. You can now track it or confirm payment."}
           </div>
           <p className="mb-6 text-muted-foreground">
-            {t.checkout.nextStepsDesc} <strong className="text-foreground">{formatNPR(summaryTotal)}</strong>
+            {lang === "ne" ? "कुल रकम" : "Total amount"} <strong className="text-foreground">{formatNPR(summaryTotal)}</strong>.{" "}
+            {lang === "ne"
+              ? "आवश्यक परे फोन वा WhatsApp मार्फत पसललाई सन्देश पठाउन सक्नुहुन्छ।"
+              : "If needed, you can call or send WhatsApp to the shop directly."}
           </p>
           <div className="mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
             <p className="font-bold text-amber-950">{NEPALI_WARNING}</p>
@@ -254,7 +257,11 @@ export default function CheckoutModern() {
             <div><span className="text-muted-foreground block text-xs uppercase mb-1">{t.checkout.esewaId}</span><strong className="text-lg">{esewaId || t.checkout.qrNotSet}</strong></div>
             <div><span className="text-muted-foreground block text-xs uppercase mb-1">{t.checkout.khaltiId}</span><strong className="text-lg">{khaltiId || t.checkout.qrNotSet}</strong></div>
           </div>
-          <p className="mt-5 text-sm text-muted-foreground">{t.checkout.whatsappHint}</p>
+          <p className="mt-5 text-sm text-muted-foreground">
+            {lang === "ne"
+              ? "यदि चाहनुहुन्छ भने मात्र WhatsApp मार्फत पसललाई सन्देश पठाउनुहोस्।"
+              : "Use WhatsApp only if you want to contact the shop directly."}
+          </p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
@@ -270,7 +277,7 @@ export default function CheckoutModern() {
             </a>
             <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 py-3 font-bold text-white">
               <MessageCircle className="w-4 h-4" />
-              {t.checkout.whatsappOwner}
+              {lang === "ne" ? "चाहिएमा WhatsApp पठाउनुहोस्" : "Send WhatsApp if needed"}
             </a>
             {orderId ? (
               <button
