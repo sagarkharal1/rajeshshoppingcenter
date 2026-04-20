@@ -183,6 +183,7 @@ function OwnerApp() {
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [publicSettings, setPublicSettings] = useState<any>(null);
@@ -526,19 +527,21 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
 
   const load = async () => {
     if (!token) return;
-    const [summaryData, customersData, productsData, categoriesData, settingsData, ordersData] = await Promise.all([
+    const [summaryData, customersData, productsData, categoriesData, settingsData, ordersData, bookingsData] = await Promise.all([
       api<any>("/admin/dashboard-summary"),
       api<any[]>("/admin/customers"),
       api<any[]>("/admin/products"),
       api<any[]>("/admin/categories"),
       api<any>("/settings"),
       api<any[]>("/admin/orders"),
+      api<any[]>("/admin/bookings"),
     ]);
     setSummary(summaryData);
     setCustomers(customersData);
     setProducts(productsData);
     setCategories(categoriesData);
     setOrders(ordersData);
+    setBookings(bookingsData);
     setSettings(settingsData);
     setSettingsForm({
       shopName: settingsData?.shopName ?? "",
@@ -817,7 +820,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         }),
       });
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      showOwnerFeedback("success", lang === "ne" ? "??????? ??????????? ???????? ????" : "Password changed successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "??????? ???????? ????" : "Password changed.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : "Password change failed");
     } finally {
@@ -838,7 +841,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setEditingCustomerId(null);
       setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
       await load();
-      showOwnerFeedback("success", editingCustomerId ? (lang === "ne" ? "?????? ????? ??????" : "Customer updated successfully.") : (lang === "ne" ? "?????? ??????" : "Customer created successfully."));
+      showOwnerFeedback("success", lang === "ne" ? "?????? ??????." : "Customer saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "?????? ??? ???? ??????" : "Could not save the customer."));
     }
@@ -850,7 +853,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
       setPaymentForm((current) => ({ ...current, amount: "", referenceNote: "" }));
       await load();
-      showOwnerFeedback("success", lang === "ne" ? "???????? ??????????? ???????" : "Payment recorded successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "???????? ?????." : "Payment saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "???????? ????? ??????" : "Could not record the payment."));
     }
@@ -880,7 +883,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setEditingProductId(null);
       setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
       await load();
-      showOwnerFeedback("success", editingProductId ? (lang === "ne" ? "????? ????? ??????" : "Product updated successfully.") : (lang === "ne" ? "????? ??????" : "Product created successfully."));
+      showOwnerFeedback("success", lang === "ne" ? "????? ??????." : "Product saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "????? ??? ???? ??????" : "Could not save the product."));
     }
@@ -901,7 +904,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setEditingCategoryId(null);
       setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
       await load();
-      showOwnerFeedback("success", editingCategoryId ? (lang === "ne" ? "?????? ????? ??????" : "Category updated successfully.") : (lang === "ne" ? "?????? ??????" : "Category created successfully."));
+      showOwnerFeedback("success", lang === "ne" ? "?????? ??????." : "Category saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "?????? ??? ???? ??????" : "Could not save the category."));
     }
@@ -915,7 +918,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setInvoiceForm((current) => ({ ...current, amountPaid: "", note: "", paymentMethod: "cash" }));
       setLines(products[0] ? [{ productId: products[0].id, quantity: 1 }] : []);
       await load();
-      showOwnerFeedback("success", lang === "ne" ? "??? ??????????? ??? ????" : "Invoice saved successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "??? ??????." : "Sale saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "??? ??? ???? ??????" : "Could not save the invoice."));
     }
@@ -962,7 +965,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
       }
       await load();
-      showOwnerFeedback("success", lang === "ne" ? "????? ???????" : "Product deleted successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "????? ???????." : "Product removed.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "????? ????? ??????" : "Could not delete the product."));
     }
@@ -977,7 +980,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         setCategoryForm({ name: "", description: "", icon: "grocery", sortOrder: String((categories.at(-1)?.sortOrder ?? 0) + 1) });
       }
       await load();
-      showOwnerFeedback("success", lang === "ne" ? "?????? ???????" : "Category deleted successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "?????? ???????." : "Category removed.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "?????? ????? ??????" : "Could not delete the category."));
     }
@@ -1005,7 +1008,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
       }
       await load();
-      showOwnerFeedback("success", lang === "ne" ? "?????? ???????" : "Customer deleted successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "?????? ???????." : "Customer removed.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "?????? ????? ??????" : "Could not delete the customer."));
     }
@@ -1015,6 +1018,14 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     await api(`/admin/orders/${orderId}/status`, {
       method: "PUT",
       body: JSON.stringify({ status, ...(paymentStatus ? { paymentStatus } : {}) }),
+    });
+    await load();
+  };
+
+  const updateBookingStatus = async (bookingId: number, status: string) => {
+    await api(`/admin/bookings/${bookingId}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
     });
     await load();
   };
@@ -1053,8 +1064,8 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     }
   };
 
-  const saveMediaSettings = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveMediaSettings = async (event?: React.FormEvent) => {
+    event?.preventDefault();
     setSettingsBusy(true);
     setOwnerFeedback(null);
     try {
@@ -1093,7 +1104,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       await load();
       const latest = await publicApi<any>("/settings");
       setPublicSettings(latest);
-      showOwnerFeedback("success", lang === "ne" ? "???? ? ?????? ??????????? ??? ????" : "Photos and media settings saved successfully.");
+      showOwnerFeedback("success", lang === "ne" ? "???? ? ?????? ??????." : "Media settings saved.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "?????? ??? ???? ??????" : "Could not save media settings."));
     } finally {
@@ -1150,6 +1161,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       settings={settings}
       summary={summary}
       orders={orders}
+      bookings={bookings}
       customers={customers}
       products={products}
       preview={preview}
@@ -1190,6 +1202,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setToken={setToken}
       setOwnerEntryRequested={setOwnerEntryRequested}
       updateOrderStatus={updateOrderStatus}
+      updateBookingStatus={updateBookingStatus}
       externalFeedback={ownerFeedback}
     />
   );

@@ -7,12 +7,17 @@ import { motion } from "framer-motion";
 export default function BookService() {
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
+  const serviceImages = {
+    jeep: "/bolero-service.jpg",
+    tractor: "/tractor-service.jpg",
+    telcoline: "/tata-telcoline-service.webp",
+  } as const;
 
   const [isSuccess, setIsSuccess] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [formData, setFormData] = useState({
-    serviceType: "jeep" as "jeep" | "tractor",
+    serviceType: "jeep" as "jeep" | "tractor" | "telcoline",
     customerName: "",
     customerPhone: "",
     pickupLocation: "",
@@ -116,7 +121,7 @@ export default function BookService() {
           {/* Service Type */}
           <div>
             <label className="block text-sm font-bold text-foreground mb-4">{t.book.selectService}</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <label className={`relative cursor-pointer rounded-2xl border-2 p-6 flex flex-col items-center text-center transition-all ${
                 formData.serviceType === 'jeep'
                   ? 'border-primary bg-primary/5 text-primary shadow-md'
@@ -125,7 +130,14 @@ export default function BookService() {
                 <input type="radio" name="serviceType" value="jeep" className="sr-only"
                   checked={formData.serviceType === 'jeep'}
                   onChange={() => setFormData({...formData, serviceType: 'jeep'})} />
-                <Truck className="w-12 h-12 mb-3" />
+                <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl border border-border/60 bg-white">
+                  <img
+                    src={serviceImages.jeep}
+                    alt="Bolero double cab"
+                    className="h-full w-full object-contain p-3"
+                  />
+                </div>
+                <Truck className="mb-3 w-10 h-10" />
                 <span className="font-bold text-lg mb-1 text-foreground">{t.book.cargoJeep}</span>
                 <span className="text-sm opacity-80">{t.book.cargoJeepDesc}</span>
                 {formData.serviceType === 'jeep' && (
@@ -143,10 +155,42 @@ export default function BookService() {
                 <input type="radio" name="serviceType" value="tractor" className="sr-only"
                   checked={formData.serviceType === 'tractor'}
                   onChange={() => setFormData({...formData, serviceType: 'tractor'})} />
-                <Tractor className="w-12 h-12 mb-3" />
+                <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl border border-border/60 bg-white">
+                  <img
+                    src={serviceImages.tractor}
+                    alt="Tractor service"
+                    className="h-full w-full object-contain p-3"
+                  />
+                </div>
+                <Tractor className="mb-3 w-10 h-10" />
                 <span className="font-bold text-lg mb-1 text-foreground">{t.book.heavyTractor}</span>
                 <span className="text-sm opacity-80">{t.book.heavyTractorDesc}</span>
                 {formData.serviceType === 'tractor' && (
+                  <div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-primary flex items-center justify-center text-white">
+                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                  </div>
+                )}
+              </label>
+
+              <label className={`relative cursor-pointer rounded-2xl border-2 p-6 flex flex-col items-center text-center transition-all ${
+                formData.serviceType === 'telcoline'
+                  ? 'border-primary bg-primary/5 text-primary shadow-md'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-muted/50'
+              }`}>
+                <input type="radio" name="serviceType" value="telcoline" className="sr-only"
+                  checked={formData.serviceType === 'telcoline'}
+                  onChange={() => setFormData({...formData, serviceType: 'telcoline'})} />
+                <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl border border-border/60 bg-white">
+                  <img
+                    src={serviceImages.telcoline}
+                    alt="Tata Telcoline"
+                    className="h-full w-full object-contain p-3"
+                  />
+                </div>
+                <Truck className="mb-3 w-10 h-10" />
+                <span className="font-bold text-lg mb-1 text-foreground">Tata Telcoline</span>
+                <span className="text-sm opacity-80">Pickup service for cargo, delivery, and transport booking.</span>
+                {formData.serviceType === 'telcoline' && (
                   <div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-primary flex items-center justify-center text-white">
                     <div className="w-2 h-2 rounded-full bg-white"></div>
                   </div>

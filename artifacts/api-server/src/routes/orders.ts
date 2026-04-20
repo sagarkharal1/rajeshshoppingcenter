@@ -46,7 +46,7 @@ function buildCustomerCode(id: number) {
 }
 
 const createBookingSchema = z.object({
-  serviceType: z.enum(["jeep", "tractor"]),
+  serviceType: z.enum(["jeep", "tractor", "telcoline"]),
   customerName: z.string().min(1, "Name is required").max(100).transform(s => s.trim()),
   customerPhone: z
     .string()
