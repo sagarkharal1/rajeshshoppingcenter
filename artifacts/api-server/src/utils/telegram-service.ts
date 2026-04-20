@@ -41,8 +41,11 @@ export async function sendTelegramMessage(message: string): Promise<void> {
     return;
   }
 
+  const endpoint = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+  const plainTextMessage = message.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[^>]+>/g, "");
+
   try {
-    const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -53,12 +56,36 @@ export async function sendTelegramMessage(message: string): Promise<void> {
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.warn("[Telegram] sendMessage responded with status", response.status, errorText);
+    if (response.ok) {
+      return;
     }
+
+    const errorText = await response.text().catch(() => "");
+    console.warn("[Telegram] HTML sendMessage responded with status", response.status, errorText);
   } catch (error) {
-    console.warn("[Telegram] Failed to send notification:", error);
+    console.warn("[Telegram] Failed HTML notification attempt:", error);
+  }
+
+  try {
+    const fallbackResponse = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: telegramChatId,
+        text: plainTextMessage,
+        disable_web_page_preview: true,
+      }),
+    });
+
+    if (!fallbackResponse.ok) {
+      const fallbackErrorText = await fallbackResponse.text().catch(() => "");
+      console.warn("[Telegram] Plain text sendMessage responded with status", fallbackResponse.status, fallbackErrorText);
+      return;
+    }
+
+    console.info("[Telegram] Plain text fallback notification sent successfully.");
+  } catch (error) {
+    console.warn("[Telegram] Failed plain text notification attempt:", error);
   }
 }
 
