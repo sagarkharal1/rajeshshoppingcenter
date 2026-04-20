@@ -1,7 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureBootstrapData } from "./lib/bootstrap";
-import { runAutoMigrationIfConfigured } from "./lib/auto-migrate";
 
 const rawPort = process.env["PORT"];
 
@@ -23,8 +22,7 @@ if (!process.env.ADMIN_JWT_SECRET) {
   );
 }
 
-void runAutoMigrationIfConfigured()
-  .then(() => ensureBootstrapData())
+void ensureBootstrapData()
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
@@ -36,6 +34,6 @@ void runAutoMigrationIfConfigured()
     });
   })
   .catch((err) => {
-    logger.error({ err }, "Failed to prepare database during startup");
+    logger.error({ err }, "Failed to bootstrap default database data");
     process.exit(1);
   });
