@@ -146,6 +146,31 @@ function getPaymentStatusMeta(status: string, lang: "en" | "ne") {
   };
 }
 
+function getSafeOrderStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "delivered") {
+    return { label: lang === "ne" ? "\u0921\u0947\u0932\u093f\u092d\u0930 \u092d\u092f\u094b" : "Delivered", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  if (normalized === "cancelled" || normalized === "rejected") {
+    return { label: lang === "ne" ? "\u0930\u0926\u094d\u0926 / \u0905\u0938\u094d\u0935\u0940\u0915\u0943\u0924" : "Rejected / Cancelled", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+  }
+  if (normalized === "dispatched") {
+    return { label: lang === "ne" ? "\u092a\u0920\u093e\u0907\u092f\u094b" : "On the way", className: "border-sky-200 bg-sky-50 text-sky-700", icon: Truck };
+  }
+  return { label: lang === "ne" ? "\u092a\u0941\u0937\u094d\u091f\u093f / \u0924\u092f\u093e\u0930\u0940" : "Confirmed / Preparing", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+}
+
+function getSafePaymentStatusMeta(status: string, lang: "en" | "ne") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid" || normalized === "confirmed") {
+    return { label: lang === "ne" ? "\u092d\u0941\u0915\u094d\u0924\u093e\u0928\u0940 \u092a\u0941\u0937\u094d\u091f\u093f" : "Confirmed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+  }
+  if (normalized === "rejected" || normalized === "failed") {
+    return { label: lang === "ne" ? "\u092d\u0941\u0915\u094d\u0924\u093e\u0928\u0940 \u0905\u0938\u094d\u0935\u0940\u0915\u0943\u0924" : "Rejected", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+  }
+  return { label: lang === "ne" ? "\u092d\u0941\u0915\u094d\u0924\u093e\u0928\u0940 \u092c\u093e\u0901\u0915\u0940" : "Pending", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+}
+
 export default function AccountPage() {
   const { lang } = useLanguage();
   const [location, setLocation] = useLocation();
@@ -197,7 +222,6 @@ export default function AccountPage() {
           },
     [lang],
   );
-
   const loadProfile = async (codeValue = customerCode, phoneValue = phone) => {
     if (!codeValue || !phoneValue) return;
     setLoading(true);
@@ -243,7 +267,7 @@ export default function AccountPage() {
           className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-sm"
         >
           <Home className="h-4 w-4" />
-          {lang === "ne" ? "à¤¹à¥‹à¤®à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to home"}
+          {lang === "ne" ? "\u0939\u094b\u092e\u092e\u093e \u092b\u0930\u094d\u0915\u0928\u0941\u0939\u094b\u0938\u094d" : "Back to home"}
         </button>
       </div>
       <div className="rounded-[2rem] bg-primary px-6 py-10 text-primary-foreground">
@@ -334,7 +358,7 @@ export default function AccountPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm">
                       {(() => {
-                        const statusMeta = getOrderStatusMeta(order.status, lang === "ne" ? "ne" : "en");
+                        const statusMeta = getSafeOrderStatusMeta(order.status, lang === "ne" ? "ne" : "en");
                         return (
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${statusMeta.className}`}>
                             <statusMeta.icon className="h-4 w-4" />
@@ -343,7 +367,7 @@ export default function AccountPage() {
                         );
                       })()}
                       {(() => {
-                        const paymentMeta = getPaymentStatusMeta(order.paymentStatus, lang === "ne" ? "ne" : "en");
+                        const paymentMeta = getSafePaymentStatusMeta(order.paymentStatus, lang === "ne" ? "ne" : "en");
                         return (
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${paymentMeta.className}`}>
                             <paymentMeta.icon className="h-4 w-4" />
@@ -403,7 +427,7 @@ export default function AccountPage() {
                         <p className="text-sm text-slate-500">{formatWhen(invoice.createdAt)}</p>
                       </div>
                       {(() => {
-                        const paymentMeta = getPaymentStatusMeta(invoice.paymentStatus, lang === "ne" ? "ne" : "en");
+                        const paymentMeta = getSafePaymentStatusMeta(invoice.paymentStatus, lang === "ne" ? "ne" : "en");
                         return (
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${paymentMeta.className}`}>
                             <paymentMeta.icon className="h-4 w-4" />

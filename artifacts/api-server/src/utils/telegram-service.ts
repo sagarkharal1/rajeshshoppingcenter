@@ -44,6 +44,17 @@ function escapeTelegramHtml(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+function formatTelegramDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kathmandu",
+  });
+}
+
 export async function sendTelegramMessage(message: string): Promise<void> {
   const telegramBotToken = getTelegramBotToken();
   const telegramChatIds = getTelegramChatIds();
@@ -175,7 +186,7 @@ export function formatTelegramBookingMessage(booking: {
     `Phone: ${escapeTelegramHtml(booking.customerPhone)}`,
     `Pickup: ${escapeTelegramHtml(booking.pickupLocation)}`,
     `Destination: ${escapeTelegramHtml(booking.destination)}`,
-    `Date: ${escapeTelegramHtml(booking.bookingDate)}`,
+    `Date: ${escapeTelegramHtml(formatTelegramDate(booking.bookingDate))}`,
   ];
 
   if (booking.notes) {

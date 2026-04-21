@@ -1,4 +1,5 @@
 ﻿import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
 import { scanBillImage } from "@/lib/bill-ocr";
 
@@ -117,6 +118,24 @@ export function OwnerLoginModern({
   loginOtpInfo,
   error,
 }: any) {
+  const identifierRef = useRef<HTMLInputElement | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
+  const [allowCredentialsTyping, setAllowCredentialsTyping] = useState(false);
+
+  useEffect(() => {
+    setLogin({ identifier: "", password: "", otp: "" });
+    setError("");
+  }, [setLogin, setError]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (identifierRef.current) identifierRef.current.value = "";
+      if (passwordRef.current) passwordRef.current.value = "";
+      setLogin({ identifier: "", password: "", otp: "" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [setLogin]);
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f7efe1_0%,#eadfcd_52%,#e4d4bf_100%)] px-4 py-6 sm:px-6">
       <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -144,7 +163,9 @@ export function OwnerLoginModern({
           </div>
         </section>
 
-        <form onSubmit={forgotMode ? resetPassword : submitLogin} className="rounded-[2rem] border border-[#d7c3a0] bg-[#fffdf9] p-6 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.4)] sm:p-8">
+        <form onSubmit={forgotMode ? resetPassword : submitLogin} autoComplete="off" className="rounded-[2rem] border border-[#d7c3a0] bg-[#fffdf9] p-6 shadow-[0_20px_50px_-35px_rgba(15,23,42,0.4)] sm:p-8">
+          <input type="text" name="fake-owner-name" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="fake-owner-password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
           <GaneshBlessing compact centered />
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -161,10 +182,15 @@ export function OwnerLoginModern({
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               {text.usernameLabel}
                 <input
+                  ref={identifierRef}
                   className={shellInput()}
-                  name="owner-identifier"
-                  autoComplete="off"
+                  name="shop-access-id"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   spellCheck={false}
+                  readOnly={!allowCredentialsTyping}
+                  onFocus={() => setAllowCredentialsTyping(true)}
                   value={forgotMode ? forgotForm.identifier : login.identifier}
                   onChange={(e) =>
                     forgotMode
@@ -208,11 +234,16 @@ export function OwnerLoginModern({
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   {text.passwordLabel}
                   <input
+                    ref={passwordRef}
                     type="password"
                     className={shellInput()}
-                    name="owner-password"
+                    name="shop-access-key"
                     autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     spellCheck={false}
+                    readOnly={!allowCredentialsTyping}
+                    onFocus={() => setAllowCredentialsTyping(true)}
                     value={login.password}
                     onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))}
                   />

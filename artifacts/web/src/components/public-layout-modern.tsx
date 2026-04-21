@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Grid2x2, Home, Info, Languages, Menu, Search, ShoppingBag, Truck, X } from "lucide-react";
+import { ExternalLink, Grid2x2, Home, Info, Languages, Menu, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
 import { useGetSettings } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
@@ -19,7 +19,9 @@ export function PublicLayoutModern({
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoTapCount, setLogoTapCount] = useState(0);
+  const [shareFeedback, setShareFeedback] = useState("");
   const logoTapResetRef = useRef<number | null>(null);
+  const shareFeedbackResetRef = useRef<number | null>(null);
   const [location] = useLocation();
   const { totalItems } = useCart();
   const { data: settings } = useGetSettings();
@@ -29,8 +31,6 @@ export function PublicLayoutModern({
   const facebookUrl = "https://www.facebook.com/anpchaurpiplarukhaGulmi/";
   const tiktokUrl = "https://www.tiktok.com/@rajeshshoppingcenter";
   const homeLabel = lang === "ne" ? "होम" : "Home";
-  const ownerLabel = lang === "ne" ? "मालिक" : "Owner";
-  const ownerLoginLabel = lang === "ne" ? "मालिक लगइन" : "Owner login";
 
   const navLinks = [
     { href: "/", label: homeLabel, icon: Home },
@@ -90,16 +90,6 @@ export function PublicLayoutModern({
               <Languages className="h-3.5 w-3.5" />
               {lang === "ne" ? "EN" : "ने"}
             </button>
-            {onOwnerAccessRequest ? (
-              <button
-                type="button"
-                onClick={onOwnerAccessRequest}
-                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-muted"
-                title={ownerLoginLabel}
-              >
-                {ownerLabel}
-              </button>
-            ) : null}
             <Link href="/cart" className="relative flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-foreground outline-none transition-colors hover:bg-secondary/80 hover:text-accent">
               <ShoppingBag className="h-5 w-5" />
               <span className="text-sm font-bold">{t.nav.cart}</span>
@@ -157,19 +147,6 @@ export function PublicLayoutModern({
                     {link.label}
                   </Link>
                 ))}
-                {onOwnerAccessRequest ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      onOwnerAccessRequest();
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-base font-semibold text-foreground"
-                  >
-                    <Info className="h-5 w-5" />
-                    {ownerLoginLabel}
-                  </button>
-                ) : null}
               </nav>
             </motion.div>
           ) : null}

@@ -15,7 +15,7 @@ const LanguageContext = createContext<LanguageContextType>({
   toggleLanguage: () => {},
 });
 
-const STORAGE_KEY = "rajesh_web_lang";
+const STORAGE_KEY = "rajesh_web_lang_v2";
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(() => {
