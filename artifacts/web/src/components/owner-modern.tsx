@@ -329,7 +329,8 @@ export function OwnerWorkspaceModern(props: any) {
     deleteCustomer, startEditCustomer, productForm, setProductForm, createProduct,
     editingProductId, setEditingProductId, startEditProduct, deleteProduct, settingsForm,
     setSettingsForm, saveMediaSettings, settingsBusy, passwordForm, setPasswordForm, passwordBusy, changePassword, readFileAsDataUrl,
-    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, updateBookingStatus, externalFeedback,
+    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, updateBookingStatus,
+    seedSampleProducts, seedingProducts, externalFeedback,
   } = props;
 
   const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || customers[0];
@@ -1202,7 +1203,29 @@ export function OwnerWorkspaceModern(props: any) {
         {tab === "products" ? (
           <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-2xl font-bold text-slate-950">{text.productCosts}</h3>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-950">{text.productCosts}</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {lang === "ne" ? "परीक्षणका लागि सबै श्रेणीमा नमूना सामान थप्न सकिन्छ।" : "Load practical test items across every shop category."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={Boolean(seedingProducts)}
+                  onClick={() =>
+                    runOwnerAction(
+                      () => seedSampleProducts?.(),
+                      lang === "ne" ? "नमूना उत्पादनहरू तयार भयो।" : "Sample products ready.",
+                      lang === "ne" ? "नमूना उत्पादन थप्न सकिएन।" : "Could not load sample products.",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  {seedingProducts ? (lang === "ne" ? "थपिँदै..." : "Loading...") : text.sampleProducts}
+                </button>
+              </div>
               <div className="mt-4 grid gap-3">
                 {products.map((product: any) => {
                   const cost = num(product.buyingPrice) + num(product.transportationCost) + num(product.extraCost);

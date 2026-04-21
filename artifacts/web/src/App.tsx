@@ -1067,6 +1067,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
 
       const existingProducts = await api<any[]>("/admin/products");
       const existingSkus = new Set(existingProducts.map((product) => String(product.sku || "")));
+      let createdCount = 0;
 
       for (const product of sampleCatalogProducts) {
         if (existingSkus.has(product.sku)) continue;
@@ -1079,8 +1080,22 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
             categoryId,
           }),
         });
+        createdCount += 1;
       }
       await load();
+      showOwnerFeedback(
+        "success",
+        lang === "ne"
+          ? createdCount > 0
+            ? `${createdCount} वटा नमूना उत्पादन थपियो।`
+            : "सबै नमूना उत्पादन पहिले नै छन्।"
+          : createdCount > 0
+            ? `${createdCount} sample products added.`
+            : "All sample products are already loaded.",
+      );
+    } catch (err) {
+      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "नमूना उत्पादन थप्न सकिएन।" : "Could not load sample products."));
+      throw err;
     } finally {
       setSeedingProducts(false);
     }
@@ -1225,6 +1240,8 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setOwnerEntryRequested={setOwnerEntryRequested}
       updateOrderStatus={updateOrderStatus}
       updateBookingStatus={updateBookingStatus}
+      seedSampleProducts={seedSampleProducts}
+      seedingProducts={seedingProducts}
       externalFeedback={ownerFeedback}
     />
   );
