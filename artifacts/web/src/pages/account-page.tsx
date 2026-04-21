@@ -97,27 +97,27 @@ function getOrderStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "delivered") {
     return {
-      label: lang === "ne" ? "à¤¸à¤«à¤² à¤¡à¥‡à¤²à¤¿à¤­à¤°" : "Delivered",
+      label: lang === "ne" ? "सफल डेलिभर" : "Delivered",
       className: "border-emerald-200 bg-emerald-50 text-emerald-800",
       icon: CheckCircle2,
     };
   }
   if (normalized === "cancelled" || normalized === "rejected") {
     return {
-      label: lang === "ne" ? "à¤°à¤¦à¥à¤¦ / à¤…à¤¸à¥à¤µà¥€à¤•à¥ƒà¤¤" : "Rejected / Cancelled",
+      label: lang === "ne" ? "रद्द / अस्वीकृत" : "Rejected / Cancelled",
       className: "border-rose-200 bg-rose-50 text-rose-700",
       icon: XCircle,
     };
   }
   if (normalized === "dispatched") {
     return {
-      label: lang === "ne" ? "à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹" : "On the way",
+      label: lang === "ne" ? "पठाइएको" : "On the way",
       className: "border-sky-200 bg-sky-50 text-sky-700",
       icon: Truck,
     };
   }
   return {
-    label: lang === "ne" ? "à¤ªà¥à¤·à¥à¤Ÿà¤¿ / à¤¤à¤¯à¤¾à¤°à¥€" : "Confirmed / Preparing",
+    label: lang === "ne" ? "पुष्टि / तयारी" : "Confirmed / Preparing",
     className: "border-amber-200 bg-amber-50 text-amber-800",
     icon: Clock3,
   };
@@ -127,20 +127,20 @@ function getPaymentStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "paid" || normalized === "confirmed") {
     return {
-      label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿" : "Confirmed",
+      label: lang === "ne" ? "भुक्तानी पुष्टि" : "Confirmed",
       className: "border-emerald-200 bg-emerald-50 text-emerald-800",
       icon: CheckCircle2,
     };
   }
   if (normalized === "rejected" || normalized === "failed") {
     return {
-      label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤…à¤¸à¥à¤µà¥€à¤•à¥ƒà¤¤" : "Rejected",
+      label: lang === "ne" ? "भुक्तानी अस्वीकृत" : "Rejected",
       className: "border-rose-200 bg-rose-50 text-rose-700",
       icon: XCircle,
     };
   }
   return {
-    label: lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤¬à¤¾à¤à¤•à¥€" : "Pending",
+    label: lang === "ne" ? "भुक्तानी बाँकी" : "Pending",
     className: "border-amber-200 bg-amber-50 text-amber-800",
     icon: Clock3,
   };

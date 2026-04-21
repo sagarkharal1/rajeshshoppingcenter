@@ -373,7 +373,7 @@ export default function CheckoutModern() {
           className="inline-flex items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-sm"
         >
           <Home className="w-4 h-4" />
-          {lang === "ne" ? "à¤¹à¥‹à¤®à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to home"}
+          {lang === "ne" ? "होममा फर्कनुहोस्" : "Back to home"}
         </button>
         <button
           type="button"

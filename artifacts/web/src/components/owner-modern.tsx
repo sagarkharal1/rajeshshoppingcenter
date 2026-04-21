@@ -143,7 +143,14 @@ export function OwnerLoginModern({
           <div className="inline-flex rounded-full bg-amber-100/95 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-[#8a5200]">
             {text.ownerWorkspace}
           </div>
-          <h1 className="mt-5 text-4xl font-bold leading-tight">{shopName}</h1>
+          <div className="mt-5 flex items-center gap-4">
+            <img
+              src="/rajesh-logo.png"
+              alt="Rajesh Shopping Center logo"
+              className="h-16 w-16 rounded-2xl object-cover ring-2 ring-white/30"
+            />
+            <h1 className="text-4xl font-bold leading-tight">{shopName}</h1>
+          </div>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/88">
             {lang === "ne"
               ? "मालिकका लागि सजिलो निजी लगइन। बिल, ग्राहक उधारो, स्टक र सेटिङ सबै मोबाइलमा पनि सजिलै चल्ने गरी राखिएको छ।"
@@ -168,9 +175,16 @@ export function OwnerLoginModern({
           <input type="password" name="fake-owner-password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
           <GaneshBlessing compact centered />
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="flex min-w-0 items-center gap-3">
+              <img
+                src="/rajesh-logo.png"
+                alt="Rajesh Shopping Center logo"
+                className="h-12 w-12 rounded-2xl object-cover ring-1 ring-slate-200"
+              />
+              <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-800">{text.ownerLogin}</p>
               <h2 className="mt-2 text-3xl font-bold text-slate-950">{shopName}</h2>
+              </div>
             </div>
             <button type="button" onClick={toggleLanguage} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
               <Languages className="h-3.5 w-3.5" />
@@ -397,7 +411,7 @@ export function OwnerWorkspaceModern(props: any) {
       setter((state) => ({
         ...state,
         loading: false,
-        error: lang === "ne" ? "à¤¬à¤¿à¤² à¤ªà¤¢à¥à¤¨ à¤¸à¤•à¥‡à¤¨à¥¤ à¤«à¥‹à¤Ÿà¥‹ à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤°à¤¾à¤–à¥‡à¤° à¤«à¥‡à¤°à¤¿ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤" : "Could not read the bill. Try again with a clearer photo.",
+        error: lang === "ne" ? "बिल पढ्न सकेन। फोटो स्पष्ट राखेर फेरि प्रयास गर्नुहोस्।" : "Could not read the bill. Try again with a clearer photo.",
       }));
     }
   };
@@ -438,10 +452,17 @@ export function OwnerWorkspaceModern(props: any) {
     <div className="min-h-screen bg-[linear-gradient(180deg,#fff9f1_0%,#f2ebdf_100%)] pb-24">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-background/92 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-800">{text.ownerWorkspace}</p>
-            <h1 className="truncate text-2xl font-bold text-slate-950">{shopName}</h1>
-            <p className="truncate text-xs text-slate-500">{shopAddress}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <img
+              src="/rajesh-logo.png"
+              alt="Rajesh Shopping Center logo"
+              className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-slate-200"
+            />
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-800">{text.ownerWorkspace}</p>
+              <h1 className="truncate text-2xl font-bold text-slate-950">{shopName}</h1>
+              <p className="truncate text-xs text-slate-500">{shopAddress}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={toggleLanguage} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
@@ -651,19 +672,19 @@ export function OwnerWorkspaceModern(props: any) {
             <form onSubmit={createInvoice} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "à¤•à¤¾à¤‰à¤¨à¥à¤Ÿà¤° à¤¬à¤¿à¤•à¥à¤°à¥€" : "Counter Sale"}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "à¤¦à¥ˆà¤¨à¤¿à¤• à¤ªà¤¸à¤² à¤¬à¤¿à¤•à¥à¤°à¥€, à¤¨à¤—à¤¦, à¤‰à¤§à¤¾à¤°à¥‹, à¤° à¤¸à¥à¤Ÿà¤• à¤°à¥‡à¤•à¤°à¥à¤¡ à¤¯à¤¹à¥€à¤ à¤°à¤¾à¤–à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤" : "Record daily shop sales, cash, credit, and stock changes here."}</p>
+                  <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "काउन्टर बिक्री" : "Counter Sale"}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "दैनिक पसल बिक्री, नगद, उधारो, र स्टक रेकर्ड यहीँ राख्नुहोस्।" : "Record daily shop sales, cash, credit, and stock changes here."}</p>
                 </div>
                 <div className="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">{text.totalPreview}: {money(preview.total)}</div>
               </div>
               <div className="mt-4 grid gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤›à¤¿à¤Ÿà¥‹ à¤—à¥à¤°à¤¾à¤¹à¤• à¤›à¤¨à¥‹à¤Ÿ" : "Quick customer pick"}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "छिटो ग्राहक छनोट" : "Quick customer pick"}</p>
                   <input
                     className={`${shellInput()} mt-3`}
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
-                    placeholder={lang === "ne" ? "à¤¨à¤¾à¤®, à¤«à¥‹à¤¨ à¤µà¤¾ à¤—à¥à¤°à¤¾à¤¹à¤• à¤•à¥‹à¤¡ à¤–à¥‹à¤œà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Search name, phone, or customer code"}
+                    placeholder={lang === "ne" ? "नाम, फोन वा ग्राहक कोड खोज्नुहोस्" : "Search name, phone, or customer code"}
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     {quickCustomers.map((customer: any) => (
@@ -684,26 +705,26 @@ export function OwnerWorkspaceModern(props: any) {
                 {currentCustomer ? (
                   <div className="grid gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:grid-cols-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤•" : "Customer"}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "ग्राहक" : "Customer"}</p>
                       <p className="mt-1 font-semibold text-slate-950">{currentCustomer.name}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "à¤ªà¥à¤°à¤¾à¤¨à¥‹ à¤¬à¤¾à¤à¤•à¥€" : "Previous due"}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "पुरानो बाँकी" : "Previous due"}</p>
                       <p className="mt-1 font-semibold text-slate-950">{money(preview.previousDue)}</p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "à¤«à¥‹à¤¨" : "Phone"}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-amber-800">{lang === "ne" ? "फोन" : "Phone"}</p>
                       <p className="mt-1 font-semibold text-slate-950">{currentCustomer.phone || text.noPhoneSaved}</p>
                     </div>
                   </div>
                 ) : null}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤›à¤¿à¤Ÿà¥‹ à¤¸à¤¾à¤®à¤¾à¤¨ à¤¥à¤ªà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Quick add products"}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "छिटो सामान थप्नुहोस्" : "Quick add products"}</p>
                   <input
                     className={`${shellInput()} mt-3`}
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder={lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨ à¤µà¤¾ SKU à¤–à¥‹à¤œà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Search product or SKU"}
+                    placeholder={lang === "ne" ? "सामान वा SKU खोज्नुहोस्" : "Search product or SKU"}
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     {quickProducts.filter((product: any) => {
@@ -731,7 +752,7 @@ export function OwnerWorkspaceModern(props: any) {
                     <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700" onClick={() => setLines((items: any[]) => items.filter((_, i) => i !== index))}>{text.remove}</button>
                   </div>
                 ))}
-                <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => products[0] && setLines((items: any[]) => [...items, { productId: products[0].id, quantity: 1 }])}>{lang === "ne" ? "à¤…à¤°à¥à¤•à¥‹ à¤¸à¤¾à¤®à¤¾à¤¨ à¤¥à¤ªà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Add another item"}</button>
+                <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => products[0] && setLines((items: any[]) => [...items, { productId: products[0].id, quantity: 1 }])}>{lang === "ne" ? "अर्को सामान थप्नुहोस्" : "Add another item"}</button>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <select className={shellInput()} value={invoiceForm.paymentMethod} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
                     {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{method}</option>)}
@@ -744,21 +765,21 @@ export function OwnerWorkspaceModern(props: any) {
                     onClick={() => setInvoiceForm((v: any) => ({ ...v, paymentMethod: "cash", amountPaid: String(preview.total) }))}
                     className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
                   >
-                    {lang === "ne" ? "à¤ªà¥‚à¤°à¤¾ à¤¨à¤—à¤¦" : "Full Cash"}
+                    {lang === "ne" ? "पूरा नगद" : "Full Cash"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setInvoiceForm((v: any) => ({ ...v, paymentMethod: "credit", amountPaid: "0" }))}
                     className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800"
                   >
-                    {lang === "ne" ? "à¤ªà¥‚à¤°à¤¾ à¤‰à¤§à¤¾à¤°à¥‹" : "Full Credit"}
+                    {lang === "ne" ? "पूरा उधारो" : "Full Credit"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setInvoiceForm((v: any) => ({ ...v, paymentMethod: "cash", amountPaid: String(Math.max(Math.round(preview.total / 2), 0)) }))}
                     className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700"
                   >
-                    {lang === "ne" ? "à¤†à¤§à¤¾ à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€" : "Partial Payment"}
+                    {lang === "ne" ? "आधा भुक्तानी" : "Partial Payment"}
                   </button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-4">
@@ -775,9 +796,9 @@ export function OwnerWorkspaceModern(props: any) {
                   ))}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤• à¤¬à¤¿à¤² à¤«à¥‹à¤Ÿà¥‹" : "Customer bill photo"}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "ग्राहक बिल फोटो" : "Customer bill photo"}</p>
                   <label className="mt-3 block rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600">
-                    {lang === "ne" ? "à¤¬à¤¿à¤²à¤•à¥‹ à¤«à¥‹à¤Ÿà¥‹ à¤–à¤¿à¤šà¥à¤¨à¥à¤¹à¥‹à¤¸à¥ à¤µà¤¾ à¤…à¤ªà¤²à¥‹à¤¡ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Take or upload the bill photo"}
+                    {lang === "ne" ? "बिलको फोटो खिच्नुहोस् वा अपलोड गर्नुहोस्" : "Take or upload the bill photo"}
                     <input
                       type="file"
                       accept="image/*"
@@ -807,13 +828,13 @@ export function OwnerWorkspaceModern(props: any) {
                         onClick={() => setCustomerBillScan(createBillScanState())}
                         className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700"
                       >
-                        {lang === "ne" ? "à¤«à¥‹à¤Ÿà¥‹ à¤¹à¤Ÿà¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Remove photo"}
+                        {lang === "ne" ? "फोटो हटाउनुहोस्" : "Remove photo"}
                       </button>
                     </div>
                   ) : null}
                 </div>
                 <textarea className={`${shellInput()} min-h-24`} value={invoiceForm.note} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, note: e.target.value }))} placeholder={text.billNote} />
-                <button className="rounded-2xl bg-accent px-4 py-4 text-lg font-bold text-accent-foreground shadow-lg">{lang === "ne" ? "à¤¬à¤¿à¤•à¥à¤°à¥€ à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Save Sale"}</button>
+                <button className="rounded-2xl bg-accent px-4 py-4 text-lg font-bold text-accent-foreground shadow-lg">{lang === "ne" ? "बिक्री सुरक्षित गर्नुहोस्" : "Save Sale"}</button>
               </div>
             </form>
 
@@ -848,10 +869,10 @@ export function OwnerWorkspaceModern(props: any) {
                 </div>
                 <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                   <div className="grid grid-cols-[1.4fr_0.7fr_0.9fr_0.9fr] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                    <span>{lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨" : "Item"}</span>
-                    <span>{lang === "ne" ? "à¤ªà¤°à¤¿à¤®à¤¾à¤£" : "Qty"}</span>
-                    <span>{lang === "ne" ? "à¤¦à¤°" : "Rate"}</span>
-                    <span>{lang === "ne" ? "à¤°à¤•à¤®" : "Amount"}</span>
+                    <span>{lang === "ne" ? "सामान" : "Item"}</span>
+                    <span>{lang === "ne" ? "परिमाण" : "Qty"}</span>
+                    <span>{lang === "ne" ? "दर" : "Rate"}</span>
+                    <span>{lang === "ne" ? "रकम" : "Amount"}</span>
                   </div>
                   {preview.items.length ? preview.items.map((item: any) => (
                     <div key={`preview-${item.productId}-${item.name}`} className="grid grid-cols-[1.4fr_0.7fr_0.9fr_0.9fr] px-4 py-3 text-sm text-slate-700 border-b border-slate-100 last:border-b-0">
@@ -862,7 +883,7 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                   )) : (
                     <div className="px-4 py-6 text-center text-sm text-slate-500">
-                      {lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨ à¤¥à¤ªà¥‡à¤ªà¤›à¤¿ à¤¬à¤¿à¤² à¤µà¤¿à¤µà¤°à¤£ à¤¯à¤¹à¤¾à¤ à¤¦à¥‡à¤–à¤¿à¤¨à¥à¤›à¥¤" : "Add products to see the bill details here."}
+                      {lang === "ne" ? "सामान थपेपछि बिल विवरण यहाँ देखिन्छ।" : "Add products to see the bill details here."}
                     </div>
                   )}
                 </div>
@@ -903,7 +924,7 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤•" : "Customer"}</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "ग्राहक" : "Customer"}</p>
                         <p className="mt-2 text-lg font-semibold">{currentCustomer?.name || "-"}</p>
                         <p className="text-sm text-slate-600">{currentCustomer?.phone || text.noPhoneSaved}</p>
                         <p className="text-sm text-slate-600">{currentCustomer?.address || text.noAddressSaved}</p>
@@ -927,10 +948,10 @@ export function OwnerWorkspaceModern(props: any) {
                   <table className="mt-6 w-full border-collapse text-sm">
                     <thead>
                       <tr className="bg-slate-100 text-left">
-                        <th className="px-4 py-3">{lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨" : "Item"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "à¤ªà¤°à¤¿à¤®à¤¾à¤£" : "Qty"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "à¤¦à¤°" : "Rate"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "à¤°à¤•à¤®" : "Amount"}</th>
+                        <th className="px-4 py-3">{lang === "ne" ? "सामान" : "Item"}</th>
+                        <th className="px-4 py-3">{lang === "ne" ? "परिमाण" : "Qty"}</th>
+                        <th className="px-4 py-3">{lang === "ne" ? "दर" : "Rate"}</th>
+                        <th className="px-4 py-3">{lang === "ne" ? "रकम" : "Amount"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -944,7 +965,7 @@ export function OwnerWorkspaceModern(props: any) {
                       )) : (
                         <tr>
                           <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
-                            {lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨ à¤¥à¤ªà¥‡à¤ªà¤›à¤¿ à¤¬à¤¿à¤² à¤ªà¥à¤°à¤¿à¤¨à¥à¤Ÿ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤" : "Add products before printing the bill."}
+                            {lang === "ne" ? "सामान थपेपछि बिल प्रिन्ट गर्नुहोस्।" : "Add products before printing the bill."}
                           </td>
                         </tr>
                       )}
@@ -1139,7 +1160,7 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => startEditCustomer(customer)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
-                      <button type="button" onClick={() => runOwnerAction(() => deleteCustomer(customer.id), lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤• à¤¹à¤Ÿà¤¾à¤‡à¤¯à¥‹à¥¤" : "Customer deleted successfully.", lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤• à¤¹à¤Ÿà¤¾à¤‰à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not delete the customer.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
+                      <button type="button" onClick={() => runOwnerAction(() => deleteCustomer(customer.id), lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.", lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                     </div>
                   </article>
                 ))}
@@ -1158,7 +1179,7 @@ export function OwnerWorkspaceModern(props: any) {
                     {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{method}</option>)}
                   </select>
                   <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
-                    {lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤°à¤¸à¤¿à¤¦/à¤¬à¤¿à¤²à¤•à¥‹ à¤«à¥‹à¤Ÿà¥‹" : "Payment receipt/bill photo"}
+                    {lang === "ne" ? "भुक्तानी रसिद/बिलको फोटो" : "Payment receipt/bill photo"}
                     <input
                       type="file"
                       accept="image/*"
@@ -1187,13 +1208,13 @@ export function OwnerWorkspaceModern(props: any) {
               </form>
 
               <form onSubmit={createCustomer} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-2xl font-bold text-slate-950">{editingCustomerId ? `${text.edit} ${lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤•" : "customer"}` : text.addCustomer}</h3>
+                <h3 className="text-2xl font-bold text-slate-950">{editingCustomerId ? `${text.edit} ${lang === "ne" ? "ग्राहक" : "customer"}` : text.addCustomer}</h3>
                 <div className="mt-4 grid gap-4">
-                  <input className={shellInput()} value={customerForm.name} onChange={(e) => setCustomerForm((v: any) => ({ ...v, name: e.target.value }))} placeholder={lang === "ne" ? "à¤¨à¤¾à¤®" : "Name"} />
-                  <input className={shellInput()} value={customerForm.phone} onChange={(e) => setCustomerForm((v: any) => ({ ...v, phone: e.target.value }))} placeholder={lang === "ne" ? "à¤«à¥‹à¤¨" : "Phone"} />
-                  <textarea className={`${shellInput()} min-h-24`} value={customerForm.address} onChange={(e) => setCustomerForm((v: any) => ({ ...v, address: e.target.value }))} placeholder={lang === "ne" ? "à¤ à¥‡à¤—à¤¾à¤¨à¤¾" : "Address"} />
+                  <input className={shellInput()} value={customerForm.name} onChange={(e) => setCustomerForm((v: any) => ({ ...v, name: e.target.value }))} placeholder={lang === "ne" ? "नाम" : "Name"} />
+                  <input className={shellInput()} value={customerForm.phone} onChange={(e) => setCustomerForm((v: any) => ({ ...v, phone: e.target.value }))} placeholder={lang === "ne" ? "फोन" : "Phone"} />
+                  <textarea className={`${shellInput()} min-h-24`} value={customerForm.address} onChange={(e) => setCustomerForm((v: any) => ({ ...v, address: e.target.value }))} placeholder={lang === "ne" ? "ठेगाना" : "Address"} />
                   <textarea className={`${shellInput()} min-h-24`} value={customerForm.notes} onChange={(e) => setCustomerForm((v: any) => ({ ...v, notes: e.target.value }))} placeholder={text.notes} />
-                  <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingCustomerId ? (lang === "ne" ? "à¤—à¥à¤°à¤¾à¤¹à¤• à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Update customer") : text.createCustomerButton}</button>
+                  <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingCustomerId ? (lang === "ne" ? "ग्राहक अपडेट गर्नुहोस्" : "Update customer") : text.createCustomerButton}</button>
                 </div>
               </form>
             </div>
@@ -1256,10 +1277,10 @@ export function OwnerWorkspaceModern(props: any) {
                             onClick={() => setExpandedProductId((current) => current === product.id ? null : product.id)}
                             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
                           >
-                            {expandedProductId === product.id ? (lang === "ne" ? "à¤²à¥à¤•à¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Hide") : (lang === "ne" ? "à¤¹à¥‡à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "View")}
+                            {expandedProductId === product.id ? (lang === "ne" ? "लुकाउनुहोस्" : "Hide") : (lang === "ne" ? "हेर्नुहोस्" : "View")}
                           </button>
                           <button type="button" onClick={() => startEditProduct(product)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
-                          <button type="button" onClick={() => runOwnerAction(() => deleteProduct(product.id), lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨ à¤¹à¤Ÿà¤¾à¤‡à¤¯à¥‹à¥¤" : "Product deleted successfully.", lang === "ne" ? "à¤¸à¤¾à¤®à¤¾à¤¨ à¤¹à¤Ÿà¤¾à¤‰à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not delete the product.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
+                          <button type="button" onClick={() => runOwnerAction(() => deleteProduct(product.id), lang === "ne" ? "सामान हटाइयो।" : "Product deleted successfully.", lang === "ne" ? "सामान हटाउन सकिएन।" : "Could not delete the product.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                         </div>
                       </div>
                       {expandedProductId === product.id ? (
@@ -1328,12 +1349,12 @@ export function OwnerWorkspaceModern(props: any) {
                   className={shellInput()}
                   value={(productForm as any).imageUrl || ""}
                   onChange={(e) => setProductForm((v: any) => ({ ...v, imageUrl: e.target.value }))}
-                  placeholder={lang === "ne" ? "à¤‰à¤¤à¥à¤ªà¤¾à¤¦à¤¨ à¤«à¥‹à¤Ÿà¥‹ à¤²à¤¿à¤‚à¤• à¤µà¤¾ data url" : "Product image URL or data URL"}
+                  placeholder={lang === "ne" ? "उत्पादन फोटो लिंक वा data url" : "Product image URL or data URL"}
                 />
                 <label className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/50 px-4 py-4 text-sm text-amber-900">
                   <div className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "à¤–à¤°à¤¿à¤¦ à¤¬à¤¿à¤² / à¤¸à¤ªà¥à¤²à¤¾à¤¯à¤° à¤¬à¤¿à¤²à¤•à¥‹ à¤«à¥‹à¤Ÿà¥‹" : "Purchase bill / supplier bill photo"}</span>
+                    <span>{lang === "ne" ? "खरिद बिल / सप्लायर बिलको फोटो" : "Purchase bill / supplier bill photo"}</span>
                   </div>
                   <input
                     type="file"
@@ -1364,14 +1385,14 @@ export function OwnerWorkspaceModern(props: any) {
                       onClick={() => setPurchaseBillScan(createBillScanState())}
                       className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
                     >
-                      {lang === "ne" ? "à¤¬à¤¿à¤² à¤«à¥‹à¤Ÿà¥‹ à¤¹à¤Ÿà¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Remove bill photo"}
+                      {lang === "ne" ? "बिल फोटो हटाउनुहोस्" : "Remove bill photo"}
                     </button>
                   </div>
                 ) : null}
                 <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
                   <div className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "à¤‰à¤ªà¤•à¤°à¤£à¤¬à¤¾à¤Ÿ à¤‰à¤¤à¥à¤ªà¤¾à¤¦à¤¨ à¤«à¥‹à¤Ÿà¥‹ à¤…à¤ªà¤²à¥‹à¤¡ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Upload product photo from device"}</span>
+                    <span>{lang === "ne" ? "उपकरणबाट उत्पादन फोटो अपलोड गर्नुहोस्" : "Upload product photo from device"}</span>
                   </div>
                   <input
                     type="file"
@@ -1389,7 +1410,7 @@ export function OwnerWorkspaceModern(props: any) {
                 <label className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-4 text-sm text-amber-900">
                   <div className="flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "à¤•à¥à¤¯à¤¾à¤®à¥‡à¤°à¤¾ à¤ªà¥à¤°à¤¯à¥‹à¤— à¤—à¤°à¥‡à¤° à¤‰à¤¤à¥à¤ªà¤¾à¤¦à¤¨ à¤«à¥‹à¤Ÿà¥‹ à¤–à¤¿à¤šà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Use camera for product photo"}</span>
+                    <span>{lang === "ne" ? "क्यामेरा प्रयोग गरेर उत्पादन फोटो खिच्नुहोस्" : "Use camera for product photo"}</span>
                   </div>
                   <input
                     type="file"
@@ -1413,7 +1434,7 @@ export function OwnerWorkspaceModern(props: any) {
                       onClick={() => setProductForm((v: any) => ({ ...v, imageUrl: "" }))}
                       className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700"
                     >
-                      {lang === "ne" ? "à¤«à¥‹à¤Ÿà¥‹ à¤¹à¤Ÿà¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Remove photo"}
+                      {lang === "ne" ? "फोटो हटाउनुहोस्" : "Remove photo"}
                     </button>
                   </div>
                 ) : null}
@@ -1543,7 +1564,7 @@ export function OwnerWorkspaceModern(props: any) {
                               ),
                             }))
                           }
-                          placeholder={lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤µà¤¿à¤µà¤°à¤£" : "Notice details"}
+                          placeholder={lang === "ne" ? "सूचना विवरण" : "Notice details"}
                         />
                         <div className="flex flex-wrap gap-3">
                           <button
@@ -1556,7 +1577,7 @@ export function OwnerWorkspaceModern(props: any) {
                             }
                             className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
                           >
-                            {lang === "ne" ? "à¤¹à¤Ÿà¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Remove"}
+                            {lang === "ne" ? "हटाउनुहोस्" : "Remove"}
                           </button>
                         </div>
                       </div>
@@ -1564,7 +1585,7 @@ export function OwnerWorkspaceModern(props: any) {
                   ))
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    {lang === "ne" ? "à¤…à¤¹à¤¿à¤²à¥‡à¤¸à¤®à¥à¤® à¤•à¥à¤¨à¥ˆ à¤¸à¥‚à¤šà¤¨à¤¾ à¤°à¤¾à¤–à¤¿à¤à¤•à¥‹ à¤›à¥ˆà¤¨à¥¤" : "No notices added yet."}
+                    {lang === "ne" ? "अहिलेसम्म कुनै सूचना राखिएको छैन।" : "No notices added yet."}
                   </div>
                 )}
               </div>
@@ -1572,18 +1593,18 @@ export function OwnerWorkspaceModern(props: any) {
 
             <section className="space-y-5">
               {[
-                ["bankQrPath", lang === "ne" ? "à¤¬à¥ˆà¤‚à¤• QR à¤«à¥‹à¤Ÿà¥‹" : "Bank QR photo"],
-                ["esewaQrPath", lang === "ne" ? "eSewa QR à¤«à¥‹à¤Ÿà¥‹" : "eSewa QR photo"],
-                ["khaltiQrPath", lang === "ne" ? "Khalti QR à¤«à¥‹à¤Ÿà¥‹" : "Khalti QR photo"],
+                ["bankQrPath", lang === "ne" ? "बैंक QR फोटो" : "Bank QR photo"],
+                ["esewaQrPath", lang === "ne" ? "eSewa QR फोटो" : "eSewa QR photo"],
+                ["khaltiQrPath", lang === "ne" ? "Khalti QR फोटो" : "Khalti QR photo"],
               ].map(([field, label]) => (
                 <div key={field} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
                   <h4 className="text-xl font-bold text-slate-950">{label}</h4>
                   <p className="mt-1 text-sm text-slate-500">
                     {lang === "ne"
-                      ? "à¤—à¥à¤°à¤¾à¤¹à¤•à¤²à¥‡ QR à¤¬à¤¾à¤Ÿ à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤—à¤°à¥à¤¨à¥ à¤…à¤˜à¤¿ à¤«à¥‹à¤¨ à¤—à¤°à¥‡à¤° à¤¨à¤¾à¤®/à¤¯à¥à¤œà¤°à¤¨à¥‡à¤® à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤—à¤°à¥à¤¨à¥à¤ªà¤°à¥à¤¨à¥‡ à¤¸à¥‚à¤šà¤¨à¤¾ à¤¦à¥‡à¤–à¤¾à¤‡à¤¨à¥‡à¤›à¥¤"
+                      ? "ग्राहकले QR बाट भुक्तानी गर्नु अघि फोन गरेर नाम/युजरनेम पुष्टि गर्नुपर्ने सूचना देखाइनेछ।"
                       : "Customers will be warned to call and confirm the payment name/username before using this QR."}
                   </p>
-                  <input className={`${shellInput()} mt-4`} value={settingsForm[field] || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, [field]: e.target.value }))} placeholder={lang === "ne" ? "QR à¤«à¥‹à¤Ÿà¥‹ à¤²à¤¿à¤‚à¤• à¤µà¤¾ data url" : "QR image URL or data URL"} />
+                  <input className={`${shellInput()} mt-4`} value={settingsForm[field] || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, [field]: e.target.value }))} placeholder={lang === "ne" ? "QR फोटो लिंक वा data url" : "QR image URL or data URL"} />
                   <label className="mt-4 flex items-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
                     <Upload className="h-4 w-4" />
                     {text.uploadImage}
@@ -1600,7 +1621,7 @@ export function OwnerWorkspaceModern(props: any) {
               ].map(([field, label]) => (
                 <div key={field} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
                   <h4 className="text-xl font-bold text-slate-950">{label}</h4>
-                  <input className={`${shellInput()} mt-4`} value={settingsForm[field] || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, [field]: e.target.value }))} placeholder={lang === "ne" ? "à¤¤à¤¸à¥à¤¬à¤¿à¤° à¤²à¤¿à¤‚à¤• à¤µà¤¾ data url" : "Image URL or data URL"} />
+                  <input className={`${shellInput()} mt-4`} value={settingsForm[field] || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, [field]: e.target.value }))} placeholder={lang === "ne" ? "तस्बिर लिंक वा data url" : "Image URL or data URL"} />
                   <label className="mt-4 flex items-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
                     <Upload className="h-4 w-4" />
                     {text.uploadImage}
