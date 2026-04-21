@@ -15,7 +15,7 @@ const orderItemSchema = z.object({
   productId: z.number().int().positive(),
   productName: z.string().min(1).max(200).transform(s => s.trim()),
   price: z.number().nonnegative(),
-  quantity: z.number().int().positive().max(999),
+  quantity: z.number().positive().max(999),
   unit: z.string().max(20).default("pc"),
 });
 
