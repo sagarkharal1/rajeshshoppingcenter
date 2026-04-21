@@ -31,16 +31,15 @@ export function PublicLayoutModern({
   const homeLabel = lang === "ne" ? "होम" : "Home";
   const ownerLabel = lang === "ne" ? "मालिक" : "Owner";
   const ownerLoginLabel = lang === "ne" ? "मालिक लगइन" : "Owner login";
-  const langToggleLabel = lang === "ne" ? "EN" : "ने";
 
   const navLinks = [
-    { href: "/", label: lang === "ne" ? "होम" : "Home", icon: Home },
+    { href: "/", label: homeLabel, icon: Home },
     { href: "/catalog", label: t.nav.catalog, icon: Grid2x2 },
     { href: "/book", label: t.nav.transport, icon: Truck },
     { href: "/about", label: t.nav.about, icon: Info },
   ];
 
-  const termsLabel = lang === "ne" ? "सेवा सर्तहरू" : "Terms of Service";
+  const termsLabel = lang === "ne" ? "सेवाका सर्तहरू" : "Terms of Service";
   const accountLabel = lang === "ne" ? "मेरो खाता" : "My Account";
 
   const handleLogoSecretTap = () => {
@@ -91,6 +90,16 @@ export function PublicLayoutModern({
               <Languages className="h-3.5 w-3.5" />
               {lang === "ne" ? "EN" : "ने"}
             </button>
+            {onOwnerAccessRequest ? (
+              <button
+                type="button"
+                onClick={onOwnerAccessRequest}
+                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground/80 transition-colors hover:bg-muted"
+                title={ownerLoginLabel}
+              >
+                {ownerLabel}
+              </button>
+            ) : null}
             <Link href="/cart" className="relative flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-foreground outline-none transition-colors hover:bg-secondary/80 hover:text-accent">
               <ShoppingBag className="h-5 w-5" />
               <span className="text-sm font-bold">{t.nav.cart}</span>
@@ -148,6 +157,19 @@ export function PublicLayoutModern({
                     {link.label}
                   </Link>
                 ))}
+                {onOwnerAccessRequest ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      onOwnerAccessRequest();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3 text-base font-semibold text-foreground"
+                  >
+                    <Info className="h-5 w-5" />
+                    {ownerLoginLabel}
+                  </button>
+                ) : null}
               </nav>
             </motion.div>
           ) : null}
@@ -179,7 +201,7 @@ export function PublicLayoutModern({
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/96 px-3 pb-3 pt-2 backdrop-blur-xl md:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 gap-2">
           {[
-            { href: "/", label: lang === "ne" ? "होम" : "Home", icon: Home },
+            { href: "/", label: homeLabel, icon: Home },
             { href: "/catalog", label: t.nav.catalog, icon: Search },
             { href: "/book", label: t.nav.transport, icon: Truck },
             { href: "/about", label: t.nav.about, icon: Info },

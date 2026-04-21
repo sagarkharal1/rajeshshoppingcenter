@@ -59,40 +59,40 @@ function shellInput() {
 function getOwnerOrderStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "delivered") {
-    return { label: lang === "ne" ? "Ã Â¤Â¸Ã Â¤Â«Ã Â¤Â² Ã Â¤Â¡Ã Â¥â€¡Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â­Ã Â¤Â°" : "Delivered", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+    return { label: lang === "ne" ? "डेलिभर भयो" : "Delivered", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
   }
   if (normalized === "cancelled") {
-    return { label: lang === "ne" ? "Ã Â¤Â°Ã Â¤Â¦Ã Â¥ÂÃ Â¤Â¦" : "Rejected / Cancelled", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+    return { label: lang === "ne" ? "रद्द" : "Rejected / Cancelled", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
   }
   if (normalized === "dispatched") {
-    return { label: lang === "ne" ? "Ã Â¤ÂªÃ Â¤Â Ã Â¤Â¾Ã Â¤â€¡Ã Â¤ÂÃ Â¤â€¢Ã Â¥â€¹" : "Dispatched", className: "border-sky-200 bg-sky-50 text-sky-700", icon: Truck };
+    return { label: lang === "ne" ? "पठाइयो" : "Dispatched", className: "border-sky-200 bg-sky-50 text-sky-700", icon: Truck };
   }
   if (normalized === "preparing") {
-    return { label: lang === "ne" ? "Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â·Ã Â¥ÂÃ Â¤Å¸Ã Â¤Â¿ Ã Â¤Â­Ã Â¤Âˆ Ã Â¤Â¤Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â°Ã Â¥â‚¬" : "Confirmed / Preparing", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+    return { label: lang === "ne" ? "पुष्टि / तयारी" : "Confirmed / Preparing", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
   }
-  return { label: lang === "ne" ? "Ã Â¤Â¨Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â Ã Â¤â€¦Ã Â¤Â°Ã Â¥ÂÃ Â¤Â¡Ã Â¤Â°" : "New order", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+  return { label: lang === "ne" ? "नयाँ अर्डर" : "New order", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
 }
 
 function getOwnerPaymentStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "paid") {
-    return { label: lang === "ne" ? "Ã Â¤Â­Ã Â¥ÂÃ Â¤â€¢Ã Â¥ÂÃ Â¤Â¤Ã Â¤Â¾Ã Â¤Â¨Ã Â¥â‚¬ Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â·Ã Â¥ÂÃ Â¤Å¸Ã Â¤Â¿" : "Confirmed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+    return { label: lang === "ne" ? "भुक्तानी पुष्टि" : "Confirmed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
   }
-  return { label: lang === "ne" ? "Ã Â¤Â­Ã Â¥ÂÃ Â¤â€¢Ã Â¥ÂÃ Â¤Â¤Ã Â¤Â¾Ã Â¤Â¨Ã Â¥â‚¬ Ã Â¤Â¬Ã Â¤Â¾Ã Â¤ÂÃ Â¤â€¢Ã Â¥â‚¬" : "Pending", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+  return { label: lang === "ne" ? "बाँकी" : "Pending", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
 }
 
 function getOwnerBookingStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "completed" || normalized === "delivered") {
-    return { label: lang === "ne" ? "ÃƒÂ Ã‚Â¤Ã‚Â¸ÃƒÂ Ã‚Â¤Ã‚Â•ÃƒÂ Ã‚Â¤Ã‚Â¿ÃƒÂ Ã‚Â¤Ã‚Â¯ÃƒÂ Ã‚Â¥Ã¢â‚¬Â¹" : "Completed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
+    return { label: lang === "ne" ? "सम्पन्न" : "Completed", className: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: CheckCircle2 };
   }
   if (normalized === "cancelled" || normalized === "rejected") {
-    return { label: lang === "ne" ? "ÃƒÂ Ã‚Â¤Ã‚Â°ÃƒÂ Ã‚Â¤Ã‚Â¦ÃƒÂ Ã‚Â¥Ã‚ÂÃƒÂ Ã‚Â¤Ã‚Â¦" : "Rejected", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
+    return { label: lang === "ne" ? "रद्द" : "Rejected", className: "border-rose-200 bg-rose-50 text-rose-700", icon: XCircle };
   }
   if (normalized === "confirmed") {
-    return { label: lang === "ne" ? "ÃƒÂ Ã‚Â¤Ã‚ÂªÃƒÂ Ã‚Â¥Ã‚ÂÃƒÂ Ã‚Â¤Ã‚Â·ÃƒÂ Ã‚Â¥Ã‚ÂÃƒÂ Ã‚Â¤Ã…Â¸ÃƒÂ Ã‚Â¤Ã‚Â¿" : "Confirmed", className: "border-amber-200 bg-amber-50 text-amber-800", icon: CheckCircle2 };
+    return { label: lang === "ne" ? "पुष्टि" : "Confirmed", className: "border-amber-200 bg-amber-50 text-amber-800", icon: CheckCircle2 };
   }
-  return { label: lang === "ne" ? "ÃƒÂ Ã‚Â¤Ã‚Â¨ÃƒÂ Ã‚Â¤Ã‚Â¯ÃƒÂ Ã‚Â¤Ã‚Â¾ÃƒÂ Ã‚Â¤Ã‚Â ÃƒÂ Ã‚Â¤Ã‚Â¬ÃƒÂ Ã‚Â¥Ã‚ÂÃƒÂ Ã‚Â¤Ã¢â‚¬Â¢ÃƒÂ Ã‚Â¤Ã‚Â¿ÃƒÂ Ã‚Â¤Ã¢â‚¬Å¡ÃƒÂ Ã‚Â¤Ã¢â‚¬â€" : "New booking", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
+  return { label: lang === "ne" ? "नयाँ बुकिङ" : "New booking", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
 }
 
 export function OwnerLoginModern({
@@ -127,7 +127,7 @@ export function OwnerLoginModern({
           <h1 className="mt-5 text-4xl font-bold leading-tight">{shopName}</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/88">
             {lang === "ne"
-              ? "à¤®à¤¾à¤²à¤¿à¤•à¤•à¤¾ à¤²à¤¾à¤—à¤¿ à¤¸à¤œà¤¿à¤²à¥‹ à¤¨à¤¿à¤œà¥€ à¤²à¤—à¤‡à¤¨à¥¤ à¤¬à¤¿à¤², à¤—à¥à¤°à¤¾à¤¹à¤• à¤‰à¤§à¤¾à¤°à¥‹, à¤¸à¥à¤Ÿà¤• à¤° à¤¸à¥‡à¤Ÿà¤¿à¤™ à¤¸à¤¬à¥ˆ à¤®à¥‹à¤¬à¤¾à¤‡à¤²à¤®à¤¾ à¤ªà¤¨à¤¿ à¤¸à¤œà¤¿à¤²à¥ˆ à¤šà¤²à¥à¤¨à¥‡ à¤—à¤°à¥€ à¤°à¤¾à¤–à¤¿à¤à¤•à¥‹ à¤›à¥¤"
+              ? "मालिकका लागि सजिलो निजी लगइन। बिल, ग्राहक उधारो, स्टक र सेटिङ सबै मोबाइलमा पनि सजिलै चल्ने गरी राखिएको छ।"
               : "Simple private owner login. Billing, customer credit, stock, and settings are designed to be easy on mobile too."}
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -153,18 +153,21 @@ export function OwnerLoginModern({
             </div>
             <button type="button" onClick={toggleLanguage} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
               <Languages className="h-3.5 w-3.5" />
-              {lang === "ne" ? "EN" : "à¤¨à¥‡"}
+              {lang === "ne" ? "EN" : "ने"}
             </button>
           </div>
 
           <div className="mt-6 grid gap-4">
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               {text.usernameLabel}
-              <input
-                className={shellInput()}
-                value={forgotMode ? forgotForm.identifier : login.identifier}
-                onChange={(e) =>
-                  forgotMode
+                <input
+                  className={shellInput()}
+                  name="owner-identifier"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={forgotMode ? forgotForm.identifier : login.identifier}
+                  onChange={(e) =>
+                    forgotMode
                     ? setForgotForm((v: any) => ({ ...v, identifier: e.target.value }))
                     : setLogin((v: any) => ({ ...v, identifier: e.target.value }))
                 }
@@ -173,16 +176,16 @@ export function OwnerLoginModern({
             {forgotMode ? (
               <>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤•à¥‹à¤¡" : "Reset code"}
+                  {lang === "ne" ? "रिसेट कोड" : "Reset code"}
                   <input
                     className={shellInput()}
                     value={forgotForm.otp}
                     onChange={(e) => setForgotForm((v: any) => ({ ...v, otp: e.target.value }))}
-                    placeholder={lang === "ne" ? "WhatsApp à¤µà¤¾ à¤«à¤²à¤¬à¥à¤¯à¤¾à¤• à¤•à¥‹à¤¡" : "Code from WhatsApp or fallback"}
+                    placeholder={lang === "ne" ? "WhatsApp वा फलब्याक कोड" : "Code from WhatsApp or fallback"}
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡" : "New password"}
+                  {lang === "ne" ? "नयाँ पासवर्ड" : "New password"}
                   <input
                     type="password"
                     className={shellInput()}
@@ -191,7 +194,7 @@ export function OwnerLoginModern({
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤ªà¥à¤¨à¤ƒ à¤²à¥‡à¤–à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Confirm new password"}
+                  {lang === "ne" ? "नयाँ पासवर्ड पुनः लेख्नुहोस्" : "Confirm new password"}
                   <input
                     type="password"
                     className={shellInput()}
@@ -204,7 +207,15 @@ export function OwnerLoginModern({
               <>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   {text.passwordLabel}
-                  <input type="password" className={shellInput()} value={login.password} onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))} />
+                  <input
+                    type="password"
+                    className={shellInput()}
+                    name="owner-password"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    value={login.password}
+                    onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))}
+                  />
                 </label>
               </>
             )}
@@ -214,13 +225,13 @@ export function OwnerLoginModern({
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
               <p className="font-semibold">
                 {lang === "ne"
-                  ? "à¤ªà¤¹à¤¿à¤²à¥‡ à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤•à¥‹à¤¡ à¤®à¤¾à¤—à¥à¤¨à¥à¤¹à¥‹à¤¸à¥, à¤¤à¥à¤¯à¤¸à¤ªà¤›à¤¿ à¤•à¥‹à¤¡ à¤° à¤¨à¤¯à¤¾à¤ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤°à¤¾à¤–à¥‡à¤° à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤"
+                  ? "पहिले रिसेट कोड माग्नुहोस्, त्यसपछि कोड र नयाँ पासवर्ड राखेर रिसेट गर्नुहोस्।"
                   : "Request a reset code first, then enter the code and your new password."}
               </p>
               {recoveryInfo?.message ? <p className="mt-2">{recoveryInfo.message}</p> : null}
               {recoveryInfo?.devRecoveryCode ? (
                 <p className="mt-2 font-bold">
-                  {lang === "ne" ? "à¤¡à¥‡à¤­à¤²à¤ªà¤®à¥‡à¤¨à¥à¤Ÿ à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤•à¥‹à¤¡" : "Development reset code"}: {recoveryInfo.devRecoveryCode}
+                  {lang === "ne" ? "विकास रिसेट कोड" : "Development reset code"}: {recoveryInfo.devRecoveryCode}
                 </p>
               ) : null}
             </div>
@@ -235,16 +246,16 @@ export function OwnerLoginModern({
                   onClick={requestPasswordReset}
                   disabled={resetBusy}
                 >
-                  {lang === "ne" ? "à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤•à¥‹à¤¡ à¤ªà¤ à¤¾à¤‰à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Send reset code"}
+                  {lang === "ne" ? "रिसेट कोड पठाउनुहोस्" : "Send reset code"}
                 </button>
                 <button className="w-full rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground shadow-lg" disabled={resetBusy}>
-                  {resetBusy ? (lang === "ne" ? "à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤¹à¥à¤à¤¦à¥ˆà¤›..." : "Resetting...") : (lang === "ne" ? "à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤°à¤¿à¤¸à¥‡à¤Ÿ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Reset password")}
+                  {resetBusy ? (lang === "ne" ? "रिसेट हुँदैछ..." : "Resetting...") : (lang === "ne" ? "पासवर्ड रिसेट गर्नुहोस्" : "Reset password")}
                 </button>
               </>
             ) : (
               <>
                 <button className="w-full rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground shadow-lg">
-                  {lang === "ne" ? "à¤²à¤—à¤‡à¤¨ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Log in"}
+                  {lang === "ne" ? "लगइन गर्नुहोस्" : "Log in"}
                 </button>
               </>
             )}
@@ -258,8 +269,8 @@ export function OwnerLoginModern({
             }}
           >
             {forgotMode
-              ? (lang === "ne" ? "à¤²à¤—à¤‡à¤¨à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to login")
-              : (lang === "ne" ? "à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤¬à¤¿à¤°à¥à¤¸à¤¨à¥à¤­à¤¯à¥‹?" : "Forgot password?")}
+              ? (lang === "ne" ? "लगइनमा फर्कनुहोस्" : "Back to login")
+              : (lang === "ne" ? "पासवर्ड बिर्सनुभयो?" : "Forgot password?")}
           </button>
           <button
             type="button"
@@ -269,7 +280,7 @@ export function OwnerLoginModern({
               setOwnerEntryRequested(false);
             }}
           >
-            {lang === "ne" ? "à¤ªà¤¸à¤²à¤®à¤¾ à¤«à¤°à¥à¤•à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Back to shop"}
+            {lang === "ne" ? "पसलमा फर्कनुहोस्" : "Back to shop"}
           </button>
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
         </form>
@@ -317,6 +328,7 @@ export function OwnerWorkspaceModern(props: any) {
     const status = String(booking.status || "").toLowerCase();
     return !status || status === "pending" || status === "requested";
   });
+  const newActivityCount = newOrders.length + newBookings.length;
 
   const showFeedback = (type: "success" | "error", message: string) => {
     setActionFeedback({ type, message });
@@ -384,7 +396,7 @@ export function OwnerWorkspaceModern(props: any) {
   const nav = [
     { name: "overview", label: text.overview, icon: Home },
     { name: "billing", label: text.billing, icon: ReceiptText },
-    { name: "orders", label: lang === "ne" ? "à¤…à¤°à¥à¤¡à¤°" : "Orders", icon: Bell },
+    { name: "orders", label: lang === "ne" ? "अर्डर" : "Orders", icon: Bell },
     { name: "customers", label: text.customers, icon: Users },
     { name: "products", label: text.products, icon: PackagePlus },
     { name: "branding", label: text.branding, icon: Settings2 },
@@ -402,7 +414,7 @@ export function OwnerWorkspaceModern(props: any) {
           <div className="flex items-center gap-2">
             <button type="button" onClick={toggleLanguage} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
               <Languages className="h-3.5 w-3.5" />
-              {lang === "ne" ? "EN" : "à¤¨à¥‡"}
+              {lang === "ne" ? "EN" : "ने"}
             </button>
             <button
               type="button"
@@ -426,9 +438,9 @@ export function OwnerWorkspaceModern(props: any) {
             >
               <item.icon className="h-4 w-4" />
               {item.label}
-              {item.name === "orders" && newOrders.length ? (
+              {item.name === "orders" && newActivityCount ? (
                 <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tab === item.name ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"}`}>
-                  {newOrders.length}
+                  {newActivityCount}
                 </span>
               ) : null}
             </button>
@@ -454,7 +466,7 @@ export function OwnerWorkspaceModern(props: any) {
 
         <div className="grid items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-[linear-gradient(135deg,#fff8ef_0%,#f4e0ba_100%)] px-4 py-3 shadow-sm lg:grid-cols-[0.9fr_1.3fr_0.9fr]">
           <div className="flex h-12 items-center justify-center rounded-[1rem] bg-[rgba(88,28,0,0.9)] px-3 text-center text-sm font-bold leading-tight text-amber-50 shadow-sm sm:h-14 sm:text-base">
-            à¥ à¤¶à¥à¤°à¥€ à¤—à¤£à¥‡à¤¶à¤¾à¤¯ à¤¨à¤®à¤ƒ
+            ॐ श्री गणेशाय नमः
           </div>
           <div className="flex items-center justify-center">
             <img
@@ -474,15 +486,15 @@ export function OwnerWorkspaceModern(props: any) {
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                {lang === "ne" ? "à¤®à¤¾à¤²à¤¿à¤• à¤•à¤¾à¤® à¤ªà¥à¤¯à¤¾à¤¨à¤²" : "Owner workspace"}
+                {lang === "ne" ? "मालिक कार्यस्थल" : "Owner workspace"}
               </span>
-              {newOrders.length ? (
+              {newActivityCount ? (
                 <button
                   type="button"
                   onClick={() => setTab("orders")}
                   className="rounded-full bg-amber-300 px-3 py-2 text-xs font-bold text-slate-950"
                 >
-                  {lang === "ne" ? `à¤¨à¤¯à¤¾à¤ à¤…à¤°à¥à¤¡à¤° ${newOrders.length}` : `New orders ${newOrders.length}`}
+                  {lang === "ne" ? `नयाँ अर्डर / बुकिङ ${newActivityCount}` : `New orders / bookings ${newActivityCount}`}
                 </button>
               ) : null}
             </div>
@@ -495,21 +507,21 @@ export function OwnerWorkspaceModern(props: any) {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-800">
-                    {lang === "ne" ? "à¤¨à¥‡à¤ªà¤¾à¤² à¤†à¤œ" : "Today in Nepal"}
+                    {lang === "ne" ? "नेपाल आज" : "Today in Nepal"}
                   </p>
                   <h3 className="mt-2 text-2xl font-bold text-slate-950">{formatNepalDate(new Date(), lang)}</h3>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤†à¤œà¤•à¤¾ à¤¬à¤¿à¤²" : "Bills today"}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आजका बिल" : "Bills today"}</p>
                     <p className="mt-2 text-xl font-semibold text-slate-950">{todayInvoices.length}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤†à¤œ à¤ªà¥à¤°à¤¾à¤ªà¥à¤¤" : "Collected today"}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आज प्राप्त" : "Collected today"}</p>
                     <p className="mt-2 text-xl font-semibold text-emerald-700">{money(todaySales)}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "à¤†à¤œ à¤¬à¤¾à¤à¤•à¥€" : "Due today"}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आज बाँकी" : "Due today"}</p>
                     <p className="mt-2 text-xl font-semibold text-amber-700">{money(todayDue)}</p>
                   </div>
                 </div>
@@ -552,6 +564,50 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+            <div className="rounded-[1.5rem] border border-amber-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "हालका अर्डर र बुकिङ" : "Recent orders & bookings"}</h3>
+                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900">
+                  {(orders || []).length + (bookings || []).length}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {[...(orders || []).map((order: any) => ({ kind: "order", createdAt: order.createdAt, data: order })), ...(bookings || []).map((booking: any) => ({ kind: "booking", createdAt: booking.createdAt || booking.bookingDate, data: booking }))]
+                  .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+                  .slice(0, 6)
+                  .map((entry: any) => (
+                    <div key={`${entry.kind}-${entry.data.id}`} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
+                      {entry.kind === "order" ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName}</p>
+                            <p className="text-slate-500">{lang === "ne" ? "सामान अर्डर" : "Product order"}</p>
+                            <p className="text-slate-400">{when(entry.data.createdAt)}</p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">{money(num(entry.data.totalAmount))}</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName}</p>
+                            <p className="text-slate-500">
+                              {entry.data.serviceType === "tractor"
+                                ? (lang === "ne" ? "ट्र्याक्टर बुकिङ" : "Tractor booking")
+                                : entry.data.serviceType === "telcoline"
+                                  ? (lang === "ne" ? "टाटा टेल्कोलाइन बुकिङ" : "Tata Telcoline booking")
+                                  : (lang === "ne" ? "बोलेरो बुकिङ" : "Bolero booking")}
+                            </p>
+                            <p className="text-slate-400">{when(entry.data.createdAt || entry.data.bookingDate)}</p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">
+                            {entry.data.pickupLocation || (lang === "ne" ? "बुकिङ" : "Booking")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -889,11 +945,11 @@ export function OwnerWorkspaceModern(props: any) {
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "à¤…à¤¨à¤²à¤¾à¤‡à¤¨ à¤…à¤°à¥à¤¡à¤°" : "Online Orders"}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "à¤µà¥‡à¤¬à¤¸à¤¾à¤‡à¤Ÿà¤¬à¤¾à¤Ÿ à¤†à¤à¤•à¤¾ à¤…à¤°à¥à¤¡à¤° à¤¯à¤¹à¤¾à¤ à¤¦à¥‡à¤–à¤¿à¤¨à¥à¤›à¤¨à¥à¥¤" : "Orders created from the website appear here."}</p>
+                  <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "अनलाइन अर्डर र बुकिङ" : "Online Orders & Bookings"}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "वेबसाइटबाट आएका अर्डर र बुकिङ यहाँ देखिन्छन्।" : "Orders and bookings created from the website appear here."}</p>
                 </div>
                 <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                  {lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤…à¤°à¥à¤¡à¤°" : "New orders"}: {newOrders.length + newBookings.length}
+                  {lang === "ne" ? "नयाँ अर्डर / बुकिङ" : "New orders / bookings"}: {newActivityCount}
                 </div>
               </div>
               <div className="mt-5 grid gap-4">
@@ -938,28 +994,28 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {order.status === "order-received" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "preparing"), lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤­à¤¯à¥‹à¥¤" : "Order confirmed", lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤—à¤°à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not confirm the order.")} className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-                          {lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Confirm order"}
+                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "preparing"), lang === "ne" ? "अर्डर पुष्टि भयो।" : "Order confirmed", lang === "ne" ? "अर्डर पुष्टि गर्न सकिएन।" : "Could not confirm the order.")} className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                          {lang === "ne" ? "अर्डर पुष्टि गर्नुहोस्" : "Confirm order"}
                         </button>
                       ) : null}
                       {order.status === "preparing" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "dispatched"), lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹ à¤°à¥‚à¤ªà¤®à¤¾ à¤°à¤¾à¤–à¤¿à¤¯à¥‹à¥¤" : "Order dispatched", lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹ à¤°à¥‚à¤ªà¤®à¤¾ à¤°à¤¾à¤–à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not mark the order as dispatched.")} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                          {lang === "ne" ? "à¤ªà¤ à¤¾à¤‡à¤à¤•à¥‹" : "Mark dispatched"}
+                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "dispatched"), lang === "ne" ? "अर्डर पठाइयो।" : "Order dispatched", lang === "ne" ? "अर्डर पठाउन सकिएन।" : "Could not mark the order as dispatched.")} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                          {lang === "ne" ? "पठाइयो" : "Mark dispatched"}
                         </button>
                       ) : null}
                       {order.status === "dispatched" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "delivered"), lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤¡à¥‡à¤²à¤¿à¤­à¤° à¤­à¤à¤•à¥‹ à¤°à¥‚à¤ªà¤®à¤¾ à¤°à¤¾à¤–à¤¿à¤¯à¥‹à¥¤" : "Order delivered", lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤¡à¥‡à¤²à¤¿à¤­à¤° à¤­à¤à¤•à¥‹ à¤°à¥‚à¤ªà¤®à¤¾ à¤°à¤¾à¤–à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not mark the order as delivered.")} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                          {lang === "ne" ? "à¤¡à¥‡à¤²à¤¿à¤­à¤° à¤­à¤¯à¥‹" : "Mark delivered"}
+                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "delivered"), lang === "ne" ? "अर्डर डेलिभर भयो।" : "Order delivered", lang === "ne" ? "अर्डर डेलिभर गर्न सकिएन।" : "Could not mark the order as delivered.")} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                          {lang === "ne" ? "डेलिभर भयो" : "Mark delivered"}
                         </button>
                       ) : null}
                       {order.paymentStatus !== "paid" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, order.status, "paid"), lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤­à¤¯à¥‹à¥¤" : "Payment received", lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤—à¤°à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not confirm the payment.")} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                          {lang === "ne" ? "à¤­à¥à¤•à¥à¤¤à¤¾à¤¨à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿" : "Confirm payment"}
+                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, order.status, "paid"), lang === "ne" ? "भुक्तानी पुष्टि भयो।" : "Payment received", lang === "ne" ? "भुक्तानी पुष्टि गर्न सकिएन।" : "Could not confirm the payment.")} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                          {lang === "ne" ? "भुक्तानी पुष्टि" : "Confirm payment"}
                         </button>
                       ) : null}
                       {order.status !== "cancelled" && order.status !== "delivered" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "cancelled"), lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤°à¤¦à¥à¤¦ à¤—à¤°à¤¿à¤¯à¥‹à¥¤" : "Order rejected", lang === "ne" ? "à¤…à¤°à¥à¤¡à¤° à¤°à¤¦à¥à¤¦ à¤—à¤°à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not cancel the order.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
-                          {lang === "ne" ? "à¤°à¤¦à¥à¤¦" : "Cancel"}
+                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "cancelled"), lang === "ne" ? "अर्डर रद्द भयो।" : "Order rejected", lang === "ne" ? "अर्डर रद्द गर्न सकिएन।" : "Could not cancel the order.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
+                          {lang === "ne" ? "रद्द" : "Cancel"}
                         </button>
                       ) : null}
                     </div>
@@ -1318,18 +1374,18 @@ export function OwnerWorkspaceModern(props: any) {
             <form onSubmit={saveMediaSettings} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.mediaCenter}</h3>
               <div className="mt-4 grid gap-4">
-                <input className={shellInput()} value={settingsForm.shopName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, shopName: e.target.value }))} placeholder={lang === "ne" ? "à¤ªà¤¸à¤² à¤¨à¤¾à¤®" : "Shop name"} />
-                <input className={shellInput()} value={settingsForm.proprietorName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, proprietorName: e.target.value }))} placeholder={lang === "ne" ? "à¤ªà¥à¤°à¥‹à¤ªà¥à¤°à¤¾à¤‡à¤Ÿà¤° à¤¨à¤¾à¤®" : "Proprietor name"} />
-                <input className={shellInput()} value={settingsForm.phone || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, phone: e.target.value }))} placeholder={lang === "ne" ? "à¤«à¥‹à¤¨ à¤¨à¤®à¥à¤¬à¤°" : "Phone number"} />
-                <textarea className={`${shellInput()} min-h-24`} value={settingsForm.address || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, address: e.target.value }))} placeholder={lang === "ne" ? "à¤ à¥‡à¤—à¤¾à¤¨à¤¾" : "Address"} />
+                <input className={shellInput()} value={settingsForm.shopName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, shopName: e.target.value }))} placeholder={lang === "ne" ? "पसल नाम" : "Shop name"} />
+                <input className={shellInput()} value={settingsForm.proprietorName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, proprietorName: e.target.value }))} placeholder={lang === "ne" ? "प्रोप्राइटर नाम" : "Proprietor name"} />
+                <input className={shellInput()} value={settingsForm.phone || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, phone: e.target.value }))} placeholder={lang === "ne" ? "फोन नम्बर" : "Phone number"} />
+                <textarea className={`${shellInput()} min-h-24`} value={settingsForm.address || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, address: e.target.value }))} placeholder={lang === "ne" ? "ठेगाना" : "Address"} />
                 <input className={shellInput()} value={settingsForm.esewaId || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, esewaId: e.target.value }))} placeholder="eSewa ID" />
                 <input className={shellInput()} value={settingsForm.khaltiId || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, khaltiId: e.target.value }))} placeholder="Khalti ID" />
-                <textarea className={`${shellInput()} min-h-28`} value={settingsForm.aboutText || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, aboutText: e.target.value }))} placeholder={lang === "ne" ? "à¤µà¥à¤¯à¤µà¤¸à¤¾à¤¯ à¤ªà¤°à¤¿à¤šà¤¯" : "Business introduction"} />
-                <textarea className={`${shellInput()} min-h-28`} value={settingsForm.deliveryPolicy || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, deliveryPolicy: e.target.value }))} placeholder={lang === "ne" ? "à¤¡à¥‡à¤²à¤¿à¤­à¤°à¥€ à¤¨à¥€à¤¤à¤¿" : "Delivery policy"} />
-                <textarea className={`${shellInput()} min-h-24`} value={settingsForm.invoiceFooter || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, invoiceFooter: e.target.value }))} placeholder={lang === "ne" ? "à¤¬à¤¿à¤² à¤«à¥à¤Ÿà¤°" : "Invoice footer"} />
+                <textarea className={`${shellInput()} min-h-28`} value={settingsForm.aboutText || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, aboutText: e.target.value }))} placeholder={lang === "ne" ? "व्यवसाय परिचय" : "Business introduction"} />
+                <textarea className={`${shellInput()} min-h-28`} value={settingsForm.deliveryPolicy || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, deliveryPolicy: e.target.value }))} placeholder={lang === "ne" ? "डेलिभरी नीति" : "Delivery policy"} />
+                <textarea className={`${shellInput()} min-h-24`} value={settingsForm.invoiceFooter || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, invoiceFooter: e.target.value }))} placeholder={lang === "ne" ? "बिल फुटर" : "Invoice footer"} />
                 <button disabled={settingsBusy} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">
                   <Save className="h-4 w-4" />
-                  {settingsBusy ? (lang === "ne" ? "à¤¸à¥‡à¤­ à¤¹à¥à¤à¤¦à¥ˆà¤›..." : "Saving...") : text.saveMediaSettings}
+                  {settingsBusy ? (lang === "ne" ? "सेभ हुँदैछ..." : "Saving...") : text.saveMediaSettings}
                 </button>
               </div>
             </form>
@@ -1340,30 +1396,30 @@ export function OwnerWorkspaceModern(props: any) {
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "à¤®à¤¾à¤²à¤¿à¤• à¤¸à¥à¤°à¤•à¥à¤·à¤¾" : "Owner security"}</h4>
+                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "मालिक सुरक्षा" : "Owner security"}</h4>
                   <p className="mt-1 text-sm text-slate-500">
                     {lang === "ne"
-                      ? "à¤®à¤¾à¤²à¤¿à¤• à¤¸à¥‡à¤¸à¤¨ à¥§à¥« à¤®à¤¿à¤¨à¥‡à¤Ÿ à¤¨à¤¿à¤·à¥à¤•à¥à¤°à¤¿à¤¯ à¤­à¤à¤ªà¤›à¤¿ à¤†à¤«à¥ˆà¤‚ à¤¬à¤¨à¥à¤¦ à¤¹à¥à¤¨à¥à¤›à¥¤ à¤¯à¤¹à¤¾à¤à¤¬à¤¾à¤Ÿ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤ªà¤°à¤¿à¤µà¤°à¥à¤¤à¤¨ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤"
+                      ? "मालिक सेसन १५ मिनेट निष्क्रिय भएपछि आफैं बन्द हुन्छ। यहाँबाट पासवर्ड परिवर्तन गर्नुहोस्।"
                       : "Owner sessions lock automatically after 15 minutes of inactivity. Change the owner password here."}
                   </p>
                 </div>
               </div>
               <div className="mt-4 grid gap-4">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4" />{lang === "ne" ? "à¤¹à¤¾à¤²à¤•à¥‹ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡" : "Current password"}</span>
+                  <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4" />{lang === "ne" ? "हालको पासवर्ड" : "Current password"}</span>
                   <input type="password" className={shellInput()} value={passwordForm.currentPassword} onChange={(e) => setPasswordForm((current: any) => ({ ...current, currentPassword: e.target.value }))} />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡" : "New password"}</span>
+                  <span>{lang === "ne" ? "नयाँ पासवर्ड" : "New password"}</span>
                   <input type="password" className={shellInput()} value={passwordForm.newPassword} onChange={(e) => setPasswordForm((current: any) => ({ ...current, newPassword: e.target.value }))} />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "à¤¨à¤¯à¤¾à¤ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤ªà¥à¤¨à¤ƒ à¤²à¥‡à¤–à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Confirm new password"}</span>
+                  <span>{lang === "ne" ? "नयाँ पासवर्ड पुनः लेख्नुहोस्" : "Confirm new password"}</span>
                   <input type="password" className={shellInput()} value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm((current: any) => ({ ...current, confirmPassword: e.target.value }))} />
                 </label>
                 <button disabled={passwordBusy} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">
                   <ShieldCheck className="h-4 w-4" />
-                  {passwordBusy ? (lang === "ne" ? "à¤ªà¤°à¤¿à¤µà¤°à¥à¤¤à¤¨ à¤¹à¥à¤à¤¦à¥ˆà¤›..." : "Updating...") : (lang === "ne" ? "à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤ªà¤°à¤¿à¤µà¤°à¥à¤¤à¤¨ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Change password")}
+                  {passwordBusy ? (lang === "ne" ? "परिवर्तन हुँदैछ..." : "Updating...") : (lang === "ne" ? "पासवर्ड परिवर्तन गर्नुहोस्" : "Change password")}
                 </button>
               </div>
             </form>
@@ -1371,9 +1427,9 @@ export function OwnerWorkspaceModern(props: any) {
             <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "à¤ªà¤¸à¤² à¤¸à¥‚à¤šà¤¨à¤¾" : "Shop notices"}</h4>
+                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "पसल सूचना" : "Shop notices"}</h4>
                   <p className="mt-1 text-sm text-slate-500">
-                    {lang === "ne" ? "à¤¹à¥‹à¤®à¤ªà¥‡à¤œà¤®à¤¾ à¤¦à¥‡à¤–à¤¿à¤¨à¥‡ à¤¸à¥‚à¤šà¤¨à¤¾ à¤¯à¤¹à¥€à¤à¤¬à¤¾à¤Ÿ à¤°à¤¾à¤–à¥à¤¨à¥à¤¹à¥‹à¤¸à¥à¥¤" : "Manage the notices shown on the homepage here."}
+                    {lang === "ne" ? "होमपेजमा देखिने सूचना यहीँबाट राख्नुहोस्।" : "Manage the notices shown on the homepage here."}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1387,7 +1443,7 @@ export function OwnerWorkspaceModern(props: any) {
                     }
                     className="rounded-2xl bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-900"
                   >
-                    {lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¥à¤ªà¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Add notice"}
+                    {lang === "ne" ? "सूचना थप्नुहोस्" : "Add notice"}
                   </button>
                   <button
                     type="button"
@@ -1420,7 +1476,7 @@ export function OwnerWorkspaceModern(props: any) {
                               ),
                             }))
                           }
-                          placeholder={lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¶à¥€à¤°à¥à¤·à¤•" : "Notice title"}
+                          placeholder={lang === "ne" ? "सूचना शीर्षक" : "Notice title"}
                         />
                         <textarea
                           className={`${shellInput()} min-h-24`}
@@ -1457,24 +1513,6 @@ export function OwnerWorkspaceModern(props: any) {
                     {lang === "ne" ? "à¤…à¤¹à¤¿à¤²à¥‡à¤¸à¤®à¥à¤® à¤•à¥à¤¨à¥ˆ à¤¸à¥‚à¤šà¤¨à¤¾ à¤°à¤¾à¤–à¤¿à¤à¤•à¥‹ à¤›à¥ˆà¤¨à¥¤" : "No notices added yet."}
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      runOwnerAction(
-                        () => saveMediaSettings(),
-                        lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¸à¥‡à¤­" : "Notices saved",
-                        lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¸à¥‡à¤­ à¤—à¤°à¥à¤¨ à¤¸à¤•à¤¿à¤à¤¨à¥¤" : "Could not save notices.",
-                      )
-                    }
-                    className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-                  >
-                    {lang === "ne" ? "à¤¸à¥‚à¤šà¤¨à¤¾ à¤¸à¥‡à¤­ à¤—à¤°à¥à¤¨à¥à¤¹à¥‹à¤¸à¥" : "Save notices"}
-                  </button>
-                  <p className="text-sm text-slate-500">
-                    {lang === "ne" ? "à¤¯à¥‹ à¤¬à¤Ÿà¤¨à¤²à¥‡ à¤¸à¥‚à¤šà¤¨à¤¾ à¤®à¤¾à¤¤à¥à¤° à¤¸à¥‡à¤­ à¤—à¤°à¥à¤›à¥¤" : "This saves only the notices above."}
-                  </p>
-                </div>
               </div>
             </section>
 
