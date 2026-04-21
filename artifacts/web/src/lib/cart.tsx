@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import type { Product } from "@workspace/api-client-react";
+import { normalizeQuantity } from "@/lib/quantity";
 
 export interface CartItem {
   product: Product;
@@ -36,16 +37,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const addToCart = (product: Product, quantity: number = 1) => {
+    const cleanQuantity = normalizeQuantity(quantity, product.unit);
     setItems((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
         return prev.map((item) =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? { ...item, quantity: normalizeQuantity(item.quantity + cleanQuantity, product.unit) }
             : item
         );
       }
-      return [...prev, { product, quantity }];
+      return [...prev, { product, quantity: cleanQuantity }];
     });
   };
 
@@ -57,7 +59,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (quantity < 1) return;
     setItems((prev) =>
       prev.map((item) =>
-        item.product.id === productId ? { ...item, quantity } : item
+        item.product.id === productId ? { ...item, quantity: normalizeQuantity(quantity, item.product.unit) } : item
       )
     );
   };

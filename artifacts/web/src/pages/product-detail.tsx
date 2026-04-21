@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useGetProduct } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
+import { formatQuantity, getQuantityStep, normalizeQuantity } from "@/lib/quantity";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatNPR, getImageUrl } from "@/lib/utils";
@@ -19,6 +20,8 @@ export default function ProductDetail() {
   const { addToCart } = useCart();
   const { toast } = useToast();
   const [quantity, setQuantity] = useState(1);
+  const quantityStep = getQuantityStep(product?.unit);
+  const quantityLabel = lang === "ne" ? "मात्रा" : "Quantity";
   const cartActionText = lang === "ne" ? "कार्टमा जानुहोस्" : "Go to cart";
   const keepSelectingText = lang === "ne" ? "वा सामान छानिरहनुहोस्" : "Keep selecting items";
 
@@ -43,7 +46,7 @@ export default function ProductDetail() {
     addToCart(product, quantity);
     toast({
       title: t.product.addedToCart,
-      description: `${quantity}x ${product.name} ${t.product.addedToCartDesc}`,
+      description: `${formatQuantity(quantity)}x ${product.name} ${t.product.addedToCartDesc}`,
       action: (
         <ToastAction altText={cartActionText} onClick={() => navigate("/cart")}>
           {cartActionText}
@@ -151,17 +154,25 @@ export default function ProductDetail() {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex items-center border-2 border-border rounded-xl overflow-hidden bg-background h-14 w-full sm:w-auto">
                   <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={!product.inStock || quantity <= 1}
+                    onClick={() => setQuantity(normalizeQuantity(quantity - quantityStep, product.unit))}
+                    disabled={!product.inStock || quantity <= quantityStep}
                     className="w-14 h-full flex items-center justify-center hover:bg-muted disabled:opacity-50 transition-colors"
                   >
                     <Minus className="w-5 h-5" />
                   </button>
-                  <div className="w-16 h-full flex items-center justify-center font-bold text-lg border-x-2 border-border">
-                    {quantity}
-                  </div>
+                  <input
+                    type="number"
+                    min={quantityStep}
+                    step={quantityStep}
+                    inputMode="decimal"
+                    value={formatQuantity(quantity)}
+                    onChange={(event) => setQuantity(normalizeQuantity(event.target.value, product.unit))}
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="h-full w-20 border-x-2 border-border bg-transparent px-2 text-center text-lg font-bold outline-none"
+                    aria-label={quantityLabel}
+                  />
                   <button
-                    onClick={() => setQuantity(quantity + 1)}
+                    onClick={() => setQuantity(normalizeQuantity(quantity + quantityStep, product.unit))}
                     disabled={!product.inStock}
                     className="w-14 h-full flex items-center justify-center hover:bg-muted disabled:opacity-50 transition-colors"
                   >

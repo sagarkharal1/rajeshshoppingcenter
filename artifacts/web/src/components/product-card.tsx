@@ -4,6 +4,7 @@ import type { Product } from "@workspace/api-client-react";
 import { formatNPR, getImageUrl } from "@/lib/utils";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
+import { formatQuantity, getQuantityStep, normalizeQuantity } from "@/lib/quantity";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { motion } from "framer-motion";
@@ -17,6 +18,8 @@ export function ProductCard({ product }: { product: Product }) {
   const productMeta = product as Product & { stockQuantity?: number; sku?: string };
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [imageFailed, setImageFailed] = useState(false);
+  const quantityStep = getQuantityStep(product.unit);
+  const quantityLabel = lang === "ne" ? "मात्रा" : "Quantity";
   const cartActionText = lang === "ne" ? "कार्टमा जानुहोस्" : "Go to cart";
   const keepSelectingText = lang === "ne" ? "वा सामान छानिरहनुहोस्" : "Keep selecting items";
   const quantityInCart = useMemo(
@@ -29,7 +32,7 @@ export function ProductCard({ product }: { product: Product }) {
     addToCart(product, selectedQuantity);
     toast({
       title: t.product.addedToCart,
-      description: `${selectedQuantity}x ${product.name} ${t.product.addedToCartDesc}`,
+      description: `${formatQuantity(selectedQuantity)}x ${product.name} ${t.product.addedToCartDesc}`,
       action: (
         <ToastAction altText={cartActionText} onClick={() => navigate("/cart")}>
           {cartActionText}
@@ -102,27 +105,35 @@ export function ProductCard({ product }: { product: Product }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Quantity
+                {quantityLabel}
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">
-                {selectedQuantity} {product.unit}
+                {formatQuantity(selectedQuantity)} {product.unit}
               </p>
             </div>
             <div className="flex items-center overflow-hidden rounded-2xl border border-border bg-background">
               <button
                 type="button"
-                onClick={() => setSelectedQuantity((value) => Math.max(1, value - 1))}
+                onClick={() => setSelectedQuantity((value) => normalizeQuantity(value - quantityStep, product.unit))}
                 className="px-3 py-2 text-base font-bold text-foreground transition hover:bg-muted"
                 aria-label="Decrease quantity"
               >
                 -
               </button>
-              <span className="min-w-10 px-3 py-2 text-center text-sm font-semibold text-foreground">
-                {selectedQuantity}
-              </span>
+              <input
+                type="number"
+                min={quantityStep}
+                step={quantityStep}
+                inputMode="decimal"
+                value={formatQuantity(selectedQuantity)}
+                onChange={(event) => setSelectedQuantity(normalizeQuantity(event.target.value, product.unit))}
+                onFocus={(event) => event.currentTarget.select()}
+                className="h-full w-16 border-x border-border bg-transparent px-2 py-2 text-center text-sm font-semibold text-foreground outline-none"
+                aria-label={quantityLabel}
+              />
               <button
                 type="button"
-                onClick={() => setSelectedQuantity((value) => value + 1)}
+                onClick={() => setSelectedQuantity((value) => normalizeQuantity(value + quantityStep, product.unit))}
                 disabled={!product.inStock}
                 className="px-3 py-2 text-base font-bold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Increase quantity"
@@ -133,7 +144,7 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
           {quantityInCart > 0 ? (
             <p className="mt-2 text-xs font-medium text-primary">
-              Already in cart: {quantityInCart} {product.unit}
+              Already in cart: {formatQuantity(quantityInCart)} {product.unit}
             </p>
           ) : null}
         </div>

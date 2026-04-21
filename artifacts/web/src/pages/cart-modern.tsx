@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { ArrowRight, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
+import { formatQuantity, getQuantityStep, normalizeQuantity } from "@/lib/quantity";
 import { formatNPR, getImageUrl } from "@/lib/utils";
 
 export default function CartModern() {
@@ -44,6 +45,8 @@ export default function CartModern() {
         <div className="space-y-3">
           {items.map((item) => {
             const imageUrl = getImageUrl(item.product.imageUrl);
+            const quantityStep = getQuantityStep(item.product.unit);
+            const quantityLabel = lang === "ne" ? "मात्रा" : "Quantity";
             return (
               <div key={item.product.id} className="rounded-[1.5rem] border border-border bg-card p-4 shadow-sm">
                 <div className="flex gap-4">
@@ -64,11 +67,21 @@ export default function CartModern() {
                     </p>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center overflow-hidden rounded-2xl border border-border">
-                        <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="flex h-10 w-10 items-center justify-center bg-muted/50">
+                        <button onClick={() => updateQuantity(item.product.id, normalizeQuantity(item.quantity - quantityStep, item.product.unit))} className="flex h-10 w-10 items-center justify-center bg-muted/50">
                           <Minus className="h-4 w-4" />
                         </button>
-                        <div className="flex h-10 w-12 items-center justify-center font-bold">{item.quantity}</div>
-                        <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="flex h-10 w-10 items-center justify-center bg-muted/50">
+                        <input
+                          type="number"
+                          min={quantityStep}
+                          step={quantityStep}
+                          inputMode="decimal"
+                          value={formatQuantity(item.quantity)}
+                          onChange={(event) => updateQuantity(item.product.id, normalizeQuantity(event.target.value, item.product.unit))}
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="flex h-10 w-16 border-x border-border bg-background px-2 text-center font-bold outline-none"
+                          aria-label={quantityLabel}
+                        />
+                        <button onClick={() => updateQuantity(item.product.id, normalizeQuantity(item.quantity + quantityStep, item.product.unit))} className="flex h-10 w-10 items-center justify-center bg-muted/50">
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
