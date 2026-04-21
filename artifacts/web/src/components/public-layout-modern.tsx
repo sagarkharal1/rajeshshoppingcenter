@@ -1,12 +1,12 @@
 import { ReactNode, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Grid2x2, Home, Info, Languages, Menu, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
+import { Download, ExternalLink, Grid2x2, Home, Info, Languages, Menu, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
 import { useGetSettings } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { cn } from "@/lib/utils";
-import { InstallAppBanner } from "@/components/install-app-banner";
+import { INSTALL_APP_EVENT, InstallAppBanner } from "@/components/install-app-banner";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
 import { NepalDateTime } from "@/components/nepal-date-time";
 
@@ -41,6 +41,7 @@ export function PublicLayoutModern({
 
   const termsLabel = lang === "ne" ? "सेवाका सर्तहरू" : "Terms of Service";
   const accountLabel = lang === "ne" ? "मेरो खाता" : "My Account";
+  const downloadAppLabel = lang === "ne" ? "एप डाउनलोड" : "Download app";
 
   const handleLogoSecretTap = () => {
     if (!onOwnerAccessRequest) return;
@@ -53,6 +54,10 @@ export function PublicLayoutModern({
     }
     if (logoTapResetRef.current) window.clearTimeout(logoTapResetRef.current);
     logoTapResetRef.current = window.setTimeout(() => setLogoTapCount(0), 2200);
+  };
+
+  const handleDownloadApp = () => {
+    window.dispatchEvent(new Event(INSTALL_APP_EVENT));
   };
 
   return (
@@ -89,6 +94,13 @@ export function PublicLayoutModern({
             >
               <Languages className="h-3.5 w-3.5" />
               {lang === "ne" ? "EN" : "ने"}
+            </button>
+            <button
+              onClick={handleDownloadApp}
+              className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950 transition-all hover:border-amber-400 hover:bg-amber-100"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {downloadAppLabel}
             </button>
             <Link href="/cart" className="relative flex items-center gap-2 rounded-full bg-secondary px-4 py-2 text-foreground outline-none transition-colors hover:bg-secondary/80 hover:text-accent">
               <ShoppingBag className="h-5 w-5" />
@@ -147,6 +159,16 @@ export function PublicLayoutModern({
                     {link.label}
                   </Link>
                 ))}
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleDownloadApp();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base font-bold text-amber-950"
+                >
+                  <Download className="h-5 w-5" />
+                  {downloadAppLabel}
+                </button>
               </nav>
             </motion.div>
           ) : null}
