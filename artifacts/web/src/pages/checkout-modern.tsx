@@ -282,7 +282,7 @@ export default function CheckoutModern() {
             {orderId ? (
               <button
                 type="button"
-                onClick={() => setLocation(`/track-order?id=${orderId}&phone=${encodeURIComponent(formData.phone)}`)}
+                onClick={() => setLocation(`/track?id=${orderId}&phone=${encodeURIComponent(formData.phone)}`)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-5 py-3 font-bold text-foreground"
               >
                 <Search className="w-4 h-4" />

@@ -343,7 +343,7 @@ export function OwnerWorkspaceModern(props: any) {
     deleteCustomer, startEditCustomer, productForm, setProductForm, createProduct,
     editingProductId, setEditingProductId, startEditProduct, deleteProduct, settingsForm,
     setSettingsForm, saveMediaSettings, settingsBusy, passwordForm, setPasswordForm, passwordBusy, changePassword, readFileAsDataUrl,
-    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, updateBookingStatus,
+    handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, confirmOrderPayment, updateBookingStatus,
     seedSampleProducts, seedingProducts, externalFeedback,
   } = props;
 
@@ -1036,6 +1036,11 @@ export function OwnerWorkspaceModern(props: any) {
                       </div>
                       <div className="flex flex-wrap gap-2 text-sm">
                         <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">{money(num(order.totalAmount))}</span>
+                        {order.paymentMethod ? (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600">
+                            {order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : "Bank"}
+                          </span>
+                        ) : null}
                         {(() => {
                           const statusMeta = getOwnerOrderStatusMeta(order.status, lang === "ne" ? "ne" : "en");
                           return (
@@ -1081,9 +1086,32 @@ export function OwnerWorkspaceModern(props: any) {
                         </button>
                       ) : null}
                       {order.paymentStatus !== "paid" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, order.status, "paid"), lang === "ne" ? "भुक्तानी पुष्टि भयो।" : "Payment received", lang === "ne" ? "भुक्तानी पुष्टि गर्न सकिएन।" : "Could not confirm the payment.")} className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                          {lang === "ne" ? "भुक्तानी पुष्टि" : "Confirm payment"}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => runOwnerAction(
+                              () => confirmOrderPayment(order.id, "confirmed", order.paymentMethod || "bank"),
+                              lang === "ne" ? "भुक्तानी खाताबहीमा राखियो ✅" : "Payment confirmed & recorded in ledger ✅",
+                              lang === "ne" ? "भुक्तानी पुष्टि गर्न सकिएन।" : "Could not confirm payment."
+                            )}
+                            className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800"
+                            title={lang === "ne" ? "ग्राहकले वास्तवमा पैसा पठायो — खाताबहीमा राख्नुहोस्" : "Customer actually sent money — record in ledger"}
+                          >
+                            ✅ {lang === "ne" ? "भुक्तानी पायो (खाताबही)" : `Received via ${order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : "Bank"}`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => runOwnerAction(
+                              () => confirmOrderPayment(order.id, "credit", order.paymentMethod || "bank"),
+                              lang === "ne" ? "उधारो खाताबहीमा थपियो 📒" : "Added to customer credit tab 📒",
+                              lang === "ne" ? "उधारो थप्न सकिएन।" : "Could not add to credit tab."
+                            )}
+                            className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
+                            title={lang === "ne" ? "ग्राहकले पैसा पठाएन — उनको उधारो खातामा राख्नुहोस्" : "Customer didn't pay — add to their credit tab"}
+                          >
+                            📒 {lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit tab"}
+                          </button>
+                        </>
                       ) : null}
                       {order.status !== "cancelled" && order.status !== "delivered" ? (
                         <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "cancelled"), lang === "ne" ? "अर्डर रद्द भयो।" : "Order rejected", lang === "ne" ? "अर्डर रद्द गर्न सकिएन।" : "Could not cancel the order.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">

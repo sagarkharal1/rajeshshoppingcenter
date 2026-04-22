@@ -6,6 +6,9 @@ import {
   ordersTable,
   bookingsTable,
   settingsTable,
+  customersTable,
+  customerPaymentsTable,
+  customerLedgerTable,
 } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import jwt from "jsonwebtoken";
@@ -651,6 +654,113 @@ router.put("/admin/orders/:id/status", authMiddleware, async (req, res) => {
     res.json({ ...order, totalAmount: Number(order.totalAmount) });
   } catch {
     res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+// Settle an online order: confirm real payment received, or add unpaid amount to customer credit tab
+router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid order ID" });
+  }
+
+  const { action, paymentMethod } = req.body ?? {};
+  if (!["confirmed", "credit"].includes(action)) {
+    return res.status(400).json({ error: "action must be 'confirmed' or 'credit'" });
+  }
+  if (!["cash", "esewa", "khalti", "bank"].includes(paymentMethod)) {
+    return res.status(400).json({ error: "paymentMethod must be cash, esewa, khalti, or bank" });
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [order] = await tx
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, id))
+        .limit(1);
+
+      if (!order) throw new Error("ORDER_NOT_FOUND");
+      if (action === "confirmed" && order.paymentStatus === "paid") throw new Error("ALREADY_PAID");
+
+      const customerId = order.customerId;
+      if (!customerId) throw new Error("NO_CUSTOMER");
+
+      const [customer] = await tx
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.id, customerId))
+        .limit(1);
+
+      if (!customer) throw new Error("CUSTOMER_NOT_FOUND");
+
+      const totalAmount = Number(order.totalAmount);
+      const currentBalance = Number(customer.creditBalance ?? 0);
+
+      if (action === "confirmed") {
+        // Mark order paid
+        await tx
+          .update(ordersTable)
+          .set({ paymentStatus: "paid" })
+          .where(eq(ordersTable.id, id));
+
+        // Record the incoming payment
+        const [payment] = await tx
+          .insert(customerPaymentsTable)
+          .values({
+            customerId: customer.id,
+            amount: totalAmount.toFixed(2),
+            paymentMethod,
+            referenceNote: `Online order #${order.id} — ${paymentMethod} payment confirmed`,
+          })
+          .returning();
+
+        // Ledger entry: credit side (money received, balance unchanged)
+        await tx.insert(customerLedgerTable).values({
+          customerId: customer.id,
+          paymentId: payment.id,
+          entryType: "payment",
+          description: `Online order #${order.id} — ${paymentMethod} payment confirmed`,
+          debitAmount: "0.00",
+          creditAmount: totalAmount.toFixed(2),
+          balanceAfter: currentBalance.toFixed(2),
+          metadata: { source: "order-payment-confirm", orderId: order.id, paymentMethod },
+        });
+      } else {
+        // Move to credit: customer owes this amount
+        const newBalance = currentBalance + totalAmount;
+
+        await tx
+          .update(customersTable)
+          .set({
+            creditBalance: newBalance.toFixed(2),
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(customersTable.id, customer.id));
+
+        // Ledger entry: debit side (debt added to account)
+        await tx.insert(customerLedgerTable).values({
+          customerId: customer.id,
+          entryType: "order-credit",
+          description: `Online order #${order.id} — added to credit tab`,
+          debitAmount: totalAmount.toFixed(2),
+          creditAmount: "0.00",
+          balanceAfter: newBalance.toFixed(2),
+          metadata: { source: "order-credit", orderId: order.id, originalPaymentMethod: order.paymentMethod },
+        });
+      }
+
+      return { success: true, action, orderId: id };
+    });
+
+    res.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN";
+    if (message === "ORDER_NOT_FOUND") return res.status(404).json({ error: "Order not found" });
+    if (message === "ALREADY_PAID") return res.status(400).json({ error: "Order is already marked as paid" });
+    if (message === "NO_CUSTOMER") return res.status(400).json({ error: "This order has no linked customer record" });
+    if (message === "CUSTOMER_NOT_FOUND") return res.status(404).json({ error: "Customer not found" });
+    res.status(500).json({ error: "Failed to settle order" });
   }
 });
 

@@ -1044,6 +1044,14 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     await load();
   };
 
+  const confirmOrderPayment = async (orderId: number, action: "confirmed" | "credit", paymentMethod: string) => {
+    await api(`/admin/orders/${orderId}/settle`, {
+      method: "POST",
+      body: JSON.stringify({ action, paymentMethod }),
+    });
+    await load();
+  };
+
   const updateBookingStatus = async (bookingId: number, status: string) => {
     await api(`/admin/bookings/${bookingId}/status`, {
       method: "PUT",
@@ -1239,6 +1247,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setToken={setToken}
       setOwnerEntryRequested={setOwnerEntryRequested}
       updateOrderStatus={updateOrderStatus}
+      confirmOrderPayment={confirmOrderPayment}
       updateBookingStatus={updateBookingStatus}
       seedSampleProducts={seedSampleProducts}
       seedingProducts={seedingProducts}
