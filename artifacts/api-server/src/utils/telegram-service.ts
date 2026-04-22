@@ -77,13 +77,13 @@ async function fetchWithTimeout(
 // Keeps retrying in the background until Telegram confirms success
 async function sendWithPersistentRetry(
   endpoint: string,
-  message: string,
+  htmlMessage: string,
   plainTextMessage: string,
   telegramChatId: string,
 ): Promise<void> {
   const TIMEOUT_MS = 10_000;
   const RETRY_DELAY_MS = 30_000; // 30 seconds between retries
-  const MAX_ATTEMPTS = 240;      // keep trying for up to 2 hours
+  const MAX_ATTEMPTS = 240; // keep trying for up to 2 hours
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -94,7 +94,7 @@ async function sendWithPersistentRetry(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: telegramChatId,
-            text: message,
+            text: htmlMessage,
             parse_mode: "HTML",
             disable_web_page_preview: true,
           }),
@@ -107,10 +107,9 @@ async function sendWithPersistentRetry(
           `[Telegram] Notification sent successfully on attempt ${attempt}.`,
           telegramChatId,
         );
-        return; // success — stop retrying
+        return;
       }
 
-      // Try plain text if HTML fails with a bad status
       const fallback = await fetchWithTimeout(
         endpoint,
         {
@@ -130,7 +129,7 @@ async function sendWithPersistentRetry(
           `[Telegram] Plain text notification sent on attempt ${attempt}.`,
           telegramChatId,
         );
-        return; // success — stop retrying
+        return;
       }
 
       console.warn(
@@ -170,16 +169,44 @@ export function sendTelegramMessage(message: string): void {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/?[^>]+>/g, "");
 
-  // Fire and forget — runs in background, never blocks the order response
+  const maxChunkSize = 3500;
+  const htmlChunks: string[] = [];
+  const plainChunks: string[] = [];
+
+  if (message.length <= maxChunkSize) {
+    htmlChunks.push(message);
+  } else {
+    for (let i = 0; i < message.length; i += maxChunkSize) {
+      htmlChunks.push(message.slice(i, i + maxChunkSize));
+    }
+  }
+
+  if (plainTextMessage.length <= maxChunkSize) {
+    plainChunks.push(plainTextMessage);
+  } else {
+    for (let i = 0; i < plainTextMessage.length; i += maxChunkSize) {
+      plainChunks.push(plainTextMessage.slice(i, i + maxChunkSize));
+    }
+  }
+
+  // Fire and forget; runs in background, never blocks order response
   for (const telegramChatId of telegramChatIds) {
-    sendWithPersistentRetry(
-      endpoint,
-      message,
-      plainTextMessage,
-      telegramChatId,
-    ).catch((error) => {
-      console.error("[Telegram] Unexpected error in retry loop:", error);
-    });
+    const chunkCount = Math.max(htmlChunks.length, plainChunks.length);
+
+    for (let idx = 0; idx < chunkCount; idx++) {
+      const htmlChunk = htmlChunks[idx] ?? plainChunks[idx] ?? "";
+      const plainChunk = plainChunks[idx] ?? htmlChunks[idx] ?? "";
+      if (!htmlChunk && !plainChunk) continue;
+
+      sendWithPersistentRetry(
+        endpoint,
+        htmlChunk,
+        plainChunk,
+        telegramChatId,
+      ).catch((error) => {
+        console.error("[Telegram] Unexpected error in retry loop:", error);
+      });
+    }
   }
 }
 
@@ -215,7 +242,9 @@ export function formatTelegramOrderMessage(order: {
 
   for (const item of order.items) {
     lines.push(
-      `- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(item.price * item.quantity)}`,
+      `- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(
+        item.price * item.quantity,
+      )}`,
     );
   }
 
