@@ -206,7 +206,9 @@ router.post("/orders", async (req, res) => {
       paymentStatus: (result.order as any).paymentStatus ?? "unpaid",
       notes: result.order.notes,
       items: result.order.items as Array<{ productName: string; quantity: number; price: number; unit?: string }>,
-    })).catch(() => {});
+    })).catch((error) => {
+      console.warn("[Orders] Telegram send failed for product order", result.order.id, error);
+    });
 
     res.status(201).json({
       ...result.order,
@@ -415,7 +417,9 @@ router.post("/bookings", async (req, res) => {
       destination: booking.destination,
       bookingDate: booking.bookingDate,
       notes: booking.notes,
-    })).catch(() => {});
+    })).catch((error) => {
+      console.warn("[Orders] Telegram send failed for booking", booking.id, error);
+    });
 
     res.status(201).json(booking);
   } catch (err) {

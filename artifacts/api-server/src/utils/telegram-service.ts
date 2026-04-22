@@ -26,11 +26,17 @@ function getTelegramChatIds(): string[] {
     .filter(Boolean)
     .join(",");
 
+  const sanitizeChatId = (value: string) =>
+    value
+      .trim()
+      .replace(/^[[\]"']+/, "")
+      .replace(/[[\]"']+$/, "");
+
   return Array.from(
     new Set(
       combined
-        .split(",")
-        .map((value) => value.trim())
+        .split(/[\s,;]+/g)
+        .map(sanitizeChatId)
         .filter(Boolean),
     ),
   );
