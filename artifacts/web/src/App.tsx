@@ -177,7 +177,7 @@ function PublicApp({ onOwnerAccessRequest }: { onOwnerAccessRequest: () => void 
           <Route path="/catalog" component={Catalog} />
           <Route path="/cart" component={CartPage} />
           <Route path="/checkout" component={Checkout} />
-          <Route path="/track-order" component={TrackOrderPage} />
+          <Route path="/track" component={TrackOrderPage} />
           <Route path="/about" component={AboutPage} />
           <Route path="/account" component={AccountPage} />
           <Route path="/terms" component={TermsPage} />
