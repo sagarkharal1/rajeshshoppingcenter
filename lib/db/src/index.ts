@@ -10,9 +10,20 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+const rawUrl = process.env.DATABASE_URL ?? "";
+
+// pg-connection-string v3 now maps sslmode=require → verify-full (rejectUnauthorized: true).
+// Strip sslmode from the URL so the parser cannot force rejectUnauthorized: true,
+// then pass ssl: { rejectUnauthorized: false } directly so DigitalOcean's
+// self-signed CA certificate is accepted.
+const connectionString = rawUrl
+  .replace(/&sslmode=[^&]*/i, "")   // sslmode is not the first query param
+  .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
+  .replace(/\?$/, "");               // remove trailing ? if nothing left
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("sslmode=require")
+  connectionString,
+  ssl: rawUrl.toLowerCase().includes("sslmode=")
     ? { rejectUnauthorized: false }
     : undefined,
 });
