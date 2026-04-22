@@ -3,7 +3,6 @@ function firstNonEmpty(...values: Array<string | undefined>): string {
     const trimmed = value?.trim();
     if (trimmed) return trimmed;
   }
-
   return "";
 }
 
@@ -55,7 +54,103 @@ function formatTelegramDate(value: string): string {
   });
 }
 
-export async function sendTelegramMessage(message: string): Promise<void> {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Keeps retrying in the background until Telegram confirms success
+async function sendWithPersistentRetry(
+  endpoint: string,
+  message: string,
+  plainTextMessage: string,
+  telegramChatId: string,
+): Promise<void> {
+  const TIMEOUT_MS = 10_000;
+  const RETRY_DELAY_MS = 30_000; // 30 seconds between retries
+  const MAX_ATTEMPTS = 240;      // keep trying for up to 2 hours
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: message,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+        },
+        TIMEOUT_MS,
+      );
+
+      if (response.ok) {
+        console.info(
+          `[Telegram] Notification sent successfully on attempt ${attempt}.`,
+          telegramChatId,
+        );
+        return; // success — stop retrying
+      }
+
+      // Try plain text if HTML fails with a bad status
+      const fallback = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: plainTextMessage,
+            disable_web_page_preview: true,
+          }),
+        },
+        TIMEOUT_MS,
+      );
+
+      if (fallback.ok) {
+        console.info(
+          `[Telegram] Plain text notification sent on attempt ${attempt}.`,
+          telegramChatId,
+        );
+        return; // success — stop retrying
+      }
+
+      console.warn(
+        `[Telegram] Attempt ${attempt}/${MAX_ATTEMPTS} failed with status ${response.status}. Retrying in 30s...`,
+        telegramChatId,
+      );
+    } catch (error) {
+      console.warn(
+        `[Telegram] Attempt ${attempt}/${MAX_ATTEMPTS} failed (network error). Retrying in 30s...`,
+        telegramChatId,
+        error,
+      );
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    }
+  }
+
+  console.error(
+    `[Telegram] Gave up after ${MAX_ATTEMPTS} attempts (2 hours).`,
+    telegramChatId,
+  );
+}
+
+export function sendTelegramMessage(message: string): void {
   const telegramBotToken = getTelegramBotToken();
   const telegramChatIds = getTelegramChatIds();
 
@@ -65,53 +160,20 @@ export async function sendTelegramMessage(message: string): Promise<void> {
   }
 
   const endpoint = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
-  const plainTextMessage = message.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[^>]+>/g, "");
+  const plainTextMessage = message
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/?[^>]+>/g, "");
 
+  // Fire and forget — runs in background, never blocks the order response
   for (const telegramChatId of telegramChatIds) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: telegramChatId,
-          text: message,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-        }),
-      });
-
-      if (response.ok) {
-        console.info("[Telegram] HTML notification sent successfully.", telegramChatId);
-        continue;
-      }
-
-      const errorText = await response.text().catch(() => "");
-      console.warn("[Telegram] HTML sendMessage responded with status", response.status, telegramChatId, errorText);
-    } catch (error) {
-      console.warn("[Telegram] Failed HTML notification attempt:", telegramChatId, error);
-    }
-
-    try {
-      const fallbackResponse = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: telegramChatId,
-          text: plainTextMessage,
-          disable_web_page_preview: true,
-        }),
-      });
-
-      if (!fallbackResponse.ok) {
-        const fallbackErrorText = await fallbackResponse.text().catch(() => "");
-        console.warn("[Telegram] Plain text sendMessage responded with status", fallbackResponse.status, telegramChatId, fallbackErrorText);
-        continue;
-      }
-
-      console.info("[Telegram] Plain text fallback notification sent successfully.", telegramChatId);
-    } catch (error) {
-      console.warn("[Telegram] Failed plain text notification attempt:", telegramChatId, error);
-    }
+    sendWithPersistentRetry(
+      endpoint,
+      message,
+      plainTextMessage,
+      telegramChatId,
+    ).catch((error) => {
+      console.error("[Telegram] Unexpected error in retry loop:", error);
+    });
   }
 }
 
@@ -147,9 +209,7 @@ export function formatTelegramOrderMessage(order: {
 
   for (const item of order.items) {
     lines.push(
-      `- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(
-        item.price * item.quantity,
-      )}`,
+      `- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(item.price * item.quantity)}`,
     );
   }
 
