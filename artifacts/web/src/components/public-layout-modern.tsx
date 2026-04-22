@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, ExternalLink, Grid2x2, Home, Info, Languages, Menu, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
+import { Download, ExternalLink, Grid2x2, Home, Info, Languages, Menu, PackageSearch, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
 import { useGetSettings } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
@@ -32,10 +32,13 @@ export function PublicLayoutModern({
   const tiktokUrl = "https://www.tiktok.com/@rajeshshoppingcenter";
   const homeLabel = lang === "ne" ? "होम" : "Home";
 
+  const trackLabel = lang === "ne" ? "अर्डर ट्र्याक" : "Track Order";
+
   const navLinks = [
     { href: "/", label: homeLabel, icon: Home },
     { href: "/catalog", label: t.nav.catalog, icon: Grid2x2 },
     { href: "/book", label: t.nav.transport, icon: Truck },
+    { href: "/track", label: trackLabel, icon: PackageSearch },
     { href: "/about", label: t.nav.about, icon: Info },
   ];
 
@@ -203,7 +206,7 @@ export function PublicLayoutModern({
             { href: "/", label: homeLabel, icon: Home },
             { href: "/catalog", label: t.nav.catalog, icon: Search },
             { href: "/book", label: t.nav.transport, icon: Truck },
-            { href: "/about", label: t.nav.about, icon: Info },
+            { href: "/track", label: trackLabel, icon: PackageSearch },
             { href: "/cart", label: t.nav.cart, icon: ShoppingBag, badge: totalItems },
           ].map((item) => (
             <Link

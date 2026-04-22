@@ -1005,7 +1005,26 @@ export function OwnerWorkspaceModern(props: any) {
                   {lang === "ne" ? "नयाँ अर्डर / बुकिङ" : "New orders / bookings"}: {newActivityCount}
                 </div>
               </div>
-              <div className="mt-5 grid gap-4">
+            </div>
+
+            {/* Side-by-side: Product Orders | Transport Bookings */}
+            <div className="grid gap-5 lg:grid-cols-2">
+
+              {/* ── Product Orders ── */}
+              <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-lg font-bold text-slate-950">{lang === "ne" ? "उत्पादन अर्डर" : "Product Orders"}</h4>
+                    <p className="text-xs text-slate-500">{lang === "ne" ? "सामान खरिद अर्डरहरू" : "Shop purchases"}</p>
+                  </div>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+                    {(orders || []).length} {lang === "ne" ? "अर्डर" : "orders"}
+                    {newOrders.length > 0 && (
+                      <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{newOrders.length} new</span>
+                    )}
+                  </span>
+                </div>
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {(orders || []).slice().reverse().map((order: any) => (
                   <article key={order.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1074,6 +1093,27 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                   </article>
                 ))}
+                {(orders || []).length === 0 && (
+                  <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै अर्डर छैन।" : "No product orders yet."}</p>
+                )}
+                </div>
+              </div>
+
+              {/* ── Transport Bookings ── */}
+              <div className="rounded-[1.5rem] border border-amber-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-lg font-bold text-slate-950">{lang === "ne" ? "यातायात बुकिङ" : "Transport Bookings"}</h4>
+                    <p className="text-xs text-slate-500">{lang === "ne" ? "बोलेरो, ट्र्याक्टर, टेल्कोलाइन" : "Bolero, Tractor, Telcoline"}</p>
+                  </div>
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                    {(bookings || []).length} {lang === "ne" ? "बुकिङ" : "bookings"}
+                    {newBookings.length > 0 && (
+                      <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{newBookings.length} new</span>
+                    )}
+                  </span>
+                </div>
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {(bookings || []).slice().reverse().map((booking: any) => {
                   const bookingStatus = getOwnerBookingStatusMeta(booking.status, lang === "ne" ? "ne" : "en");
                   const bookingLabel =
@@ -1088,7 +1128,7 @@ export function OwnerWorkspaceModern(props: any) {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-lg font-bold text-slate-950">#{booking.id} {booking.customerName}</p>
-                          <p className="text-sm font-medium text-slate-700">{bookingLabel} booking</p>
+                          <p className="text-sm font-medium text-amber-700">{bookingLabel} booking</p>
                           <p className="text-sm text-slate-500">{booking.customerPhone}</p>
                           <p className="text-sm text-slate-500">{booking.pickupLocation} → {booking.destination}</p>
                           <p className="mt-1 text-sm text-slate-400">{when(booking.bookingDate || booking.createdAt)}</p>
@@ -1135,8 +1175,13 @@ export function OwnerWorkspaceModern(props: any) {
                     </article>
                   );
                 })}
+                {(bookings || []).length === 0 && (
+                  <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet."}</p>
+                )}
+                </div>
               </div>
-            </div>
+
+            </div>{/* end side-by-side grid */}
           </section>
         ) : null}
 
