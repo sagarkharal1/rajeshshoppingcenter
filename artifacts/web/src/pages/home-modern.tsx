@@ -74,8 +74,8 @@ export default function HomeModern() {
     partnerDesc: lang === "ne" ? "थप सेवा र सप्लाइका लागि हाम्रो भरोसायोग्य साझेदार व्यवसायहरू।" : "Trusted partner businesses for more services and supply support.",
     story:
       lang === "ne"
-        ? "राजेश सपिङ्ग सेन्टरमा किराना, तरकारी, फलफूल, खाद्यान्न, हार्डवेयर, ग्यास, कपडा, जुत्ता, चप्पल र दैनिक चाहिने धेरै सामान पाइन्छ। यहाँ डेलिभरी सेवा, बोलेरो डबल क्याब सेवा र ट्रयाक्टर सहायता पनि उपलब्ध छ।"
-        : (businessStory || "Rajesh Shopping Center offers groceries, vegetables, fruits, clothes, beverages, hardware, kitchenware, shoes, rice, dal, and many daily-needs items in one place."),
+        ? "राजेश सिपिङ् सेन्टर १९९७ देखि मुसिकोट–५, आपचौर, गुल्मीमा सेवा दिँदै आएको बहुउपयोगी स्थानीय व्यवसाय हो। यहाँ तरकारी, फलफूल, खाद्यान्न, किराना, लत्ताकपडा, हार्डवेयर, ग्यास, जुत्ता–चप्पल र दैनिक चाहिने धेरै सामान पाइन्छ। यहाँ डेलिभरी सेवा, बोलेरो डबल क्याब सेवा र ट्र्याक्टर सहयोग पनि उपलब्ध छ।"
+        : "Rajesh Shopping Center has been serving Musikot-5, Aapchaur, Gulmi since 1997. We offer groceries, vegetables, fruits, food items, clothing, hardware, gas, shoes, and daily essentials. Bolero, tractor, and delivery services are also available.",
     highlights:
       lang === "ne"
         ? ["तरकारी, फलफूल, किराना", "हार्डवेयर र निर्माण सामान", "बोलेरो डबल क्याब सेवा", "डेलिभरी र ट्रयाक्टर सहयोग"]
@@ -92,7 +92,7 @@ export default function HomeModern() {
                 {copy.easyOrder}
               </div>
               <h1 className="mt-2 text-xl font-bold leading-tight text-slate-950 sm:text-[1.65rem]">
-                {settings?.shopName || "Rajesh Shopping Center"}
+                {lang === "ne" ? (settings?.shopName || "राजेश सिपिङ् सेन्टर") : "Rajesh Shopping Center"}
               </h1>
               <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-800">
                 {copy.heroDesc}

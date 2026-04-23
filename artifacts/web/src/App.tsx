@@ -1158,7 +1158,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   };
 
   const shopInfo = settings || publicSettings || {};
-  const shopName = String(shopInfo?.shopName ?? "Rajesh Shopping Center");
+  const shopName = lang === "ne"
+    ? String(shopInfo?.shopName ?? "राजेश सिपिङ् सेन्टर")
+    : "Rajesh Shopping Center";
   const shopAddress = String(shopInfo?.address ?? "Musikot-5, Anpchaur, Gulmi, Nepal");
   const shopPhone = String(shopInfo?.phone ?? "+977-XXXXXXXXXX");
   const shopEmail = String(shopInfo?.email ?? "rajeshshoppingcenter@gmail.com");

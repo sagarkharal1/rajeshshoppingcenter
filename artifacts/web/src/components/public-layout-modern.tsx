@@ -27,7 +27,9 @@ export function PublicLayoutModern({
   const { data: settings } = useGetSettings();
   const { t, lang, toggleLanguage } = useLanguage();
 
-  const shopName = settings?.shopName || "Rajesh Shopping Center";
+  const shopName = lang === "ne"
+    ? (settings?.shopName || "राजेश सिपिङ् सेन्टर")
+    : "Rajesh Shopping Center";
   const facebookUrl = "https://www.facebook.com/anpchaurpiplarukhaGulmi/";
   const tiktokUrl = "https://www.tiktok.com/@rajeshshoppingcenter";
   const homeLabel = lang === "ne" ? "होम" : "Home";
