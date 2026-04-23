@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, rewardTransactionsTable, settingsTable } from "@workspace/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable } from "@workspace/db/schema";
+import { desc, eq, sql } from "drizzle-orm";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
@@ -166,6 +166,17 @@ router.post("/orders", async (req, res) => {
           paymentMethod,
         } as any)
         .returning();
+
+      // Reduce stock for each ordered item
+      for (const item of items) {
+        await tx
+          .update(productsTable)
+          .set({
+            stockQuantity: sql`GREATEST(${productsTable.stockQuantity} - ${item.quantity}, 0)`,
+            inStock: sql`(${productsTable.stockQuantity} - ${item.quantity}) > 0`,
+          })
+          .where(eq(productsTable.id, item.productId));
+      }
 
       await tx.insert(customerLedgerTable).values({
         customerId: customer.id,

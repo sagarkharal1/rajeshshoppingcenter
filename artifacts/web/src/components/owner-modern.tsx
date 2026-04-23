@@ -580,6 +580,28 @@ export function OwnerWorkspaceModern(props: any) {
                 </div>
               </div>
             </div>
+            {/* Online order action banner — only when orders need payment decision */}
+            {summary.totals.pendingOnlineOrders > 0 ? (
+              <div
+                className="flex cursor-pointer items-center justify-between gap-4 rounded-[1.5rem] border-2 border-amber-300 bg-amber-50 px-5 py-4 shadow-sm"
+                onClick={() => setTab("orders")}
+              >
+                <div>
+                  <p className="text-sm font-bold text-amber-900">
+                    {lang === "ne"
+                      ? `${summary.totals.pendingOnlineOrders} अर्डर भुक्तानी पुष्टि पर्खिरहेको छ`
+                      : `${summary.totals.pendingOnlineOrders} online order${summary.totals.pendingOnlineOrders > 1 ? "s" : ""} waiting for payment decision`}
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    {lang === "ne" ? "भुक्तानी पुष्टि वा उधारो राख्न यहाँ थिच्नुहोस्" : "Tap to confirm payment or move to credit tab"}
+                  </p>
+                </div>
+                <span className="rounded-full bg-amber-400 px-4 py-2 text-sm font-bold text-white">
+                  {lang === "ne" ? "हेर्नुहोस्" : "View →"}
+                </span>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
                 [text.totalProducts, summary.totals.totalProducts, PackagePlus],
@@ -598,6 +620,23 @@ export function OwnerWorkspaceModern(props: any) {
                 </article>
               ))}
             </div>
+            {/* Online order revenue summary */}
+            {summary.totals.totalOnlineOrders > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-sm text-slate-500">{lang === "ne" ? "कुल अनलाइन अर्डर" : "Total online orders"}</p>
+                  <h3 className="mt-3 text-3xl font-bold text-slate-950">{summary.totals.totalOnlineOrders}</h3>
+                </article>
+                <article className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                  <p className="text-sm text-amber-700">{lang === "ne" ? "भुक्तानी बाँकी" : "Awaiting payment"}</p>
+                  <h3 className="mt-3 text-3xl font-bold text-amber-900">{summary.totals.pendingOnlineOrders}</h3>
+                </article>
+                <article className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+                  <p className="text-sm text-emerald-700">{lang === "ne" ? "पुष्टि भएको अनलाइन आम्दानी" : "Confirmed online revenue"}</p>
+                  <h3 className="mt-3 text-2xl font-bold text-emerald-900">{money(summary.totals.confirmedOnlineRevenue)}</h3>
+                </article>
+              </div>
+            ) : null}
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.recentInvoices}</h3>
               <div className="mt-4 grid gap-3">

@@ -7,6 +7,7 @@ import {
   customerPaymentsTable,
   invoiceItemsTable,
   invoicesTable,
+  ordersTable,
   productsTable,
   rewardTransactionsTable,
   settingsTable,
@@ -111,6 +112,14 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
       })
       .from(customersTable);
 
+    const [onlineOrderStats] = await db
+      .select({
+        totalOrders: sql<number>`count(*)`,
+        pendingPayment: sql<number>`sum(case when ${ordersTable.paymentStatus} = 'unpaid' and ${ordersTable.status} not in ('cancelled','delivered') then 1 else 0 end)`,
+        confirmedRevenue: sql<string>`coalesce(sum(case when ${ordersTable.paymentStatus} = 'paid' then ${ordersTable.totalAmount}::numeric else 0 end), 0)`,
+      })
+      .from(ordersTable);
+
     const recentInvoices = await db
       .select({
         id: invoicesTable.id,
@@ -137,6 +146,9 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
         totalCustomers: Number(customerStats?.totalCustomers ?? 0),
         totalCreditBalance: asNumber(customerStats?.totalCreditBalance),
         totalRewardPoints: Number(customerStats?.totalRewardPoints ?? 0),
+        totalOnlineOrders: Number(onlineOrderStats?.totalOrders ?? 0),
+        pendingOnlineOrders: Number(onlineOrderStats?.pendingPayment ?? 0),
+        confirmedOnlineRevenue: asNumber(onlineOrderStats?.confirmedRevenue),
       },
       recentInvoices: recentInvoices.map((invoice) => ({
         ...invoice,
