@@ -98,9 +98,12 @@ function getOwnerBookingStatusMeta(status: string, lang: "en" | "ne") {
 }
 
 // ── Print helpers: open a printable slip in a new window ──────────────────
-function printOrderSlip(order: any, lang: string) {
-  const payMethod = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : order.paymentMethod === "bank" ? "Bank/QR" : "Cash";
+type ShopInfo = { name: string; phone: string; address: string; pan: string };
+
+function printOrderSlip(order: any, lang: string, shop: ShopInfo) {
+  const payMethod = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : order.paymentMethod === "bank" ? "Bank/QR" : order.paymentMethod === "cash" ? "Cash" : order.paymentMethod || "—";
   const isPaid = order.paymentStatus === "paid";
+  const isCredited = !isPaid; // treat non-paid as credit/pending
   const items = (order.items || []).map((item: any) =>
     `<tr>
       <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9">${item.productName}</td>
@@ -109,65 +112,72 @@ function printOrderSlip(order: any, lang: string) {
     </tr>`
   ).join("");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order #${order.id}</title>
-<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse}.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600}.paid{background:#dcfce7;color:#166534}.credit{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
+<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.credit{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
 </head><body>
-<h2>Rajesh Shopping Center</h2>
-<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip"} · PAN: 123456789</p>
+<h2>${shop.name}</h2>
+<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip"}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
+<p style="margin:2px 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <p><strong>Order #${order.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(order.createdAt).toLocaleString()}</span></p>
 <p style="margin:4px 0"><strong>${order.customerName}</strong></p>
-<p style="margin:4px 0;color:#64748b;font-size:13px">${order.customerPhone}${order.customerAddress ? " · " + order.customerAddress : ""}</p>
+<p style="margin:2px 0;color:#64748b;font-size:13px">📞 ${order.customerPhone}</p>
+${order.customerAddress ? `<p style="margin:2px 0;color:#64748b;font-size:13px">📍 ${order.customerAddress}</p>` : ""}
+${order.customerEmail ? `<p style="margin:2px 0;color:#64748b;font-size:13px">✉ ${order.customerEmail}</p>` : ""}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <table><thead><tr>
-  <th style="text-align:left;padding:6px 8px;font-size:12px;color:#64748b">Item</th>
-  <th style="text-align:center;padding:6px 8px;font-size:12px;color:#64748b">Qty</th>
-  <th style="text-align:right;padding:6px 8px;font-size:12px;color:#64748b">Amount</th>
+  <th style="text-align:left;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Item</th>
+  <th style="text-align:center;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Qty</th>
+  <th style="text-align:right;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Amount</th>
 </tr></thead><tbody>${items}</tbody></table>
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <div style="text-align:right">
   <p style="margin:4px 0;font-size:18px;font-weight:700">Total: NPR ${Number(order.totalAmount).toLocaleString()}</p>
-  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment: ${payMethod}</p>
-  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "भुक्तानी भयो" : "✅ Paid") : (lang === "ne" ? "उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
+  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment method: ${payMethod}</p>
+  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "✅ भुक्तानी भयो (नगद)" : "✅ Paid — Cash / Digital") : (lang === "ne" ? "📒 उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
 </div>
+${order.notes ? `<hr style="margin:12px 0;border:1px solid #e2e8f0"><p style="font-size:13px;color:#64748b"><strong>Notes:</strong> ${order.notes}</p>` : ""}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p style="text-align:center;color:#64748b;font-size:12px">Rajesh Shopping Center · +977-9814401716 · Musikot-5, Gulmi</p>
+<p style="text-align:center;color:#64748b;font-size:12px">${shop.name}${shop.phone ? " · " + shop.phone : ""}${shop.address ? " · " + shop.address : ""}</p>
 <button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
 </body></html>`;
-  const w = window.open("", "_blank", "width=500,height=680");
+  const w = window.open("", "_blank", "width=500,height=700");
   if (w) { w.document.write(html); w.document.close(); }
 }
 
-function printBookingSlip(booking: any, lang: string) {
-  const serviceLabel = booking.serviceType === "tractor" ? "Tractor" : booking.serviceType === "telcoline" ? "Tata Telcoline" : "Bolero";
+function printBookingSlip(booking: any, lang: string, shop: ShopInfo) {
+  const serviceLabel = booking.serviceType === "tractor" ? (lang === "ne" ? "ट्र्याक्टर" : "Tractor") : booking.serviceType === "telcoline" ? "Tata Telcoline" : (lang === "ne" ? "बोलेरो / जिप" : "Bolero / Jeep");
   const charged = Number(booking.chargedAmount ?? 0);
   const paid = Number(booking.amountPaid ?? 0);
   const due = Math.max(0, charged - paid);
   const payMethod = booking.paymentMethod || "cash";
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking #${booking.id}</title>
-<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9}.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
+<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
 </head><body>
-<h2>Rajesh Shopping Center</h2>
-<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip"} · PAN: 123456789</p>
+<h2>${shop.name}</h2>
+<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip"}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
+<p style="margin:2px 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <p><strong>Booking #${booking.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(booking.bookingDate || booking.createdAt).toLocaleString()}</span></p>
-<p style="margin:4px 0"><strong>${booking.customerName}</strong> · ${booking.customerPhone}</p>
+<p style="margin:4px 0"><strong>${booking.customerName}</strong></p>
+<p style="margin:2px 0;color:#64748b;font-size:13px">📞 ${booking.customerPhone}</p>
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
-<div class="row"><span style="color:#64748b">Service</span><strong>${serviceLabel}</strong></div>
-<div class="row"><span style="color:#64748b">Route</span><strong>${booking.pickupLocation} → ${booking.destination}</strong></div>
-${booking.notes ? `<div class="row"><span style="color:#64748b">Notes</span><span>${booking.notes}</span></div>` : ""}
+<div class="row"><span style="color:#64748b">${lang === "ne" ? "सेवा" : "Service"}</span><strong>${serviceLabel}</strong></div>
+<div class="row"><span style="color:#64748b">${lang === "ne" ? "रुट" : "Route"}</span><strong>${booking.pickupLocation} → ${booking.destination}</strong></div>
+<div class="row"><span style="color:#64748b">${lang === "ne" ? "मिति" : "Date"}</span><strong>${new Date(booking.bookingDate || booking.createdAt).toLocaleDateString()}</strong></div>
+${booking.notes ? `<div class="row"><span style="color:#64748b">${lang === "ne" ? "नोट" : "Notes"}</span><span>${booking.notes}</span></div>` : ""}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
-<div class="row"><span>Total Charged</span><strong>NPR ${charged.toLocaleString()}</strong></div>
-<div class="row"><span>Paid</span><strong style="color:${due > 0 ? "#b45309" : "#166534"}">NPR ${paid.toLocaleString()}</strong></div>
-${due > 0 ? `<div class="row"><span>Remaining Due</span><strong style="color:#b45309">NPR ${due.toLocaleString()}</strong></div>` : ""}
+<div class="row"><span>${lang === "ne" ? "कुल शुल्क" : "Total Charged"}</span><strong>NPR ${charged.toLocaleString()}</strong></div>
+<div class="row"><span>${lang === "ne" ? "तिरेको" : "Paid"}</span><strong style="color:${due > 0 ? "#b45309" : "#166534"}">NPR ${paid.toLocaleString()}</strong></div>
+${due > 0 ? `<div class="row"><span>${lang === "ne" ? "बाँकी" : "Remaining Due"}</span><strong style="color:#b45309">NPR ${due.toLocaleString()}</strong></div>` : ""}
 <div style="text-align:right;margin-top:8px">
-  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment method: ${payMethod}</p>
-  <span class="badge ${due <= 0 ? "paid" : "due"}">${due <= 0 ? "✅ Fully Paid" : `📒 Due: NPR ${due.toLocaleString()}`}</span>
+  <p style="margin:4px 0;color:#64748b;font-size:13px">${lang === "ne" ? "भुक्तानी तरिका" : "Payment method"}: ${payMethod}</p>
+  <span class="badge ${due <= 0 ? "paid" : "due"}">${due <= 0 ? (lang === "ne" ? "✅ पूरा भुक्तानी" : "✅ Fully Paid") : (lang === "ne" ? `📒 बाँकी: NPR ${due.toLocaleString()}` : `📒 Due: NPR ${due.toLocaleString()}`)}</span>
 </div>
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p style="text-align:center;color:#64748b;font-size:12px">Rajesh Shopping Center · +977-9814401716 · Musikot-5, Gulmi</p>
+<p style="text-align:center;color:#64748b;font-size:12px">${shop.name}${shop.phone ? " · " + shop.phone : ""}${shop.address ? " · " + shop.address : ""}</p>
 <button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
 </body></html>`;
-  const w = window.open("", "_blank", "width=500,height=640");
+  const w = window.open("", "_blank", "width=500,height=660");
   if (w) { w.document.write(html); w.document.close(); }
 }
 
@@ -473,11 +483,12 @@ export function OwnerLoginModern({
 }
 
 // ── BookingList: booking cards with per-booking payment form ─────────────────
-function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
+function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shopInfo }: {
   bookings: any[];
   lang: string;
   updateBookingStatus: (id: number, status: string, payment?: any) => Promise<void>;
   runOwnerAction: (fn: () => Promise<void>, ok: string, fail: string) => Promise<void>;
+  shopInfo: ShopInfo;
 }) {
   const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
   const [showCompletedBookings, setShowCompletedBookings] = useState(false);
@@ -629,7 +640,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
               ) : null}
               <button
                 type="button"
-                onClick={() => printBookingSlip(booking, lang)}
+                onClick={() => printBookingSlip(booking, lang, shopInfo)}
                 className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
                 title={lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}
               >
@@ -835,6 +846,12 @@ export function OwnerWorkspaceModern(props: any) {
     return !status || status === "pending" || status === "requested";
   });
   const newActivityCount = newOrders.length + newBookings.length;
+  const shopInfo: ShopInfo = {
+    name: shopName || "Rajesh Shopping Center",
+    phone: shopPhone || settingsForm?.phone || "+977-9814401716",
+    address: shopAddress || settingsForm?.address || "Musikot-5, Gulmi",
+    pan: settingsForm?.panNumber || "302951817",
+  };
 
   const showFeedback = (type: "success" | "error", message: string) => {
     setActionFeedback({ type, message });
@@ -1248,7 +1265,7 @@ export function OwnerWorkspaceModern(props: any) {
                                   </div>
                                 ) : null}
                                 <div className="mt-2 flex flex-wrap gap-2">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); printOrderSlip(entry.data, lang); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); printOrderSlip(entry.data, lang, shopInfo); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
                                   <button type="button" onClick={(e) => { e.stopPropagation(); setTab("orders"); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{lang === "ne" ? "अर्डर ट्याबमा →" : "Open in Orders →"}</button>
                                 </div>
                               </>
@@ -1258,7 +1275,7 @@ export function OwnerWorkspaceModern(props: any) {
                                 <p className="text-slate-500">{entry.data.pickupLocation} → {entry.data.destination}</p>
                                 {entry.data.notes ? <p className="mt-1 text-slate-600">{entry.data.notes}</p> : null}
                                 <div className="mt-2 flex flex-wrap gap-2">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); printBookingSlip(entry.data, lang); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); printBookingSlip(entry.data, lang, shopInfo); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
                                   <button type="button" onClick={(e) => { e.stopPropagation(); setTab("orders"); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{lang === "ne" ? "बुकिङ ट्याबमा →" : "Open in Bookings →"}</button>
                                 </div>
                               </>
@@ -1694,7 +1711,7 @@ export function OwnerWorkspaceModern(props: any) {
                 </div>
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {(() => {
-                  const isCompleted = (o: any) => (o.status === "delivered" && o.paymentStatus === "paid") || o.status === "cancelled";
+                  const isCompleted = (o: any) => o.status === "delivered" || o.status === "cancelled";
                   const list = (orders || []).slice().reverse();
                   const active = list.filter((o: any) => !isCompleted(o));
                   const completed = list.filter(isCompleted);
@@ -1795,7 +1812,7 @@ export function OwnerWorkspaceModern(props: any) {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => printOrderSlip(order, lang)}
+                        onClick={() => printOrderSlip(order, lang, shopInfo)}
                         className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
                         title={lang === "ne" ? "बिल/स्लिप प्रिन्ट" : "Print invoice / slip"}
                       >
@@ -1846,6 +1863,7 @@ export function OwnerWorkspaceModern(props: any) {
                   lang={lang}
                   updateBookingStatus={updateBookingStatus}
                   runOwnerAction={runOwnerAction}
+                  shopInfo={shopInfo}
                 />
               </div>
 

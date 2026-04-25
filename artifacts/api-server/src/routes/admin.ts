@@ -714,10 +714,10 @@ router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
       const currentBalance = Number(customer.creditBalance ?? 0);
 
       if (action === "confirmed") {
-        // Mark order paid
+        // Mark order paid and delivered (fully settled — move off active list)
         await tx
           .update(ordersTable)
-          .set({ paymentStatus: "paid" })
+          .set({ paymentStatus: "paid", status: "delivered" })
           .where(eq(ordersTable.id, id));
 
         // Record the incoming payment
@@ -743,8 +743,13 @@ router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
           metadata: { source: "order-payment-confirm", orderId: order.id, paymentMethod },
         });
       } else {
-        // Move to credit: customer owes this amount
+        // Move to credit: customer owes this amount — also mark order as delivered so it leaves active list
         const newBalance = currentBalance + totalAmount;
+
+        await tx
+          .update(ordersTable)
+          .set({ status: "delivered" })
+          .where(eq(ordersTable.id, id));
 
         await tx
           .update(customersTable)
