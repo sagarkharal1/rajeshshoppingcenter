@@ -192,8 +192,8 @@ function PublicApp({ onOwnerAccessRequest }: { onOwnerAccessRequest: () => void 
 }
 
 function OwnerApp() {
-  const [token, setToken] = useState("");
-  const [ownerEntryRequested, setOwnerEntryRequested] = useState(false);
+  const [token, setToken] = useState(() => sessionStorage.getItem("owner-token") || "");
+  const [ownerEntryRequested, setOwnerEntryRequested] = useState(() => sessionStorage.getItem("owner-entry") === "true");
   const [tab, setTab] = useState("overview");
   const [login, setLogin] = useState({ identifier: "", password: "", otp: "" });
   const [forgotMode, setForgotMode] = useState(false);
@@ -256,9 +256,23 @@ const [totpStep, setTotpStep] = useState(false);
 const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const { lang, toggleLanguage } = useLanguage();
 
+  // Persist owner session through page refresh (sessionStorage clears on tab close)
   useEffect(() => {
-    localStorage.removeItem("biz-owner-token");
-  }, []);
+    if (token) {
+      sessionStorage.setItem("owner-token", token);
+    } else {
+      sessionStorage.removeItem("owner-token");
+      sessionStorage.removeItem("owner-entry");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (ownerEntryRequested) {
+      sessionStorage.setItem("owner-entry", "true");
+    } else {
+      sessionStorage.removeItem("owner-entry");
+    }
+  }, [ownerEntryRequested]);
 
   useEffect(() => {
     if (!token) return;
