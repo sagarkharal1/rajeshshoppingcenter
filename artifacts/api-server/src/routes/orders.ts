@@ -238,7 +238,11 @@ router.post("/orders", async (req, res) => {
       rewardPointsEarned: result.rewardPointsEarned,
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to create order" });
+    console.error("Order creation error:", err);
+    res.status(500).json({
+      error: "Failed to create order",
+      details: (err as any)?.message || String(err)
+    });
   }
 });
 
