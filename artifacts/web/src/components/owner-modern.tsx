@@ -1787,7 +1787,13 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {order.status === "order-received" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "preparing"), lang === "ne" ? "अर्डर पुष्टि भयो।" : "Order confirmed", lang === "ne" ? "अर्डर पुष्टि गर्न सकिएन।" : "Could not confirm the order.")} className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                        <button
+                          type="button"
+                          disabled={order.paymentStatus !== "paid"}
+                          onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "preparing"), lang === "ne" ? "अर्डर पुष्टि भयो।" : "Order confirmed", lang === "ne" ? "अर्डर पुष्टि गर्न सकिएन।" : "Could not confirm the order.")}
+                          className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={order.paymentStatus !== "paid" ? (lang === "ne" ? "भुक्तानी पुष्टि गरेर पहिले अर्डर पुष्टि गर्नुहोस्" : "Confirm payment first") : ""}
+                        >
                           {lang === "ne" ? "अर्डर पुष्टि गर्नुहोस्" : "Confirm order"}
                         </button>
                       ) : null}
