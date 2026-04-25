@@ -6,6 +6,7 @@ import { formatNPR } from "@/lib/utils";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
 import { NepalDateTime } from "@/components/nepal-date-time";
 import { formatNepalDateTime } from "@/lib/nepal-time";
+import { FlashNotice } from "@/components/flash-notice";
 
 type TrackOrderResponse = {
   id: number;
@@ -182,7 +183,7 @@ export default function TrackOrderModern() {
           </button>
         </form>
 
-        {error ? <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+        <FlashNotice message={error || null} type="error" onClose={() => setError("")} />
 
         {result ? (
           <div className="mt-8 space-y-5">

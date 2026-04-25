@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { useEffect, useRef } from "react";
-import { Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
+import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
+import { FlashNotice } from "@/components/flash-notice";
 import { scanBillImage } from "@/lib/bill-ocr";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
@@ -116,6 +117,8 @@ export function OwnerLoginModern({
   setOwnerEntryRequested,
   setError,
   loginOtpInfo,
+  totpStep,
+  setTotpStep,
   error,
 }: any) {
   const identifierRef = useRef<HTMLInputElement | null>(null);
@@ -192,79 +195,113 @@ export function OwnerLoginModern({
             </button>
           </div>
 
-          <div className="mt-6 grid gap-4">
-            <label className="grid gap-2 text-sm font-medium text-slate-700">
-              {text.usernameLabel}
+          {/* ── TOTP step: show only the authenticator code input ── */}
+          {totpStep ? (
+            <div className="mt-6 grid gap-4">
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <KeyRound className="h-5 w-5 shrink-0 text-indigo-600" />
+                  <p className="text-sm font-semibold text-indigo-900">
+                    {lang === "ne"
+                      ? "Google Authenticator कोड राख्नुहोस्"
+                      : "Enter your Google Authenticator code"}
+                  </p>
+                </div>
+                <p className="mt-1 pl-8 text-xs text-indigo-700">
+                  {lang === "ne"
+                    ? "फोनको Authenticator app खोल्नुस् र ६ अङ्कको कोड राख्नुस्।"
+                    : "Open the Authenticator app on your phone and enter the 6-digit code."}
+                </p>
+              </div>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                {lang === "ne" ? "Authenticator कोड" : "Authenticator code"}
                 <input
-                  ref={identifierRef}
                   className={shellInput()}
-                  name="shop-access-id"
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  spellCheck={false}
-                  readOnly={!allowCredentialsTyping}
-                  onFocus={() => setAllowCredentialsTyping(true)}
-                  value={forgotMode ? forgotForm.identifier : login.identifier}
-                  onChange={(e) =>
-                    forgotMode
-                    ? setForgotForm((v: any) => ({ ...v, identifier: e.target.value }))
-                    : setLogin((v: any) => ({ ...v, identifier: e.target.value }))
-                }
-              />
-            </label>
-            {forgotMode ? (
-              <>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "रिसेट कोड" : "Reset code"}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={login.otp}
+                  onChange={(e) => setLogin((v: any) => ({ ...v, otp: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                  autoFocus
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4">
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                {text.usernameLabel}
                   <input
+                    ref={identifierRef}
                     className={shellInput()}
-                    value={forgotForm.otp}
-                    onChange={(e) => setForgotForm((v: any) => ({ ...v, otp: e.target.value }))}
-                    placeholder={lang === "ne" ? "WhatsApp वा फलब्याक कोड" : "Code from WhatsApp or fallback"}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "नयाँ पासवर्ड" : "New password"}
-                  <input
-                    type="password"
-                    className={shellInput()}
-                    value={forgotForm.newPassword}
-                    onChange={(e) => setForgotForm((v: any) => ({ ...v, newPassword: e.target.value }))}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {lang === "ne" ? "नयाँ पासवर्ड पुनः लेख्नुहोस्" : "Confirm new password"}
-                  <input
-                    type="password"
-                    className={shellInput()}
-                    value={forgotForm.confirmPassword}
-                    onChange={(e) => setForgotForm((v: any) => ({ ...v, confirmPassword: e.target.value }))}
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  {text.passwordLabel}
-                  <input
-                    ref={passwordRef}
-                    type="password"
-                    className={shellInput()}
-                    name="shop-access-key"
+                    name="shop-access-id"
                     autoComplete="new-password"
                     data-lpignore="true"
                     data-1p-ignore="true"
                     spellCheck={false}
                     readOnly={!allowCredentialsTyping}
                     onFocus={() => setAllowCredentialsTyping(true)}
-                    value={login.password}
-                    onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))}
-                  />
-                </label>
-              </>
-            )}
-          </div>
+                    value={forgotMode ? forgotForm.identifier : login.identifier}
+                    onChange={(e) =>
+                      forgotMode
+                      ? setForgotForm((v: any) => ({ ...v, identifier: e.target.value }))
+                      : setLogin((v: any) => ({ ...v, identifier: e.target.value }))
+                  }
+                />
+              </label>
+              {forgotMode ? (
+                <>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    {lang === "ne" ? "रिसेट कोड" : "Reset code"}
+                    <input
+                      className={shellInput()}
+                      value={forgotForm.otp}
+                      onChange={(e) => setForgotForm((v: any) => ({ ...v, otp: e.target.value }))}
+                      placeholder={lang === "ne" ? "WhatsApp वा फलब्याक कोड" : "Code from WhatsApp or fallback"}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    {lang === "ne" ? "नयाँ पासवर्ड" : "New password"}
+                    <input
+                      type="password"
+                      className={shellInput()}
+                      value={forgotForm.newPassword}
+                      onChange={(e) => setForgotForm((v: any) => ({ ...v, newPassword: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    {lang === "ne" ? "नयाँ पासवर्ड पुनः लेख्नुहोस्" : "Confirm new password"}
+                    <input
+                      type="password"
+                      className={shellInput()}
+                      value={forgotForm.confirmPassword}
+                      onChange={(e) => setForgotForm((v: any) => ({ ...v, confirmPassword: e.target.value }))}
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    {text.passwordLabel}
+                    <input
+                      ref={passwordRef}
+                      type="password"
+                      className={shellInput()}
+                      name="shop-access-key"
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      spellCheck={false}
+                      readOnly={!allowCredentialsTyping}
+                      onFocus={() => setAllowCredentialsTyping(true)}
+                      value={login.password}
+                      onChange={(e) => setLogin((v: any) => ({ ...v, password: e.target.value }))}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          )}
 
           {forgotMode ? (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
@@ -273,17 +310,42 @@ export function OwnerLoginModern({
                   ? "पहिले रिसेट कोड माग्नुहोस्, त्यसपछि कोड र नयाँ पासवर्ड राखेर रिसेट गर्नुहोस्।"
                   : "Request a reset code first, then enter the code and your new password."}
               </p>
+              <p className="mt-1 text-xs text-amber-800">
+                {lang === "ne"
+                  ? "Telegram मा कोड आउनेछ। कोड सफल भएपछि Google Authenticator स्वतः हटाइनेछ — नयाँ फोनमा फेरि सेटअप गर्न सकिनेछ।"
+                  : "The code will arrive on your Telegram. After a successful reset, Google Authenticator is automatically removed — you can re-set it up on your new phone."}
+              </p>
               {recoveryInfo?.message ? <p className="mt-2">{recoveryInfo.message}</p> : null}
-              {recoveryInfo?.devRecoveryCode ? (
-                <p className="mt-2 font-bold">
-                  {lang === "ne" ? "विकास रिसेट कोड" : "Development reset code"}: {recoveryInfo.devRecoveryCode}
-                </p>
-              ) : null}
             </div>
           ) : null}
 
           <div className="mt-6 grid gap-3">
-            {forgotMode ? (
+            {totpStep ? (
+              <>
+                <button className="w-full rounded-2xl bg-indigo-600 px-4 py-4 font-semibold text-white shadow-lg">
+                  {lang === "ne" ? "पुष्टि गर्नुहोस्" : "Verify code"}
+                </button>
+                {/* Lost phone recovery — goes to forgot-password which clears TOTP via WhatsApp OTP */}
+                <button
+                  type="button"
+                  className="w-full rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+                  onClick={() => {
+                    setError("");
+                    setTotpStep(false);
+                    setForgotMode(true);
+                  }}
+                >
+                  {lang === "ne" ? "📱 फोन हराएको / बिग्रेको? यहाँ क्लिक गर्नुहोस्" : "📱 Lost or damaged your phone? Click here"}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
+                  onClick={() => { setError(""); setTotpStep(false); setLogin((v: any) => ({ ...v, otp: "" })); }}
+                >
+                  {lang === "ne" ? "← पासवर्डमा फर्कनुहोस्" : "← Back to password"}
+                </button>
+              </>
+            ) : forgotMode ? (
               <>
                 <button
                   type="button"
@@ -305,18 +367,20 @@ export function OwnerLoginModern({
               </>
             )}
           </div>
-          <button
-            type="button"
-            className="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-medium text-slate-700"
-            onClick={() => {
-              setError("");
-              setForgotMode((current: boolean) => !current);
-            }}
-          >
-            {forgotMode
-              ? (lang === "ne" ? "लगइनमा फर्कनुहोस्" : "Back to login")
-              : (lang === "ne" ? "पासवर्ड बिर्सनुभयो?" : "Forgot password?")}
-          </button>
+          {!totpStep && (
+            <button
+              type="button"
+              className="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-medium text-slate-700"
+              onClick={() => {
+                setError("");
+                setForgotMode((current: boolean) => !current);
+              }}
+            >
+              {forgotMode
+                ? (lang === "ne" ? "लगइनमा फर्कनुहोस्" : "Back to login")
+                : (lang === "ne" ? "पासवर्ड बिर्सनुभयो?" : "Forgot password?")}
+            </button>
+          )}
           <button
             type="button"
             className="mt-3 w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-medium text-slate-700"
@@ -327,10 +391,293 @@ export function OwnerLoginModern({
           >
             {lang === "ne" ? "पसलमा फर्कनुहोस्" : "Back to shop"}
           </button>
-          {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
         </form>
       </div>
+      <FlashNotice message={error || null} type="error" onClose={() => setError("")} />
     </div>
+  );
+}
+
+// ── BookingList: booking cards with per-booking payment form ─────────────────
+function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
+  bookings: any[];
+  lang: string;
+  updateBookingStatus: (id: number, status: string, payment?: any) => Promise<void>;
+  runOwnerAction: (fn: () => Promise<void>, ok: string, fail: string) => Promise<void>;
+}) {
+  const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
+
+  const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash" };
+  const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string }>) =>
+    setPaymentForms((prev) => ({ ...prev, [id]: { ...getForm(id), ...patch } }));
+
+  if (bookings.length === 0) {
+    return <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet."}</p>;
+  }
+
+  return (
+    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+      {bookings.slice().reverse().map((booking: any) => {
+        const bookingStatus = getOwnerBookingStatusMeta(booking.status, lang === "ne" ? "ne" : "en");
+        const bookingLabel = booking.serviceType === "tractor" ? "Tractor" : booking.serviceType === "telcoline" ? "Tata Telcoline" : "Bolero";
+        const form = getForm(booking.id);
+        const charged = Number(booking.chargedAmount ?? 0);
+        const paid = Number(booking.amountPaid ?? 0);
+        const isFinanciallySet = charged > 0;
+        const isPending = booking.status !== "confirmed" && booking.status !== "completed" && booking.status !== "cancelled";
+        const isActive = booking.status !== "cancelled" && booking.status !== "completed";
+
+        return (
+          <article key={`booking-${booking.id}`} className="rounded-[1.5rem] border border-amber-200 bg-amber-50/40 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-lg font-bold text-slate-950">#{booking.id} {booking.customerName}</p>
+                <p className="text-sm font-medium text-amber-700">{bookingLabel} booking</p>
+                <p className="text-sm text-slate-500">{booking.customerPhone}</p>
+                <p className="text-sm text-slate-500">{booking.pickupLocation} → {booking.destination}</p>
+                <p className="mt-1 text-sm text-slate-400">{when(booking.bookingDate || booking.createdAt)}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${bookingStatus.className}`}>
+                  <bookingStatus.icon className="h-4 w-4" />
+                  {bookingStatus.label}
+                </span>
+                {isFinanciallySet ? (
+                  <div className="text-right text-xs">
+                    <p className="font-semibold text-slate-700">{lang === "ne" ? "शुल्क:" : "Charge:"} {money(charged)}</p>
+                    <p className={paid >= charged ? "text-emerald-700 font-bold" : "text-amber-700 font-semibold"}>
+                      {lang === "ne" ? "भुक्तानी:" : "Paid:"} {money(paid)}
+                      {paid < charged ? ` (${lang === "ne" ? "बाँकी" : "due"}: ${money(charged - paid)})` : ""}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            {booking.notes ? (
+              <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">{booking.notes}</div>
+            ) : null}
+
+            {/* Payment input panel — shown for active bookings */}
+            {isActive ? (
+              <div className="mt-4 grid gap-2 rounded-2xl border border-amber-100 bg-white p-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{lang === "ne" ? "शुल्क (NPR)" : "Charge (NPR)"}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.charged || (charged > 0 ? String(charged) : "")}
+                    onChange={(e) => setForm(booking.id, { charged: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{lang === "ne" ? "तिरेको (NPR)" : "Paid (NPR)"}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.paid || (paid > 0 ? String(paid) : "")}
+                    onChange={(e) => setForm(booking.id, { paid: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{lang === "ne" ? "भुक्तानी तरिका" : "Method"}</label>
+                  <select
+                    value={form.method}
+                    onChange={(e) => setForm(booking.id, { method: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {isPending ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const chargedAmt = Number(form.charged) || charged;
+                    const paidAmt = Number(form.paid) || 0;
+                    runOwnerAction(
+                      () => updateBookingStatus(booking.id, "confirmed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
+                      lang === "ne" ? "बुकिङ पुष्टि भयो" : "Booking confirmed",
+                      lang === "ne" ? "बुकिङ पुष्टि गर्न सकिएन।" : "Could not confirm the booking.",
+                    );
+                  }}
+                  className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                >
+                  {lang === "ne" ? "पुष्टि गर्नुहोस्" : "Confirm"}
+                </button>
+              ) : null}
+              {isActive ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const chargedAmt = Number(form.charged) || charged;
+                    const paidAmt = Number(form.paid) || paid;
+                    runOwnerAction(
+                      () => updateBookingStatus(booking.id, "completed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
+                      lang === "ne" ? "डेलिभर सम्पन्न भयो" : "Marked delivered",
+                      lang === "ne" ? "सम्पन्न गर्न सकिएन।" : "Could not complete.",
+                    );
+                  }}
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
+                >
+                  {lang === "ne" ? "डेलिभर भयो" : "Mark delivered"}
+                </button>
+              ) : null}
+              {isActive ? (
+                <button
+                  type="button"
+                  onClick={() => runOwnerAction(
+                    () => updateBookingStatus(booking.id, "cancelled"),
+                    lang === "ne" ? "रद्द भयो" : "Rejected",
+                    lang === "ne" ? "रद्द गर्न सकिएन।" : "Could not reject.",
+                  )}
+                  className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+                >
+                  {lang === "ne" ? "रद्द" : "Reject"}
+                </button>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── ReportsTab: daily / monthly / yearly analytics ───────────────────────────
+function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any) => Promise<any> }) {
+  const [period, setPeriod] = useState<"day" | "month" | "year">("day");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api(`/admin/analytics?period=${period}&date=${date}`);
+      setData(result);
+    } catch {
+      setError(lang === "ne" ? "रिपोर्ट लोड गर्न सकिएन।" : "Could not load report.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [period, date]);
+
+  const fmt = (v: number) => money(v);
+
+  return (
+    <section className="space-y-5">
+      {/* Period selector */}
+      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "व्यवसाय रिपोर्ट" : "Business Report"}</h3>
+        <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "पसल + ट्रान्सपोर्ट मिलाएर दैनिक/मासिक/वार्षिक हिसाब" : "Combined shop + transport — daily, monthly, or yearly"}</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          {(["day", "month", "year"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${period === p ? "bg-primary text-primary-foreground" : "border border-slate-200 bg-white text-slate-700"}`}
+            >
+              {p === "day" ? (lang === "ne" ? "दैनिक" : "Daily") : p === "month" ? (lang === "ne" ? "मासिक" : "Monthly") : (lang === "ne" ? "वार्षिक" : "Yearly")}
+            </button>
+          ))}
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700"
+          >
+            {loading ? "..." : (lang === "ne" ? "ताजा गर्नुहोस्" : "Refresh")}
+          </button>
+        </div>
+      </div>
+
+      {error ? <p className="text-center text-sm text-rose-600">{error}</p> : null}
+
+      {data ? (
+        <>
+          {/* Combined totals */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              { label: lang === "ne" ? "कुल बिल" : "Total Billed", value: fmt(data.combined.totalBilled), cls: "text-slate-950" },
+              { label: lang === "ne" ? "नगद/डिजिटल उठेको" : "Total Collected", value: fmt(data.combined.totalCollected), cls: "text-emerald-700" },
+              { label: lang === "ne" ? "बाँकी उधारो" : "Total Credit Due", value: fmt(data.combined.totalCredit), cls: "text-rose-700" },
+            ].map(({ label, value, cls }) => (
+              <div key={label} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
+                <p className={`mt-2 text-2xl font-extrabold ${cls}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Shop breakdown */}
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+            <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+              <span className="rounded-lg bg-primary/10 px-2 py-1 text-primary text-xs font-bold uppercase">🛒 {lang === "ne" ? "पसल बिक्री" : "Shop Sales"}</span>
+              <span className="text-sm font-normal text-slate-400">({data.shop.invoiceCount} {lang === "ne" ? "बिल" : "invoices"})</span>
+            </h4>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: lang === "ne" ? "बिल रकम" : "Billed", value: fmt(data.shop.totalBilled) },
+                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(data.shop.totalCollected), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(data.shop.totalCredit), cls: "text-rose-700" },
+              ].map(({ label, value, cls = "text-slate-950" }) => (
+                <div key={label} className="rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Transport breakdown */}
+          <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/30 p-5 shadow-sm">
+            <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+              <span className="rounded-lg bg-amber-100 px-2 py-1 text-amber-800 text-xs font-bold uppercase">🚗 {lang === "ne" ? "ट्रान्सपोर्ट" : "Transport"}</span>
+              <span className="text-sm font-normal text-slate-400">({data.transport.bookingCount} {lang === "ne" ? "बुकिङ" : "bookings"})</span>
+            </h4>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: lang === "ne" ? "शुल्क रकम" : "Charged", value: fmt(data.transport.totalBilled) },
+                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(data.transport.totalCollected), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(data.transport.totalCredit), cls: "text-rose-700" },
+              ].map(({ label, value, cls = "text-slate-950" }) => (
+                <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            {data.transport.totalCredit > 0 ? (
+              <p className="mt-3 text-xs text-amber-700">
+                ⚠ {lang === "ne" ? `NPR ${data.transport.totalCredit.toFixed(0)} ट्रान्सपोर्ट शुल्क बाँकी छ।` : `NPR ${data.transport.totalCredit.toFixed(0)} transport charge is still unpaid.`}
+              </p>
+            ) : null}
+          </div>
+        </>
+      ) : loading ? (
+        <div className="flex justify-center py-12">
+          <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -344,7 +691,7 @@ export function OwnerWorkspaceModern(props: any) {
     editingProductId, setEditingProductId, startEditProduct, deleteProduct, settingsForm,
     setSettingsForm, saveMediaSettings, settingsBusy, passwordForm, setPasswordForm, passwordBusy, changePassword, readFileAsDataUrl,
     handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, confirmOrderPayment, updateBookingStatus,
-    seedSampleProducts, seedingProducts, externalFeedback,
+    externalFeedback,
   } = props;
 
   const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || customers[0];
@@ -445,6 +792,7 @@ export function OwnerWorkspaceModern(props: any) {
     { name: "orders", label: lang === "ne" ? "अर्डर" : "Orders", icon: Bell },
     { name: "customers", label: text.customers, icon: Users },
     { name: "products", label: text.products, icon: PackagePlus },
+    { name: "reports", label: lang === "ne" ? "रिपोर्ट" : "Reports", icon: BarChart3 },
     { name: "branding", label: text.branding, icon: Settings2 },
   ];
 
@@ -468,6 +816,15 @@ export function OwnerWorkspaceModern(props: any) {
             <button type="button" onClick={toggleLanguage} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
               <Languages className="h-3.5 w-3.5" />
               {lang === "ne" ? "EN" : "ने"}
+            </button>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+              title={lang === "ne" ? "ताजा गर्नुहोस्" : "Refresh data"}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {lang === "ne" ? "ताजा" : "Refresh"}
             </button>
             <button
               type="button"
@@ -502,20 +859,11 @@ export function OwnerWorkspaceModern(props: any) {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6">
-        {(externalFeedback || actionFeedback) ? (
-          <div
-            className={`rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm ${
-              (externalFeedback || actionFeedback).type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-rose-200 bg-rose-50 text-rose-700"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {(externalFeedback || actionFeedback).type === "success" ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
-              <span>{(externalFeedback || actionFeedback).message}</span>
-            </div>
-          </div>
-        ) : null}
+        <FlashNotice
+          message={(externalFeedback || actionFeedback)?.message ?? null}
+          type={(externalFeedback || actionFeedback)?.type ?? "success"}
+          onClose={() => setActionFeedback(null)}
+        />
 
         <div className="grid items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-[linear-gradient(135deg,#fff8ef_0%,#f4e0ba_100%)] px-4 py-3 shadow-sm lg:grid-cols-[0.9fr_1.3fr_0.9fr]">
           <div className="flex h-12 items-center justify-center rounded-[1rem] bg-[rgba(88,28,0,0.9)] px-3 text-center text-sm font-bold leading-tight text-amber-50 shadow-sm sm:h-14 sm:text-base">
@@ -564,18 +912,22 @@ export function OwnerWorkspaceModern(props: any) {
                   </p>
                   <h3 className="mt-2 text-2xl font-bold text-slate-950">{formatNepalDate(new Date(), lang)}</h3>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-2xl bg-white px-4 py-3">
                     <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आजका बिल" : "Bills today"}</p>
-                    <p className="mt-2 text-xl font-semibold text-slate-950">{todayInvoices.length}</p>
+                    <p className="mt-2 text-xl font-semibold text-slate-950">{summary.totals.todayShopInvoices ?? todayInvoices.length}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आज प्राप्त" : "Collected today"}</p>
-                    <p className="mt-2 text-xl font-semibold text-emerald-700">{money(todaySales)}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "🛒 पसल उठेको" : "🛒 Shop collected"}</p>
+                    <p className="mt-2 text-xl font-semibold text-emerald-700">{money(summary.totals.todayShopCollected ?? todaySales)}</p>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "आज बाँकी" : "Due today"}</p>
-                    <p className="mt-2 text-xl font-semibold text-amber-700">{money(todayDue)}</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "🚗 ट्रान्सपोर्ट उठेको" : "🚗 Transport collected"}</p>
+                    <p className="mt-2 text-xl font-semibold text-emerald-700">{money(summary.totals.todayTransportCollected ?? 0)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-700">{lang === "ne" ? "💰 आज कुल" : "💰 Today total"}</p>
+                    <p className="mt-2 text-xl font-bold text-amber-900">{money(summary.totals.todayCombinedCollected ?? todaySales)}</p>
                   </div>
                 </div>
               </div>
@@ -936,96 +1288,157 @@ export function OwnerWorkspaceModern(props: any) {
                 </div>
               </div>
 
+              {/* ══════════════════════════════════════════════════
+                  PRINT BILL — hidden on screen, visible when printing
+                  ══════════════════════════════════════════════════ */}
               <div className="print-bill-sheet hidden">
-                <div className="mx-auto max-w-[800px] bg-white px-8 py-8 text-slate-950">
-                  <div className="mb-6 border-b-2 border-slate-200 pb-5 text-center">
+                <div className="mx-auto max-w-[780px] bg-white text-slate-950" style={{ fontFamily: "Arial, sans-serif" }}>
+
+                  {/* ── Header: Ganesh blessing ── */}
+                  <div className="border-b-2 border-slate-800 pb-3 text-center">
+                    <p className="text-xs font-bold tracking-widest text-slate-700">ॐ श्री गणेशाय नमः</p>
                     <img
                       src="/ganesh-banner.png"
-                      alt="Om Shree Ganeshaya Namah"
-                      className="mx-auto h-24 w-auto max-w-full rounded-[1.25rem] object-contain"
+                      alt="Shree Ganesh"
+                      className="mx-auto mt-1 h-16 w-auto max-w-xs rounded object-contain"
                     />
-                    <div className="mt-3">
-                      <NepalDateTime lang={lang} centered />
-                    </div>
                   </div>
-                  <div className="border-b-2 border-slate-900 pb-5">
-                    <div className="flex items-start justify-between gap-6">
+
+                  {/* ── Shop identity + Invoice meta ── */}
+                  <div className="mt-3 flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-4">
+                    {/* Left: shop details */}
+                    <div className="flex items-start gap-3">
+                      <img src="/rajesh-logo.png" alt="Logo" className="h-16 w-16 rounded object-cover" />
                       <div>
-                        <h3 className="text-3xl font-bold">{shopName}</h3>
-                        <p className="mt-2 text-sm text-slate-600">{shopAddress}</p>
-                        <p className="text-sm text-slate-600">{shopPhone}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-800">{text.invoicePreview}</p>
-                        <p className="mt-2 text-sm text-slate-600">{lastInvoice?.invoice?.invoiceNumber || "Draft"}</p>
-                        <p className="text-sm text-slate-600">{formatNepalDateTime(new Date(), lang)}</p>
+                        <p className="text-xl font-extrabold leading-tight">{lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center"}</p>
+                        <p className="mt-0.5 text-sm text-slate-600">{shopAddress}</p>
+                        <p className="text-sm text-slate-600">{lang === "ne" ? "फोन:" : "Ph:"} {shopPhone}</p>
+                        <p className="mt-0.5 text-sm font-bold text-slate-800">
+                          {lang === "ne" ? "प्यान नं.:" : "PAN No.:"} {(settingsForm as any)?.panNumber || "302951817"}
+                        </p>
                       </div>
                     </div>
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "ग्राहक" : "Customer"}</p>
-                        <p className="mt-2 text-lg font-semibold">{currentCustomer?.name || "-"}</p>
-                        <p className="text-sm text-slate-600">{currentCustomer?.phone || text.noPhoneSaved}</p>
-                        <p className="text-sm text-slate-600">{currentCustomer?.address || text.noAddressSaved}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        {[
-                          [text.previousDue, money(preview.previousDue)],
-                          [text.currentBill, money(preview.subtotal)],
-                          [text.paidNow, money(preview.amountPaid)],
-                          [text.remainingDue, money(preview.due)],
-                        ].map(([label, value]) => (
-                          <div key={`print-${String(label)}`} className="rounded-2xl bg-slate-50 px-4 py-3">
-                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-                            <p className="mt-2 font-semibold text-slate-950">{value}</p>
-                          </div>
-                        ))}
-                      </div>
+                    {/* Right: invoice number + date (always from saved invoice) */}
+                    <div className="text-right">
+                      <p className="rounded bg-slate-800 px-3 py-1 text-sm font-bold uppercase tracking-widest text-white">
+                        {lang === "ne" ? "बिल / रसिद" : "INVOICE / RECEIPT"}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-700">
+                        <span className="font-semibold">{lang === "ne" ? "बिल नं.:" : "Bill No.:"}</span>{" "}
+                        {lastInvoice?.invoice?.invoiceNumber || "—"}
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        <span className="font-semibold">{lang === "ne" ? "मिति:" : "Date:"}</span>{" "}
+                        {formatNepalDateTime(lastInvoice?.invoice?.createdAt ? new Date(lastInvoice.invoice.createdAt) : new Date(), lang)}
+                      </p>
                     </div>
                   </div>
 
-                  <table className="mt-6 w-full border-collapse text-sm">
+                  {/* ── Customer + Summary grid (from saved invoice, not live preview) ── */}
+                  <div className="mt-3 grid grid-cols-2 gap-4 border-b border-slate-300 pb-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{lang === "ne" ? "ग्राहकको विवरण" : "Bill To"}</p>
+                      <p className="mt-1.5 text-base font-bold">{lastInvoice?.customer?.name || currentCustomer?.name || "—"}</p>
+                      <p className="text-sm text-slate-600">{lastInvoice?.customer?.phone || currentCustomer?.phone || ""}</p>
+                      <p className="text-sm text-slate-600">{lastInvoice?.customer?.address || currentCustomer?.address || ""}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {[
+                        [lang === "ne" ? "पुरानो बाँकी" : "Previous Due", money(lastInvoice?.invoice?.previousDueAmount ?? 0), "text-rose-700"],
+                        [lang === "ne" ? "हालको बिल" : "Current Bill", money(lastInvoice?.invoice?.subtotalAmount ?? 0), "text-slate-950"],
+                        [lang === "ne" ? "अहिले तिरेको" : "Paid Now", money(lastInvoice?.invoice?.amountPaid ?? 0), "text-emerald-700"],
+                        [lang === "ne" ? "बाँकी रकम" : "Balance Due", money(lastInvoice?.invoice?.dueAmount ?? 0), "text-rose-700 font-extrabold"],
+                      ].map(([label, value, cls]) => (
+                        <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p>
+                          <p className={`mt-1 text-sm font-bold ${cls}`}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Items table (from saved invoice items) ── */}
+                  <table className="mt-3 w-full border-collapse text-sm">
                     <thead>
-                      <tr className="bg-slate-100 text-left">
-                        <th className="px-4 py-3">{lang === "ne" ? "सामान" : "Item"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "परिमाण" : "Qty"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "दर" : "Rate"}</th>
-                        <th className="px-4 py-3">{lang === "ne" ? "रकम" : "Amount"}</th>
+                      <tr className="border-b-2 border-slate-800 bg-slate-100 text-left">
+                        <th className="px-3 py-2 text-xs uppercase tracking-wider">#</th>
+                        <th className="px-3 py-2 text-xs uppercase tracking-wider">{lang === "ne" ? "सामानको नाम" : "Item"}</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase tracking-wider">{lang === "ne" ? "परिमाण" : "Qty"}</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase tracking-wider">{lang === "ne" ? "दर" : "Rate"}</th>
+                        <th className="px-3 py-2 text-right text-xs uppercase tracking-wider">{lang === "ne" ? "रकम" : "Amount"}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {preview.items.length ? preview.items.map((item: any) => (
-                        <tr key={`print-${item.productId}-${item.name}`}>
-                          <td className="border-b border-slate-200 px-4 py-3">{item.name}</td>
-                          <td className="border-b border-slate-200 px-4 py-3">{item.quantity} {item.unit}</td>
-                          <td className="border-b border-slate-200 px-4 py-3">{money(item.price)}</td>
-                          <td className="border-b border-slate-200 px-4 py-3">{money(item.total)}</td>
+                      {lastInvoice?.items?.length ? lastInvoice.items.map((item: any, idx: number) => (
+                        <tr key={`bill-${item.id ?? idx}`} className="border-b border-slate-200">
+                          <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
+                          <td className="px-3 py-2 font-medium">{item.productName}</td>
+                          <td className="px-3 py-2 text-right">{item.quantity} {item.unit}</td>
+                          <td className="px-3 py-2 text-right">{money(item.unitPrice)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{money(item.lineTotal)}</td>
                         </tr>
                       )) : (
                         <tr>
-                          <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
-                            {lang === "ne" ? "सामान थपेपछि बिल प्रिन्ट गर्नुहोस्।" : "Add products before printing the bill."}
+                          <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-400">
+                            {lang === "ne" ? "बिल सुरक्षित भएपछि प्रिन्ट गर्नुहोस्।" : "Save the invoice first, then print."}
                           </td>
                         </tr>
                       )}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-800">
+                        <td colSpan={4} className="px-3 py-2 text-right font-bold">{lang === "ne" ? "कुल जम्मा:" : "Grand Total:"}</td>
+                        <td className="px-3 py-2 text-right text-base font-extrabold">{money(lastInvoice?.invoice?.subtotalAmount ?? 0)}</td>
+                      </tr>
+                    </tfoot>
                   </table>
 
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
-                      <p className="font-semibold text-slate-950">{text.payment}</p>
-                      <p className="mt-2 text-slate-700">{paymentMethodLabel}</p>
-                      {invoiceForm.note ? <p className="mt-2 text-slate-600">{invoiceForm.note}</p> : null}
+                  {/* ── Payment method + reward ── */}
+                  <div className="mt-3 flex items-start justify-between gap-4 border-t border-slate-200 pt-3 text-sm">
+                    <div>
+                      <span className="font-semibold">{lang === "ne" ? "भुक्तानी तरिका:" : "Payment:"}</span>{" "}
+                      <span>{lastInvoice?.invoice?.paymentMethod || paymentMethodLabel}</span>
+                      {lastInvoice?.invoice?.note ? <p className="mt-1 text-slate-600">{lastInvoice.invoice.note}</p> : null}
                     </div>
-                    <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
-                      <p className="font-semibold text-slate-950">{text.rewardEarned}</p>
-                      <p className="mt-2 text-slate-700">{preview.rewardPoints}</p>
+                    {(lastInvoice?.invoice?.rewardPointsEarned ?? 0) > 0 ? (
+                      <div className="text-right text-xs text-slate-500">
+                        {lang === "ne" ? "पुरस्कार अंक:" : "Reward points:"} <strong>{lastInvoice.invoice.rewardPointsEarned}</strong>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* ── Footer / terms ── */}
+                  {settingsForm.invoiceFooter ? (
+                    <p className="mt-3 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">{settingsForm.invoiceFooter}</p>
+                  ) : (
+                    <p className="mt-3 border-t border-slate-200 pt-3 text-center text-xs text-slate-500">
+                      {lang === "ne"
+                        ? "सामान लिएपछि फिर्ता हुँदैन। धन्यवाद!"
+                        : "Goods once sold are not returnable. Thank you for your business!"}
+                    </p>
+                  )}
+
+                  {/* ── Signature & Stamp area ── */}
+                  <div className="mt-8 grid grid-cols-2 gap-8 border-t-2 border-slate-800 pt-6">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {lang === "ne" ? "ग्राहकको दस्तखत" : "Customer Signature"}
+                      </p>
+                      <div className="mt-6 border-b border-slate-400"></div>
+                      <p className="mt-1 text-center text-xs text-slate-400">{currentCustomer?.name || ""}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                        {lang === "ne" ? "अधिकृत दस्तखत र छाप" : "Authorised Signature & Stamp"}
+                      </p>
+                      <div className="ml-auto mt-1 h-20 w-28 rounded border-2 border-dashed border-slate-300 flex items-center justify-center">
+                        <p className="text-[10px] text-slate-300">{lang === "ne" ? "छाप" : "STAMP"}</p>
+                      </div>
+                      <div className="mt-1 border-b border-slate-400"></div>
+                      <p className="mt-1 text-xs text-slate-400">{lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center"}</p>
                     </div>
                   </div>
 
-                  {settingsForm.invoiceFooter ? (
-                    <p className="mt-8 border-t border-slate-200 pt-4 text-center text-sm text-slate-600">{settingsForm.invoiceFooter}</p>
-                  ) : null}
                 </div>
               </div>
             </section>
@@ -1180,72 +1593,12 @@ export function OwnerWorkspaceModern(props: any) {
                     )}
                   </span>
                 </div>
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-                {(bookings || []).slice().reverse().map((booking: any) => {
-                  const bookingStatus = getOwnerBookingStatusMeta(booking.status, lang === "ne" ? "ne" : "en");
-                  const bookingLabel =
-                    booking.serviceType === "tractor"
-                      ? "Tractor"
-                      : booking.serviceType === "telcoline"
-                        ? "Tata Telcoline"
-                        : "Bolero";
-
-                  return (
-                    <article key={`booking-${booking.id}`} className="rounded-[1.5rem] border border-amber-200 bg-amber-50/40 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-lg font-bold text-slate-950">#{booking.id} {booking.customerName}</p>
-                          <p className="text-sm font-medium text-amber-700">{bookingLabel} booking</p>
-                          <p className="text-sm text-slate-500">{booking.customerPhone}</p>
-                          <p className="text-sm text-slate-500">{booking.pickupLocation} → {booking.destination}</p>
-                          <p className="mt-1 text-sm text-slate-400">{when(booking.bookingDate || booking.createdAt)}</p>
-                        </div>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${bookingStatus.className}`}>
-                          <bookingStatus.icon className="h-4 w-4" />
-                          {bookingStatus.label}
-                        </span>
-                      </div>
-                      {booking.notes ? (
-                        <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
-                          {booking.notes}
-                        </div>
-                      ) : null}
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {booking.status !== "confirmed" && booking.status !== "completed" && booking.status !== "cancelled" ? (
-                          <button
-                            type="button"
-                            onClick={() => runOwnerAction(() => updateBookingStatus(booking.id, "confirmed"), lang === "ne" ? "अर्डर पुष्टि भयो" : "Order confirmed", lang === "ne" ? "बुकिङ पुष्टि गर्न सकिएन।" : "Could not confirm the booking.")}
-                            className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-                          >
-                            {lang === "ne" ? "अर्डर पुष्टि गर्नुहोस्" : "Confirm order"}
-                          </button>
-                        ) : null}
-                        {booking.status !== "completed" && booking.status !== "cancelled" ? (
-                          <button
-                            type="button"
-                            onClick={() => runOwnerAction(() => updateBookingStatus(booking.id, "completed"), lang === "ne" ? "अर्डर डेलिभर भयो" : "Order delivered", lang === "ne" ? "बुकिङ सम्पन्न गर्न सकिएन।" : "Could not complete the booking.")}
-                            className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
-                          >
-                            {lang === "ne" ? "डेलिभर भयो" : "Mark delivered"}
-                          </button>
-                        ) : null}
-                        {booking.status !== "cancelled" && booking.status !== "completed" ? (
-                          <button
-                            type="button"
-                            onClick={() => runOwnerAction(() => updateBookingStatus(booking.id, "cancelled"), lang === "ne" ? "अर्डर रद्द भयो" : "Order rejected", lang === "ne" ? "बुकिङ रद्द गर्न सकिएन।" : "Could not reject the booking.")}
-                            className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
-                          >
-                            {lang === "ne" ? "रद्द" : "Reject"}
-                          </button>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
-                {(bookings || []).length === 0 && (
-                  <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet."}</p>
-                )}
-                </div>
+                <BookingList
+                  bookings={bookings || []}
+                  lang={lang}
+                  updateBookingStatus={updateBookingStatus}
+                  runOwnerAction={runOwnerAction}
+                />
               </div>
 
             </div>{/* end side-by-side grid */}
@@ -1339,25 +1692,7 @@ export function OwnerWorkspaceModern(props: any) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-2xl font-bold text-slate-950">{text.productCosts}</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {lang === "ne" ? "परीक्षणका लागि सबै श्रेणीमा नमूना सामान थप्न सकिन्छ।" : "Load practical test items across every shop category."}
-                  </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={Boolean(seedingProducts)}
-                  onClick={() =>
-                    runOwnerAction(
-                      () => seedSampleProducts?.(),
-                      lang === "ne" ? "नमूना उत्पादनहरू तयार भयो।" : "Sample products ready.",
-                      lang === "ne" ? "नमूना उत्पादन थप्न सकिएन।" : "Could not load sample products.",
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <PackagePlus className="h-4 w-4" />
-                  {seedingProducts ? (lang === "ne" ? "थपिँदै..." : "Loading...") : text.sampleProducts}
-                </button>
               </div>
               <div className="mt-4 grid gap-3">
                 {products.map((product: any) => {
@@ -1554,6 +1889,10 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </form>
           </section>
+        ) : null}
+
+        {tab === "reports" ? (
+          <ReportsTab lang={lang} api={props.api} />
         ) : null}
 
         {tab === "branding" ? (

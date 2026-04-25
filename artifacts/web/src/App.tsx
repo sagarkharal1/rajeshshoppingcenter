@@ -249,10 +249,10 @@ function OwnerApp() {
     featuredMedia: [],
   });
 const [settingsBusy, setSettingsBusy] = useState(false);
-const [seedingProducts, setSeedingProducts] = useState(false);
 const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 const [passwordBusy, setPasswordBusy] = useState(false);
 const [loginOtpInfo, setLoginOtpInfo] = useState<any>(null);
+const [totpStep, setTotpStep] = useState(false);
 const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const { lang, toggleLanguage } = useLanguage();
 
@@ -359,7 +359,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         productCostsDesc: "यो भागमा लागत, स्टक र बिक्री विवरण राखिन्छ।",
         saveProduct: "उत्पादन सुरक्षित गर्नुहोस्",
         updateProduct: "उत्पादन अपडेट गर्नुहोस्",
-        sampleProducts: "नमूना उत्पादनहरू राख्नुहोस्",
         edit: "सम्पादन",
         delete: "हटाउनुहोस्",
         mediaCenter: "मिडिया र सूचना",
@@ -473,7 +472,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         productCostsDesc: "This private section shows the true margin behind each item.",
         saveProduct: "Save product",
         updateProduct: "Update product",
-        sampleProducts: "Load sample products",
         edit: "Edit",
         delete: "Delete",
         mediaCenter: "Media and announcements",
@@ -711,13 +709,18 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     event.preventDefault();
     setError("");
     try {
+      const body: Record<string, string> = {
+        identifier: login.identifier.trim(),
+        password: login.password,
+      };
+      // If we're already in the TOTP step, include the authenticator code
+      if (totpStep && login.otp.trim()) {
+        body.totp = login.otp.trim().replace(/\s/g, "");
+      }
       const response = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identifier: login.identifier.trim(),
-          password: login.password,
-        }),
+        body: JSON.stringify(body),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -727,7 +730,14 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       (lang === "ne" ? "लगइन सफल भएन।" : "Login failed."),
         );
       }
+      // Server says TOTP is required — show the authenticator step
+      if ((result as any)?.requiresTotp) {
+        setTotpStep(true);
+        setLogin((current) => ({ ...current, otp: "" }));
+        return;
+      }
       setToken(result.token);
+      setTotpStep(false);
       setForgotMode(false);
       setRecoveryInfo(null);
       setLoginOtpInfo(null);
@@ -1052,61 +1062,12 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     await load();
   };
 
-  const updateBookingStatus = async (bookingId: number, status: string) => {
+  const updateBookingStatus = async (bookingId: number, status: string, payment?: { chargedAmount: number; amountPaid: number; paymentMethod: string }) => {
     await api(`/admin/bookings/${bookingId}/status`, {
       method: "PUT",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...payment }),
     });
     await load();
-  };
-
-  const seedSampleProducts = async () => {
-    setSeedingProducts(true);
-    try {
-      const existingCategories = await api<any[]>("/admin/categories");
-      const categoryMap = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
-
-      for (const category of shopCategories) {
-        if (!categoryMap.has(category.name.toLowerCase())) {
-          const created = await api<any>("/admin/categories", { method: "POST", body: JSON.stringify(category) });
-          categoryMap.set(category.name.toLowerCase(), created.id);
-        }
-      }
-
-      const existingProducts = await api<any[]>("/admin/products");
-      const existingSkus = new Set(existingProducts.map((product) => String(product.sku || "")));
-      let createdCount = 0;
-
-      for (const product of sampleCatalogProducts) {
-        if (existingSkus.has(product.sku)) continue;
-        const categoryId = categoryMap.get(product.categoryName.toLowerCase());
-        if (!categoryId) continue;
-        await api("/admin/products", {
-          method: "POST",
-          body: JSON.stringify({
-            ...product,
-            categoryId,
-          }),
-        });
-        createdCount += 1;
-      }
-      await load();
-      showOwnerFeedback(
-        "success",
-        lang === "ne"
-          ? createdCount > 0
-            ? `${createdCount} वटा नमूना उत्पादन थपियो।`
-            : "सबै नमूना उत्पादन पहिले नै छन्।"
-          : createdCount > 0
-            ? `${createdCount} sample products added.`
-            : "All sample products are already loaded.",
-      );
-    } catch (err) {
-      showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "नमूना उत्पादन थप्न सकिएन।" : "Could not load sample products."));
-      throw err;
-    } finally {
-      setSeedingProducts(false);
-    }
   };
 
   const saveMediaSettings = async (event?: React.FormEvent) => {
@@ -1179,7 +1140,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
           submitLogin={submitLogin}
           requestLoginOtp={requestLoginOtp}
           forgotMode={forgotMode}
-          setForgotMode={setForgotMode}
+          setForgotMode={(v: boolean) => { setForgotMode(v); if (v) setTotpStep(false); }}
           forgotForm={forgotForm}
           setForgotForm={setForgotForm}
           requestPasswordReset={requestPasswordReset}
@@ -1187,9 +1148,11 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
           resetBusy={resetBusy}
           recoveryInfo={recoveryInfo}
           toggleLanguage={toggleLanguage}
-          setOwnerEntryRequested={setOwnerEntryRequested}
+          setOwnerEntryRequested={(v: boolean) => { setOwnerEntryRequested(v); if (!v) setTotpStep(false); }}
           setError={setError}
           loginOtpInfo={loginOtpInfo}
+          totpStep={totpStep}
+          setTotpStep={setTotpStep}
           error={error}
         />
     );
@@ -1251,9 +1214,8 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       updateOrderStatus={updateOrderStatus}
       confirmOrderPayment={confirmOrderPayment}
       updateBookingStatus={updateBookingStatus}
-      seedSampleProducts={seedSampleProducts}
-      seedingProducts={seedingProducts}
       externalFeedback={ownerFeedback}
+      api={api}
     />
   );
 

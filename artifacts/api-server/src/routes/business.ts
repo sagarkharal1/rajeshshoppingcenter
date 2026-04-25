@@ -8,6 +8,7 @@ import {
   invoiceItemsTable,
   invoicesTable,
   ordersTable,
+  bookingsTable,
   productsTable,
   rewardTransactionsTable,
   settingsTable,
@@ -120,6 +121,37 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
       })
       .from(ordersTable);
 
+    // Today's transport bookings revenue
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [transportStats] = await db
+      .select({
+        totalBilled: sql<string>`coalesce(sum(charged_amount), 0)`,
+        totalCollected: sql<string>`coalesce(sum(amount_paid), 0)`,
+        totalCredit: sql<string>`coalesce(sum(charged_amount - amount_paid), 0)`,
+        activeBookings: sql<number>`sum(case when status not in ('cancelled') then 1 else 0 end)`,
+      })
+      .from(bookingsTable);
+
+    const [todayTransport] = await db
+      .select({
+        totalCollected: sql<string>`coalesce(sum(amount_paid), 0)`,
+      })
+      .from(bookingsTable)
+      .where(sql`created_at >= ${today} AND created_at < ${tomorrow} AND status NOT IN ('cancelled')`);
+
+    const [todayShop] = await db
+      .select({
+        totalBilled: sql<string>`coalesce(sum(${invoicesTable.subtotalAmount}), 0)`,
+        totalCollected: sql<string>`coalesce(sum(${invoicesTable.amountPaid}), 0)`,
+        invoiceCount: sql<number>`count(*)`,
+      })
+      .from(invoicesTable)
+      .where(sql`${invoicesTable.createdAt} >= ${today} AND ${invoicesTable.createdAt} < ${tomorrow}`);
+
     const recentInvoices = await db
       .select({
         id: invoicesTable.id,
@@ -149,6 +181,17 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
         totalOnlineOrders: Number(onlineOrderStats?.totalOrders ?? 0),
         pendingOnlineOrders: Number(onlineOrderStats?.pendingPayment ?? 0),
         confirmedOnlineRevenue: asNumber(onlineOrderStats?.confirmedRevenue),
+        // Transport totals (all-time)
+        transportTotalBilled: asNumber(transportStats?.totalBilled),
+        transportTotalCollected: asNumber(transportStats?.totalCollected),
+        transportTotalCredit: asNumber(transportStats?.totalCredit),
+        transportActiveBookings: Number(transportStats?.activeBookings ?? 0),
+        // Today combined
+        todayShopBilled: asNumber(todayShop?.totalBilled),
+        todayShopCollected: asNumber(todayShop?.totalCollected),
+        todayShopInvoices: Number(todayShop?.invoiceCount ?? 0),
+        todayTransportCollected: asNumber(todayTransport?.totalCollected),
+        todayCombinedCollected: asNumber(todayShop?.totalCollected) + asNumber(todayTransport?.totalCollected),
       },
       recentInvoices: recentInvoices.map((invoice) => ({
         ...invoice,
@@ -478,6 +521,7 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         amountPaid: asNumber(result.invoice.amountPaid),
         dueAmount: asNumber(result.invoice.dueAmount),
       },
+      customer: result.customer,
       items: result.items.map((item) => ({
         ...item,
         unitPrice: asNumber(item.unitPrice),

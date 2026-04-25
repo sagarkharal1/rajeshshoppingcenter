@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, ExternalLink, Grid2x2, Home, Info, Languages, Menu, PackageSearch, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
+import { Download, ExternalLink, Grid2x2, Home, Info, Languages, Menu, PackageSearch, RefreshCw, Search, Share2, ShoppingBag, Truck, X } from "lucide-react";
 import { useGetSettings } from "@workspace/api-client-react";
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
@@ -101,6 +101,14 @@ export function PublicLayoutModern({
               {lang === "ne" ? "EN" : "ने"}
             </button>
             <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-bold text-foreground/70 transition-all hover:border-primary hover:text-primary"
+              title={lang === "ne" ? "ताजा गर्नुहोस्" : "Refresh"}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {lang === "ne" ? "ताजा" : "Refresh"}
+            </button>
+            <button
               onClick={handleDownloadApp}
               className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950 transition-all hover:border-amber-400 hover:bg-amber-100"
             >
@@ -126,6 +134,14 @@ export function PublicLayoutModern({
             >
               <Languages className="h-3 w-3" />
               {lang === "ne" ? "EN" : "ने"}
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-full bg-card p-2.5 text-foreground/60"
+              title={lang === "ne" ? "ताजा गर्नुहोस्" : "Refresh"}
+              aria-label="Refresh"
+            >
+              <RefreshCw className="h-4 w-4" />
             </button>
             <Link href="/cart" className="relative rounded-full bg-secondary p-2.5 text-foreground outline-none">
               <ShoppingBag className="h-5 w-5" />

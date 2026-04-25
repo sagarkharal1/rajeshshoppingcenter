@@ -2,6 +2,8 @@ import { db } from "@workspace/db";
 import { settingsTable } from "@workspace/db/schema";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+// Hardcoded owner WhatsApp number — used when no number is stored in settings/env
+const OWNER_WHATSAPP_PHONE = "+9779814401716";
 
 type WhatsAppConfig = {
   phone: string;
@@ -48,14 +50,15 @@ async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
     .from(settingsTable)
     .limit(1);
 
-  if (!settings?.whatsappPhone || !settings?.whatsappApiKey) {
+  if (!settings?.whatsappApiKey) {
     cachedConfig = null;
     cacheExpiry = now + CACHE_TTL_MS;
     return null;
   }
 
   cachedConfig = {
-    phone: settings.whatsappPhone,
+    // Use stored phone if set, otherwise fall back to the hardcoded owner number
+    phone: settings.whatsappPhone || OWNER_WHATSAPP_PHONE,
     apiKey: settings.whatsappApiKey,
     provider: "callmebot",
   };

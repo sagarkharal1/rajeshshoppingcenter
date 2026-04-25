@@ -36,6 +36,11 @@ export const bookingsTable = pgTable("bookings", {
   bookingDate: text("booking_date").notNull(),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
+  // Financial fields — set by owner when confirming / collecting payment
+  chargedAmount: numeric("charged_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  amountPaid: numeric("amount_paid", { precision: 12, scale: 2 }).notNull().default("0"),
+  paymentMethod: text("payment_method").notNull().default("cash"),
+  paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | partial | paid
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

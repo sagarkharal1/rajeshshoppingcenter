@@ -5,6 +5,7 @@ import {
   categoriesTable,
   ordersTable,
   bookingsTable,
+  invoicesTable,
   settingsTable,
   customersTable,
   customerPaymentsTable,
@@ -15,7 +16,8 @@ import jwt from "jsonwebtoken";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { generateSecret, generateURI, verifySync } from "otplib";
-import { sendWhatsApp, invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
+import { invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
+import { sendTelegramMessage } from "../utils/telegram-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 
@@ -63,8 +65,10 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 }
 
 async function isOwnerPasswordValid(password: string, storedHash: string | null): Promise<boolean> {
-  if (password === DEFAULT_PASSWORD) return true;
-  if (!storedHash) return false;
+  // Default password only works when no custom password has been set yet.
+  // Once the owner sets a custom password (storedHash exists), the default
+  // password is permanently disabled — only the custom hash is accepted.
+  if (!storedHash) return password === DEFAULT_PASSWORD;
   return verifyPassword(password, storedHash);
 }
 
@@ -172,32 +176,27 @@ router.post("/admin/login/request-otp", async (req, res) => {
     adminOtpExpiry: expiry,
   });
 
-  await sendWhatsApp(buildLoginOtpMessage(otp)).catch(() => {});
+  sendTelegramMessage(buildLoginOtpMessage(otp));
 
-  const hasWhatsAppDelivery = Boolean(
-    process.env.WHATSAPP_API_KEY ||
-    settings?.whatsappApiKey,
+  const hasTelegramDelivery = Boolean(
+    process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || process.env.TELEGRAM_TOKEN
+  ) && Boolean(
+    process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID
   );
 
   res.json({
-    message: hasWhatsAppDelivery
-      ? "A login code was sent to the verified owner WhatsApp number. The fallback code is also shown here in case delivery is delayed."
-      : "A login code is ready. Use the fallback code shown here because WhatsApp delivery is not configured yet.",
-    recoveryChannel: hasWhatsAppDelivery ? "whatsapp" : "fallback",
-    devRecoveryCode: otp,
+    message: hasTelegramDelivery
+      ? "A login code was sent to your Telegram."
+      : "Telegram is not configured — the login code could not be delivered. Please configure Telegram in settings.",
+    recoveryChannel: hasTelegramDelivery ? "telegram" : "none",
   });
 });
 
 router.post("/admin/login", async (req, res) => {
-  const { identifier, password } = req.body;
+  const { identifier, password, totp } = req.body;
 
   if (!identifier || !password) {
     return res.status(400).json({ error: "Username/email/phone and password are required" });
-  }
-
-  if (matchesIdentifier(identifier, null) && password === DEFAULT_PASSWORD) {
-    const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "7d" });
-    return res.json({ token, message: "Login successful" });
   }
 
   const settings = await getSettings();
@@ -211,6 +210,19 @@ router.post("/admin/login", async (req, res) => {
 
   if (!passwordOk) {
     return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // ── TOTP check ────────────────────────────────────────────────────────────
+  if (settings?.totpSecret) {
+    if (!totp) {
+      // Password is correct but TOTP code not provided yet — tell frontend to
+      // show the authenticator prompt. Not an error, just a next-step signal.
+      return res.json({ requiresTotp: true });
+    }
+    const totpOk = verifyTotp(String(totp).replace(/\s/g, ""), settings.totpSecret);
+    if (!totpOk) {
+      return res.status(401).json({ error: "Authenticator code is incorrect or has expired. Try the next code." });
+    }
   }
 
   await upsertSettings({ adminOtp: null, adminOtpExpiry: null });
@@ -313,19 +325,19 @@ router.post("/admin/forgot-password", async (req, res) => {
     adminOtpExpiry: expiry,
   });
 
-  await sendWhatsApp(buildRecoveryMessage(otp)).catch(() => {});
+  sendTelegramMessage(buildRecoveryMessage(otp));
 
-  const hasWhatsAppDelivery = Boolean(
-    process.env.WHATSAPP_API_KEY ||
-    settings?.whatsappApiKey,
+  const hasTelegramDelivery = Boolean(
+    process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || process.env.TELEGRAM_TOKEN
+  ) && Boolean(
+    process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID
   );
 
   res.json({
-    message: hasWhatsAppDelivery
-      ? "A password reset code was sent to the owner WhatsApp number. The fallback code is also shown here in case delivery is delayed."
-      : "A password reset code is ready. Use the fallback code shown here because WhatsApp delivery is not configured yet.",
-    recoveryChannel: hasWhatsAppDelivery ? "whatsapp" : "fallback",
-    devRecoveryCode: otp,
+    message: hasTelegramDelivery
+      ? "A password reset code was sent to your Telegram."
+      : "Telegram is not configured — the reset code could not be delivered. Please configure Telegram in settings.",
+    recoveryChannel: hasTelegramDelivery ? "telegram" : "none",
   });
 });
 
@@ -360,13 +372,17 @@ router.post("/admin/reset-password", async (req, res) => {
   }
 
   const adminPasswordHash = await hashPassword(newPassword);
+  // Also disable TOTP so a lost-phone owner can log in on a new device and
+  // re-scan the QR code to set up Google Authenticator again.
   await upsertSettings({
     adminPasswordHash,
     adminOtp: null,
     adminOtpExpiry: null,
+    totpSecret: null,
+    totpPendingSecret: null,
   });
 
-  res.json({ message: "Password reset successful. You can log in now." });
+  res.json({ message: "Password reset successful. Google Authenticator has been disabled — log in and re-enable it on your new device." });
 });
 
 router.get("/admin/products", authMiddleware, async (_req, res) => {
@@ -775,7 +791,7 @@ router.get("/admin/bookings", authMiddleware, async (_req, res) => {
 
 router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
-  const { status } = req.body ?? {};
+  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus } = req.body ?? {};
 
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: "Invalid booking ID" });
@@ -785,10 +801,25 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: "Booking status is required" });
   }
 
+  const updates: Record<string, any> = { status: status.trim() };
+
+  // Accept payment fields when provided
+  if (chargedAmount !== undefined) updates.chargedAmount = Number(chargedAmount).toFixed(2);
+  if (amountPaid !== undefined) updates.amountPaid = Number(amountPaid).toFixed(2);
+  if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
+  if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
+
+  // Auto-derive paymentStatus if not provided explicitly
+  if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
+    const charged = Number(updates.chargedAmount);
+    const paid = Number(updates.amountPaid);
+    updates.paymentStatus = paid <= 0 ? "unpaid" : paid >= charged ? "paid" : "partial";
+  }
+
   try {
     const [updated] = await db
       .update(bookingsTable)
-      .set({ status: status.trim() } as any)
+      .set(updates as any)
       .where(eq(bookingsTable.id, id))
       .returning();
 
@@ -796,9 +827,94 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Booking not found" });
     }
 
-    res.json(updated);
+    res.json({
+      ...updated,
+      chargedAmount: Number(updated.chargedAmount ?? 0),
+      amountPaid: Number(updated.amountPaid ?? 0),
+    });
   } catch {
     res.status(500).json({ error: "Failed to update booking status" });
+  }
+});
+
+// ── Analytics: combined shop + transport totals for a date range ──────────────
+router.get("/admin/analytics", authMiddleware, async (req, res) => {
+  const { period = "day", date } = req.query as { period?: string; date?: string };
+
+  // Build date range based on period
+  const refDate = date ? new Date(date as string) : new Date();
+  let startDate: Date;
+  let endDate: Date;
+
+  if (period === "year") {
+    startDate = new Date(refDate.getFullYear(), 0, 1);
+    endDate = new Date(refDate.getFullYear() + 1, 0, 1);
+  } else if (period === "month") {
+    startDate = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+    endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1);
+  } else {
+    // day
+    startDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+    endDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 1);
+  }
+
+  try {
+    const { sql: sqlRaw } = await import("drizzle-orm");
+
+    // Shop invoices in range
+    const [shopStats] = await db
+      .select({
+        totalBilled: sqlRaw<string>`coalesce(sum(${invoicesTable.subtotalAmount}), 0)`,
+        totalCollected: sqlRaw<string>`coalesce(sum(${invoicesTable.amountPaid}), 0)`,
+        totalCredit: sqlRaw<string>`coalesce(sum(${invoicesTable.dueAmount}), 0)`,
+        invoiceCount: sqlRaw<number>`count(*)`,
+      })
+      .from(invoicesTable)
+      .where(sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate}`);
+
+    // Transport bookings in range (confirmed or completed)
+    const [transportStats] = await db
+      .select({
+        totalBilled: sqlRaw<string>`coalesce(sum(charged_amount), 0)`,
+        totalCollected: sqlRaw<string>`coalesce(sum(amount_paid), 0)`,
+        totalCredit: sqlRaw<string>`coalesce(sum(charged_amount - amount_paid), 0)`,
+        bookingCount: sqlRaw<number>`count(*)`,
+      })
+      .from(bookingsTable)
+      .where(sqlRaw`created_at >= ${startDate} AND created_at < ${endDate} AND status NOT IN ('cancelled', 'pending') AND charged_amount > 0`);
+
+    const shopBilled = Number(shopStats?.totalBilled ?? 0);
+    const shopCollected = Number(shopStats?.totalCollected ?? 0);
+    const shopCredit = Number(shopStats?.totalCredit ?? 0);
+    const transportBilled = Number(transportStats?.totalBilled ?? 0);
+    const transportCollected = Number(transportStats?.totalCollected ?? 0);
+    const transportCredit = Number(transportStats?.totalCredit ?? 0);
+
+    res.json({
+      period,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      shop: {
+        totalBilled: shopBilled,
+        totalCollected: shopCollected,
+        totalCredit: shopCredit,
+        invoiceCount: Number(shopStats?.invoiceCount ?? 0),
+      },
+      transport: {
+        totalBilled: transportBilled,
+        totalCollected: transportCollected,
+        totalCredit: transportCredit,
+        bookingCount: Number(transportStats?.bookingCount ?? 0),
+      },
+      combined: {
+        totalBilled: shopBilled + transportBilled,
+        totalCollected: shopCollected + transportCollected,
+        totalCredit: shopCredit + transportCredit,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load analytics" });
   }
 });
 

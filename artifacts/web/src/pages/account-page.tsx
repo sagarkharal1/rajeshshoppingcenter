@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { CheckCircle2, Clock3, CreditCard, FileDown, History, Home, Search, ShieldCheck, Truck, UserRound, XCircle } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
+import { FlashNotice } from "@/components/flash-notice";
 
 type CustomerProfileResponse = {
   customer: {
@@ -305,7 +306,7 @@ export default function AccountPage() {
             {loading ? "..." : text.open}
           </button>
         </form>
-        {error ? <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+        <FlashNotice message={error || null} type="error" onClose={() => setError("")} />
       </div>
 
       {profile ? (

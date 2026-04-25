@@ -1,4 +1,4 @@
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { categoriesTable, settingsTable } from "@workspace/db/schema";
 
 const DEFAULT_SETTINGS = {
@@ -24,9 +24,30 @@ const DEFAULT_CATEGORY = {
 
 let bootstrapPromise: Promise<void> | null = null;
 
+async function runMigrations(): Promise<void> {
+  // Safe incremental migrations — ADD COLUMN IF NOT EXISTS never fails on re-run
+  const migrations = [
+    // 2026-04: Add financial tracking columns to bookings
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS charged_amount NUMERIC(12,2) NOT NULL DEFAULT 0`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash'`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid'`,
+  ];
+  const client = await pool.connect();
+  try {
+    for (const sql of migrations) {
+      await client.query(sql);
+    }
+  } finally {
+    client.release();
+  }
+}
+
 export async function ensureBootstrapData(): Promise<void> {
   if (!bootstrapPromise) {
     bootstrapPromise = (async () => {
+      await runMigrations();
+
       const [settings] = await db.select().from(settingsTable).limit(1);
       if (!settings) {
         await db.insert(settingsTable).values(DEFAULT_SETTINGS as any);

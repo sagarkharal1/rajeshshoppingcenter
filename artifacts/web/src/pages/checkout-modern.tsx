@@ -6,6 +6,7 @@ import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
 import { useGetSettings } from "@workspace/api-client-react";
+import { FlashNotice } from "@/components/flash-notice";
 
 const CUSTOMER_PORTAL_STORAGE_KEY = "rajesh_customer_portal";
 
@@ -262,7 +263,7 @@ export default function CheckoutModern() {
               ? "यदि चाहनुहुन्छ भने मात्र WhatsApp मार्फत पसललाई सन्देश पठाउनुहोस्।"
               : "Use WhatsApp only if you want to contact the shop directly."}
           </p>
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => window.print()}
@@ -299,17 +300,24 @@ export default function CheckoutModern() {
                 {lang === "ne" ? "मेरो खाता खोल्नुहोस्" : "Open my account"}
               </button>
             ) : null}
+            <button onClick={() => setLocation("/")} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-700">
+              {t.checkout.returnHome}
+            </button>
           </div>
         </div>
 
-        <button onClick={() => setLocation("/")} className="px-8 py-4 bg-primary text-primary-foreground font-bold rounded-xl shadow-md hover:shadow-lg transition-all">
-          {t.checkout.returnHome}
-        </button>
-
         <div className="print-bill-sheet hidden text-left">
           <div className="mx-auto mt-8 max-w-xl rounded-[2rem] border border-slate-200 bg-white p-8 text-slate-900">
-            <h2 className="text-3xl font-bold">{String(publicSettings.shopName || "Rajesh Shopping Center")}</h2>
-            <p className="mt-2 text-sm text-slate-500">{String(publicSettings.address || "Musikot-5, Aapchaur, Gulmi, Nepal")}</p>
+            {/* Shop header: logo + name + address + PAN */}
+            <div className="flex items-start gap-4 border-b-2 border-slate-800 pb-5">
+              <img src="/rajesh-logo.png" alt="Logo" className="h-16 w-16 rounded-xl object-cover" />
+              <div>
+                <h2 className="text-2xl font-extrabold leading-tight">{String(publicSettings.shopName || "Rajesh Shopping Center")}</h2>
+                <p className="mt-0.5 text-sm text-slate-500">{String(publicSettings.address || "Musikot-5, Aapchaur, Gulmi, Nepal")}</p>
+                {publicSettings.phone ? <p className="text-sm text-slate-500">{lang === "ne" ? "फोन:" : "Ph:"} {String(publicSettings.phone)}</p> : null}
+                <p className="mt-1 text-sm font-bold text-slate-800">{lang === "ne" ? "प्यान नं.:" : "PAN No.:"} {String((publicSettings as any).panNumber || "302951817")}</p>
+              </div>
+            </div>
             <div className="mt-6 grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-sm">
               <div>
                 <p className="font-semibold text-slate-500">{lang === "ne" ? "अर्डर नं" : "Order no."}</p>
@@ -395,11 +403,7 @@ export default function CheckoutModern() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
         <div className="lg:col-span-3">
           <form onSubmit={handleSubmit} className="space-y-8">
-            {submitError ? (
-              <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-700">
-                {submitError}
-              </div>
-            ) : null}
+            <FlashNotice message={submitError || null} type="error" onClose={() => setSubmitError("")} />
             <div className="bg-card p-6 sm:p-8 rounded-3xl border border-border shadow-sm">
               <h2 className="text-2xl font-serif font-bold mb-6 border-b border-border pb-4">{t.checkout.deliveryDetails}</h2>
               <div className="grid grid-cols-1 gap-6">
