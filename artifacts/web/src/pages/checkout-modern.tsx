@@ -35,6 +35,7 @@ export default function CheckoutModern() {
     address: "",
     notes: "",
     customerPhotoPath: "",
+    paymentScreenshotPath: "",
   });
   const [paymentMethod, setPaymentMethod] = useState<"bank" | "esewa" | "khalti">("bank");
   const [isSuccess, setIsSuccess] = useState(false);
@@ -148,6 +149,7 @@ export default function CheckoutModern() {
           customerAddress: cleanedAddress,
           notes: cleanedNotes || undefined,
           customerPhotoPath: formData.customerPhotoPath || undefined,
+          paymentScreenshotPath: formData.paymentScreenshotPath || undefined,
           paymentMethod,
           paymentStatus: "unpaid",
           items: validItems,
@@ -437,7 +439,8 @@ export default function CheckoutModern() {
                       : "This order automatically creates or updates the customer record. The app uses phone number and email as identifiers, so customers with the same name are stored separately when their phone or email is different."}
                   </p>
                   <label className="mt-4 block rounded-xl border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    {lang === "ne" ? "फोटो अपलोड गर्नुहोस् वा क्यामेरा प्रयोग गर्नुहोस्" : "Upload photo or use camera"}
+                    <span className="font-semibold text-foreground">{lang === "ne" ? "📸 आईडी फोटो / प्रोफाइल (वैकल्पिक)" : "📸 ID Photo / Profile (optional)"}</span>
+                    <p className="mt-1 text-xs text-muted-foreground">{lang === "ne" ? "आपको पहिचान पत्र वा प्रोफाइल फोटो" : "Your ID card or profile photo"}</p>
                     <input
                       type="file"
                       accept="image/*"
@@ -454,6 +457,33 @@ export default function CheckoutModern() {
                   </label>
                   {formData.customerPhotoPath ? (
                     <img src={formData.customerPhotoPath} alt="Customer preview" className="mt-4 h-32 w-32 rounded-2xl object-cover border border-border" />
+                  ) : null}
+
+                  {/* Payment screenshot — only for eSewa and Khalti */}
+                  {(paymentMethod === "esewa" || paymentMethod === "khalti") ? (
+                    <label className="mt-4 block rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                      <span className="font-semibold">{lang === "ne" ? "📱 भुक्तानी का प्रमाण स्क्रीनशट (आवश्यक)" : "📱 Payment proof screenshot (required)"}</span>
+                      <p className="mt-1 text-xs text-amber-700">{lang === "ne" ? `${paymentMethod === "esewa" ? "eSewa" : "Khalti"} ट्रान्जेक्शन सफल भएको स्क्रीनशट` : `Screenshot showing successful ${paymentMethod === "esewa" ? "eSewa" : "Khalti"} transaction`}</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        className="mt-3 block w-full text-sm"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const dataUrl = await readFileAsDataUrl(file);
+                          setFormData((current) => ({ ...current, paymentScreenshotPath: dataUrl }));
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  ) : null}
+                  {formData.paymentScreenshotPath ? (
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold text-emerald-700 mb-2">✅ {lang === "ne" ? "स्क्रीनशट अपलोड भयो" : "Screenshot uploaded"}</p>
+                      <img src={formData.paymentScreenshotPath} alt="Payment proof" className="h-32 w-32 rounded-2xl object-cover border border-emerald-200 bg-emerald-50" />
+                    </div>
                   ) : null}
                 </div>
               </div>

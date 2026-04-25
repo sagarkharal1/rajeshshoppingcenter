@@ -10,7 +10,8 @@ export const ordersTable = pgTable("orders", {
   customerPhone: text("customer_phone").notNull(),
   customerEmail: text("customer_email"),
   customerAddress: text("customer_address").notNull(),
-  customerPhotoPath: text("customer_photo_path"),
+  customerPhotoPath: text("customer_photo_path"), // Customer ID photo or profile picture
+  paymentScreenshotPath: text("payment_screenshot_path"), // Screenshot for eSewa / Khalti payment proof
   items: jsonb("items").notNull().$type<Array<{
     productId: number;
     productName: string;

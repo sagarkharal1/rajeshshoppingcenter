@@ -1753,6 +1753,14 @@ export function OwnerWorkspaceModern(props: any) {
                         })()}
                       </div>
                     </div>
+                    {/* Payment proof screenshot — for eSewa/Khalti */}
+                    {order.paymentScreenshotPath && (order.paymentMethod === "esewa" || order.paymentMethod === "khalti") ? (
+                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-xs font-bold text-amber-700 mb-2">📱 {lang === "ne" ? "भुक्तानी प्रमाण" : "Payment proof"}</p>
+                        <img src={order.paymentScreenshotPath} alt="Payment screenshot" className="h-40 w-full rounded-xl object-contain border border-amber-200 bg-white" />
+                      </div>
+                    ) : null}
+
                     <div className="mt-4 grid gap-2">
                       {(order.items || []).map((item: any, index: number) => (
                         <div key={`${order.id}-${index}`} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm">

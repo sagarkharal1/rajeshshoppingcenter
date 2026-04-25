@@ -33,7 +33,8 @@ const createOrderSchema = z.object({
   notes: z.string().max(1000).transform(s => s.trim()).optional(),
   paymentMethod: z.enum(["bank", "esewa", "khalti"]).default("bank"),
   paymentStatus: z.enum(["paid", "unpaid"]).default("unpaid"),
-  customerPhotoPath: z.string().max(500000).optional(),
+  customerPhotoPath: z.string().max(500000).optional(), // Customer ID or profile photo
+  paymentScreenshotPath: z.string().max(500000).optional(), // eSewa / Khalti payment proof screenshot
 });
 
 function normalizePhone(phone: string) {
@@ -69,7 +70,7 @@ router.post("/orders", async (req, res) => {
   }
 
   try {
-    const { customerName, customerPhone, customerEmail, customerAddress, items, notes, paymentMethod, paymentStatus, customerPhotoPath } = parsed.data;
+    const { customerName, customerPhone, customerEmail, customerAddress, items, notes, paymentMethod, paymentStatus, customerPhotoPath, paymentScreenshotPath } = parsed.data;
 
     const totalAmount = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -158,6 +159,7 @@ router.post("/orders", async (req, res) => {
           customerEmail: normalizedEmail || customer.email || null,
           customerAddress,
           customerPhotoPath: customerPhotoPath?.trim() || customer.photoPath || null,
+          paymentScreenshotPath: paymentScreenshotPath?.trim() || null,
           items,
           totalAmount: totalAmount.toString(),
           status: "order-received",
