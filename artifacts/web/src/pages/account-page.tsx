@@ -67,31 +67,83 @@ function formatWhen(value: string) {
   return new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function printVoucher(title: string, lines: string[]) {
-  const popup = window.open("", "_blank", "width=760,height=900");
+function printInvoice(invoice: any, customer: any, lang: string) {
+  const popup = window.open("", "_blank", "width=520,height=720");
   if (!popup) return;
-  popup.document.write(`
-    <html>
-      <head>
-        <title>${title}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
-          h1 { font-size: 24px; margin-bottom: 8px; }
-          .box { border: 1px solid #cbd5e1; border-radius: 16px; padding: 20px; }
-          .line { margin: 10px 0; font-size: 15px; }
-        </style>
-      </head>
-      <body>
-        <div class="box">
-          <h1>${title}</h1>
-          ${lines.map((line) => `<div class="line">${line}</div>`).join("")}
-        </div>
-      </body>
-    </html>
-  `);
+
+  const itemsHtml = Array.isArray(invoice.items)
+    ? invoice.items.map((item: any) => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0">${item.productName || item.name}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center">${item.quantity} ${item.unit || "pc"}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right">NPR ${(Number(item.price) * Number(item.quantity)).toLocaleString()}</td>
+      </tr>
+    `).join("")
+    : "";
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoice ${invoice.invoiceNumber}</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 20px auto; padding: 20px; color: #1e293b; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  .header { border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; margin-bottom: 12px; }
+  .info { font-size: 13px; color: #64748b; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th { background: #f1f5f9; padding: 8px; text-align: left; font-size: 12px; color: #64748b; font-weight: 600; }
+  td { padding: 8px; font-size: 14px; }
+  .summary { background: #f8fafc; padding: 12px; border-radius: 8px; margin: 12px 0; }
+  .summary-row { display: flex; justify-content: space-between; margin: 6px 0; }
+  .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 8px; }
+  .paid { background: #dcfce7; color: #166534; }
+  .due { background: #fef3c7; color: #92400e; }
+  @media print { button { display: none; } }
+</style>
+</head><body>
+<div class="header">
+  <h2>Rajesh Shopping Center</h2>
+  <p class="info">${lang === "ne" ? "काउन्टर बिल / इनभयस" : "Counter Bill / Invoice"}</p>
+</div>
+
+<p class="info"><strong>Invoice:</strong> ${invoice.invoiceNumber}</p>
+<p class="info"><strong>Customer:</strong> ${customer.name} (${customer.customerCode})</p>
+<p class="info"><strong>Date:</strong> ${new Date(invoice.createdAt).toLocaleString()}</p>
+
+${itemsHtml ? `
+<table>
+  <thead><tr>
+    <th>${lang === "ne" ? "सामान" : "Item"}</th>
+    <th>${lang === "ne" ? "परिमाण" : "Qty"}</th>
+    <th>${lang === "ne" ? "रकम" : "Amount"}</th>
+  </tr></thead>
+  <tbody>${itemsHtml}</tbody>
+</table>
+` : ""}
+
+<div class="summary">
+  <div class="summary-row">
+    <span>${lang === "ne" ? "कुल जम्मा" : "Total"}</span>
+    <strong>NPR ${Number(invoice.totalAmount).toLocaleString()}</strong>
+  </div>
+  <div class="summary-row">
+    <span>${lang === "ne" ? "तिरेको" : "Paid"}</span>
+    <strong>NPR ${Number(invoice.amountPaid).toLocaleString()}</strong>
+  </div>
+  <div class="summary-row">
+    <span>${lang === "ne" ? "बाँकी" : "Due"}</span>
+    <strong style="color: ${Number(invoice.dueAmount) > 0 ? "#b91c1c" : "#16a34a"}">NPR ${Number(invoice.dueAmount).toLocaleString()}</strong>
+  </div>
+  <p class="info" style="margin-top: 8px; margin-bottom: 0;">
+    <strong>${lang === "ne" ? "भुक्तानी तरिका" : "Payment method"}:</strong> ${invoice.paymentMethod}
+  </p>
+  <span class="badge ${Number(invoice.dueAmount) <= 0 ? "paid" : "due"}">
+    ${Number(invoice.dueAmount) <= 0 ? (lang === "ne" ? "✅ पूरा भुक्तानी" : "✅ Fully Paid") : (lang === "ne" ? `📒 बाँकी: NPR ${Number(invoice.dueAmount).toLocaleString()}` : `📒 Due: NPR ${Number(invoice.dueAmount).toLocaleString()}`)}
+  </span>
+</div>
+
+<button onclick="window.print()" style="margin-top: 16px; width: 100%; padding: 10px; background: #1e3a5f; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600;">🖨️ Print</button>
+</body></html>`;
+
+  popup.document.write(html);
   popup.document.close();
-  popup.focus();
-  popup.print();
 }
 
 function getOrderStatusMeta(status: string, lang: "en" | "ne") {
@@ -418,6 +470,7 @@ export default function AccountPage() {
               <CreditCard className="h-5 w-5 text-primary" />
               <h2 className="text-2xl font-bold text-slate-950">{text.payments}</h2>
             </div>
+            <p className="mb-5 text-sm text-slate-500">{lang === "ne" ? "पसलमा गरिएका काउन्टर बिक्री र भुक्तानीहरू" : "Counter sales invoices and payments from the shop"}</p>
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
                 {profile.invoices.map((invoice) => (
@@ -443,27 +496,14 @@ export default function AccountPage() {
                       <div className="rounded-2xl bg-white px-4 py-3">Due: <strong>{formatNPR(invoice.dueAmount)}</strong></div>
                       <div className="rounded-2xl bg-white px-4 py-3">Method: <strong>{invoice.paymentMethod}</strong></div>
                     </div>
-                    {invoice.amountPaid > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          printVoucher(text.paymentVoucher, [
-                            `Invoice: ${invoice.invoiceNumber}`,
-                            `Customer: ${profile.customer.name}`,
-                            `Customer code: ${profile.customer.customerCode}`,
-                            `Paid amount: ${formatNPR(invoice.amountPaid)}`,
-                            `Due amount: ${formatNPR(invoice.dueAmount)}`,
-                            `Payment method: ${invoice.paymentMethod}`,
-                            `Payment status: ${invoice.paymentStatus}`,
-                            `Date: ${formatWhen(invoice.createdAt)}`,
-                          ])
-                        }
-                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
-                      >
-                        <FileDown className="h-4 w-4" />
-                        {text.download}
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => printInvoice(invoice, profile.customer, lang === "ne" ? "ne" : "en")}
+                      className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      🖨️ {lang === "ne" ? "बिल प्रिन्ट गर्नुहोस्" : "Print invoice"}
+                    </button>
                   </article>
                 ))}
               </div>
