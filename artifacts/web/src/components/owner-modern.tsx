@@ -594,6 +594,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
               {isPending ? (
                 <button
                   type="button"
+                  disabled={!form.charged || Number(form.charged) <= 0}
                   onClick={() => {
                     const chargedAmt = Number(form.charged) || charged;
                     const paidAmt = Number(form.paid) || 0;
@@ -603,7 +604,8 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                       lang === "ne" ? "बुकिङ पुष्टि गर्न सकिएन।" : "Could not confirm the booking.",
                     );
                   }}
-                  className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                  className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={lang === "ne" ? "शुल्क दर्ता गरेर पुष्टि गर्नुहोस्" : "Enter charge amount first"}
                 >
                   {lang === "ne" ? "पुष्टि गर्नुहोस्" : "Confirm"}
                 </button>
@@ -623,6 +625,20 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                   className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
                 >
                   {lang === "ne" ? "डेलिभर भयो" : "Mark delivered"}
+                </button>
+              ) : null}
+              {isActive && isFinanciallySet ? (
+                <button
+                  type="button"
+                  onClick={() => runOwnerAction(
+                    () => updateBookingStatus(booking.id, "completed", { chargedAmount: charged, amountPaid: 0, paymentMethod: form.method || "cash", addToCredit: true }),
+                    lang === "ne" ? "उधारो खाताबहीमा थपियो 📒" : "Added to customer credit 📒",
+                    lang === "ne" ? "उधारो थप्न सकिएन।" : "Could not add to credit."
+                  )}
+                  className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
+                  title={lang === "ne" ? "ग्राहकले पैसा पठाएन — उनको उधारो खातामा राख्नुहोस्" : "Customer didn't pay — add to their credit"}
+                >
+                  📒 {lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit"}
                 </button>
               ) : null}
               {isActive ? (

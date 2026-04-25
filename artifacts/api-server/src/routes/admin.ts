@@ -796,7 +796,7 @@ router.get("/admin/bookings", authMiddleware, async (_req, res) => {
 
 router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
-  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus } = req.body ?? {};
+  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit } = req.body ?? {};
 
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: "Invalid booking ID" });
@@ -806,22 +806,83 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: "Booking status is required" });
   }
 
-  const updates: Record<string, any> = { status: status.trim() };
-
-  // Accept payment fields when provided
-  if (chargedAmount !== undefined) updates.chargedAmount = Number(chargedAmount).toFixed(2);
-  if (amountPaid !== undefined) updates.amountPaid = Number(amountPaid).toFixed(2);
-  if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
-  if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
-
-  // Auto-derive paymentStatus if not provided explicitly
-  if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
-    const charged = Number(updates.chargedAmount);
-    const paid = Number(updates.amountPaid);
-    updates.paymentStatus = paid <= 0 ? "unpaid" : paid >= charged ? "paid" : "partial";
-  }
-
   try {
+    // If adding to credit, fetch booking first to get customer ID
+    if (addToCredit) {
+      const [booking] = await db
+        .select()
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, id))
+        .limit(1);
+
+      if (!booking) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      // Use transaction to atomically update booking and customer credit
+      await db.transaction(async (tx) => {
+        const chargedAmt = Number(chargedAmount ?? booking.chargedAmount ?? 0);
+
+        // Update booking status to completed and mark as delivered
+        await tx
+          .update(bookingsTable)
+          .set({
+            status: "completed",
+            chargedAmount: chargedAmt.toFixed(2),
+            amountPaid: "0",
+            paymentStatus: "unpaid",
+            paymentMethod: paymentMethod || booking.paymentMethod,
+          } as any)
+          .where(eq(bookingsTable.id, id));
+
+        // Find customer by phone number (booking might not have explicit customer ID)
+        const customers = await tx.select().from(customersTable);
+        const customer = customers.find((c: any) =>
+          c.phone && c.phone.replace(/[^\d+]/g, "") === booking.customerPhone.replace(/[^\d+]/g, "")
+        );
+
+        if (customer) {
+          // Add the charged amount to customer's credit balance
+          const currentCredit = Number(customer.creditBalance ?? 0);
+          await tx
+            .update(customersTable)
+            .set({
+              creditBalance: (currentCredit + chargedAmt).toFixed(2),
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(customersTable.id, customer.id));
+        }
+      });
+
+      const [updated] = await db
+        .select()
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, id))
+        .limit(1);
+
+      return res.json({
+        ...updated,
+        chargedAmount: Number(updated.chargedAmount ?? 0),
+        amountPaid: Number(updated.amountPaid ?? 0),
+      });
+    }
+
+    // Standard booking status update (no credit addition)
+    const updates: Record<string, any> = { status: status.trim() };
+
+    // Accept payment fields when provided
+    if (chargedAmount !== undefined) updates.chargedAmount = Number(chargedAmount).toFixed(2);
+    if (amountPaid !== undefined) updates.amountPaid = Number(amountPaid).toFixed(2);
+    if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
+    if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
+
+    // Auto-derive paymentStatus if not provided explicitly
+    if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
+      const charged = Number(updates.chargedAmount);
+      const paid = Number(updates.amountPaid);
+      updates.paymentStatus = paid <= 0 ? "unpaid" : paid >= charged ? "paid" : "partial";
+    }
+
     const [updated] = await db
       .update(bookingsTable)
       .set(updates as any)
@@ -837,7 +898,8 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
       chargedAmount: Number(updated.chargedAmount ?? 0),
       amountPaid: Number(updated.amountPaid ?? 0),
     });
-  } catch {
+  } catch (err) {
+    console.error("Booking update error:", err);
     res.status(500).json({ error: "Failed to update booking status" });
   }
 });
