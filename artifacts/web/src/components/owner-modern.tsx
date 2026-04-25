@@ -97,6 +97,80 @@ function getOwnerBookingStatusMeta(status: string, lang: "en" | "ne") {
   return { label: lang === "ne" ? "नयाँ बुकिङ" : "New booking", className: "border-amber-200 bg-amber-50 text-amber-800", icon: Clock3 };
 }
 
+// ── Print helpers: open a printable slip in a new window ──────────────────
+function printOrderSlip(order: any, lang: string) {
+  const payMethod = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : order.paymentMethod === "bank" ? "Bank/QR" : "Cash";
+  const isPaid = order.paymentStatus === "paid";
+  const items = (order.items || []).map((item: any) =>
+    `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9">${item.productName}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center">${item.quantity} ${item.unit || "pc"}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right">NPR ${(Number(item.price) * Number(item.quantity)).toLocaleString()}</td>
+    </tr>`
+  ).join("");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order #${order.id}</title>
+<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse}.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600}.paid{background:#dcfce7;color:#166534}.credit{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
+</head><body>
+<h2>Rajesh Shopping Center</h2>
+<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip"} · PAN: 123456789</p>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<p><strong>Order #${order.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(order.createdAt).toLocaleString()}</span></p>
+<p style="margin:4px 0"><strong>${order.customerName}</strong></p>
+<p style="margin:4px 0;color:#64748b;font-size:13px">${order.customerPhone}${order.customerAddress ? " · " + order.customerAddress : ""}</p>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<table><thead><tr>
+  <th style="text-align:left;padding:6px 8px;font-size:12px;color:#64748b">Item</th>
+  <th style="text-align:center;padding:6px 8px;font-size:12px;color:#64748b">Qty</th>
+  <th style="text-align:right;padding:6px 8px;font-size:12px;color:#64748b">Amount</th>
+</tr></thead><tbody>${items}</tbody></table>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<div style="text-align:right">
+  <p style="margin:4px 0;font-size:18px;font-weight:700">Total: NPR ${Number(order.totalAmount).toLocaleString()}</p>
+  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment: ${payMethod}</p>
+  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "भुक्तानी भयो" : "✅ Paid") : (lang === "ne" ? "उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
+</div>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<p style="text-align:center;color:#64748b;font-size:12px">Rajesh Shopping Center · +977-9814401716 · Musikot-5, Gulmi</p>
+<button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
+</body></html>`;
+  const w = window.open("", "_blank", "width=500,height=680");
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
+function printBookingSlip(booking: any, lang: string) {
+  const serviceLabel = booking.serviceType === "tractor" ? "Tractor" : booking.serviceType === "telcoline" ? "Tata Telcoline" : "Bolero";
+  const charged = Number(booking.chargedAmount ?? 0);
+  const paid = Number(booking.amountPaid ?? 0);
+  const due = Math.max(0, charged - paid);
+  const payMethod = booking.paymentMethod || "cash";
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking #${booking.id}</title>
+<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9}.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
+</head><body>
+<h2>Rajesh Shopping Center</h2>
+<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip"} · PAN: 123456789</p>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<p><strong>Booking #${booking.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(booking.bookingDate || booking.createdAt).toLocaleString()}</span></p>
+<p style="margin:4px 0"><strong>${booking.customerName}</strong> · ${booking.customerPhone}</p>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<div class="row"><span style="color:#64748b">Service</span><strong>${serviceLabel}</strong></div>
+<div class="row"><span style="color:#64748b">Route</span><strong>${booking.pickupLocation} → ${booking.destination}</strong></div>
+${booking.notes ? `<div class="row"><span style="color:#64748b">Notes</span><span>${booking.notes}</span></div>` : ""}
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<div class="row"><span>Total Charged</span><strong>NPR ${charged.toLocaleString()}</strong></div>
+<div class="row"><span>Paid</span><strong style="color:${due > 0 ? "#b45309" : "#166534"}">NPR ${paid.toLocaleString()}</strong></div>
+${due > 0 ? `<div class="row"><span>Remaining Due</span><strong style="color:#b45309">NPR ${due.toLocaleString()}</strong></div>` : ""}
+<div style="text-align:right;margin-top:8px">
+  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment method: ${payMethod}</p>
+  <span class="badge ${due <= 0 ? "paid" : "due"}">${due <= 0 ? "✅ Fully Paid" : `📒 Due: NPR ${due.toLocaleString()}`}</span>
+</div>
+<hr style="margin:12px 0;border:1px solid #e2e8f0">
+<p style="text-align:center;color:#64748b;font-size:12px">Rajesh Shopping Center · +977-9814401716 · Musikot-5, Gulmi</p>
+<button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
+</body></html>`;
+  const w = window.open("", "_blank", "width=500,height=640");
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 export function OwnerLoginModern({
   shopName,
   text,
@@ -406,6 +480,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
   runOwnerAction: (fn: () => Promise<void>, ok: string, fail: string) => Promise<void>;
 }) {
   const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
+  const [showCompletedBookings, setShowCompletedBookings] = useState(false);
 
   const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash" };
   const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string }>) =>
@@ -415,9 +490,18 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
     return <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet."}</p>;
   }
 
+  const isBookingDone = (b: any) => {
+    const s = String(b.status || "").toLowerCase();
+    return s === "completed" || s === "delivered" || s === "cancelled" || s === "rejected";
+  };
+  const orderedBookings = bookings.slice().reverse();
+  const activeBookings = orderedBookings.filter((b: any) => !isBookingDone(b));
+  const completedBookings = orderedBookings.filter(isBookingDone);
+  const visibleBookings = showCompletedBookings ? [...activeBookings, ...completedBookings] : activeBookings;
+
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-      {bookings.slice().reverse().map((booking: any) => {
+      {visibleBookings.map((booking: any) => {
         const bookingStatus = getOwnerBookingStatusMeta(booking.status, lang === "ne" ? "ne" : "en");
         const bookingLabel = booking.serviceType === "tractor" ? "Tractor" : booking.serviceType === "telcoline" ? "Tata Telcoline" : "Bolero";
         const form = getForm(booking.id);
@@ -543,10 +627,36 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction }: {
                   {lang === "ne" ? "रद्द" : "Reject"}
                 </button>
               ) : null}
+              <button
+                type="button"
+                onClick={() => printBookingSlip(booking, lang)}
+                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                title={lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}
+              >
+                🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}
+              </button>
             </div>
           </article>
         );
       })}
+      {activeBookings.length === 0 && !showCompletedBookings ? (
+        <p className="py-6 text-center text-sm text-slate-400">
+          {completedBookings.length > 0
+            ? (lang === "ne" ? "हाल कुनै सक्रिय बुकिङ छैन।" : "No active bookings right now.")
+            : (lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet.")}
+        </p>
+      ) : null}
+      {completedBookings.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowCompletedBookings((v) => !v)}
+          className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600"
+        >
+          {showCompletedBookings
+            ? (lang === "ne" ? `सम्पन्न लुकाउनुहोस् (${completedBookings.length})` : `Hide completed (${completedBookings.length})`)
+            : (lang === "ne" ? `सम्पन्न / रद्द हेर्नुहोस् (${completedBookings.length})` : `Show completed / cancelled (${completedBookings.length})`)}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -706,6 +816,9 @@ export function OwnerWorkspaceModern(props: any) {
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
   const [customerBillScan, setCustomerBillScan] = useState<BillScanState>(createBillScanState);
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null);
+  const [expandedRecentId, setExpandedRecentId] = useState<string | null>(null);
+  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
   const filteredCustomers = customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
     if (!query) return true;
@@ -991,23 +1104,82 @@ export function OwnerWorkspaceModern(props: any) {
             ) : null}
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.recentInvoices}</h3>
+              <p className="mt-1 text-xs text-slate-500">{lang === "ne" ? "विवरण हेर्न क्लिक गर्नुहोस्" : "Click an invoice to see full details"}</p>
               <div className="mt-4 grid gap-3">
-                {summary.recentInvoices.map((invoice: any) => (
-                  <div key={invoice.id} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-950">{invoice.invoiceNumber}</p>
-                        <p className="text-slate-500">{invoice.customerName}</p>
-                        <p className="text-slate-400">{formatNepalDateTime(invoice.createdAt, lang)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">{text.paid} {money(invoice.amountPaid)}</span>
-                        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{text.due} {money(invoice.dueAmount)}</span>
-                      </div>
-                      <span className="text-slate-500">{when(invoice.createdAt)}</span>
+                {summary.recentInvoices.map((invoice: any) => {
+                  const isOpen = expandedInvoiceId === invoice.id;
+                  const total = num(invoice.amountPaid) + num(invoice.dueAmount);
+                  return (
+                    <div key={invoice.id} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedInvoiceId(isOpen ? null : invoice.id)}
+                        className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-950">{invoice.invoiceNumber} {isOpen ? "▾" : "▸"}</p>
+                          <p className="text-slate-500">{invoice.customerName}</p>
+                          <p className="text-slate-400">{formatNepalDateTime(invoice.createdAt, lang)}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">{text.paid} {money(invoice.amountPaid)}</span>
+                          <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800">{text.due} {money(invoice.dueAmount)}</span>
+                        </div>
+                        <span className="text-slate-500">{when(invoice.createdAt)}</span>
+                      </button>
+                      {isOpen ? (
+                        <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-wider text-slate-500">{lang === "ne" ? "ग्राहक" : "Customer"}</p>
+                              <p className="font-semibold text-slate-950">{invoice.customerName}</p>
+                              {invoice.customerPhone ? <p className="text-slate-500">{invoice.customerPhone}</p> : null}
+                            </div>
+                            <div>
+                              <p className="text-xs uppercase tracking-wider text-slate-500">{lang === "ne" ? "भुक्तानी तरिका" : "Payment method"}</p>
+                              <p className="font-semibold text-slate-950">{invoice.paymentMethod || "—"}</p>
+                            </div>
+                          </div>
+                          {Array.isArray(invoice.items) && invoice.items.length > 0 ? (
+                            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                              <div className="grid grid-cols-[1.4fr_0.6fr_0.9fr_0.9fr] bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                                <span>{lang === "ne" ? "सामान" : "Item"}</span>
+                                <span>{lang === "ne" ? "परिमाण" : "Qty"}</span>
+                                <span>{lang === "ne" ? "दर" : "Rate"}</span>
+                                <span className="text-right">{lang === "ne" ? "रकम" : "Amount"}</span>
+                              </div>
+                              {invoice.items.map((item: any, idx: number) => (
+                                <div key={idx} className="grid grid-cols-[1.4fr_0.6fr_0.9fr_0.9fr] border-t border-slate-100 px-3 py-2 text-sm">
+                                  <span className="font-medium text-slate-900">{item.productName || item.name}</span>
+                                  <span>{item.quantity} {item.unit || ""}</span>
+                                  <span>{money(num(item.price))}</span>
+                                  <span className="text-right font-semibold">{money(num(item.price) * num(item.quantity))}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-xs text-slate-500">{lang === "ne" ? "जम्मा" : "Total"}</p>
+                              <p className="font-bold text-slate-950">{money(total)}</p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                              <p className="text-xs text-emerald-700">{lang === "ne" ? "उठेको" : "Paid"}</p>
+                              <p className="font-bold text-emerald-800">{money(num(invoice.amountPaid))}</p>
+                            </div>
+                            <div className="rounded-xl bg-amber-50 px-3 py-2">
+                              <p className="text-xs text-amber-700">{lang === "ne" ? "बाँकी" : "Due"}</p>
+                              <p className="font-bold text-amber-900">{money(num(invoice.dueAmount))}</p>
+                            </div>
+                          </div>
+                          {invoice.note ? (
+                            <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{invoice.note}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="rounded-[1.5rem] border border-amber-200 bg-white p-5 shadow-sm">
@@ -1021,37 +1193,81 @@ export function OwnerWorkspaceModern(props: any) {
                 {[...(orders || []).map((order: any) => ({ kind: "order", createdAt: order.createdAt, data: order })), ...(bookings || []).map((booking: any) => ({ kind: "booking", createdAt: booking.createdAt || booking.bookingDate, data: booking }))]
                   .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
                   .slice(0, 6)
-                  .map((entry: any) => (
-                    <div key={`${entry.kind}-${entry.data.id}`} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
-                      {entry.kind === "order" ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName}</p>
-                            <p className="text-slate-500">{lang === "ne" ? "सामान अर्डर" : "Product order"}</p>
-                            <p className="text-slate-400">{when(entry.data.createdAt)}</p>
+                  .map((entry: any) => {
+                    const key = `${entry.kind}-${entry.data.id}`;
+                    const isOpen = expandedRecentId === key;
+                    return (
+                      <div key={key} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRecentId(isOpen ? null : key)}
+                          className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                        >
+                          {entry.kind === "order" ? (
+                            <>
+                              <div>
+                                <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName} {isOpen ? "▾" : "▸"}</p>
+                                <p className="text-slate-500">{lang === "ne" ? "सामान अर्डर" : "Product order"}</p>
+                                <p className="text-slate-400">{when(entry.data.createdAt)}</p>
+                              </div>
+                              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">{money(num(entry.data.totalAmount))}</span>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName} {isOpen ? "▾" : "▸"}</p>
+                                <p className="text-slate-500">
+                                  {entry.data.serviceType === "tractor"
+                                    ? (lang === "ne" ? "ट्र्याक्टर बुकिङ" : "Tractor booking")
+                                    : entry.data.serviceType === "telcoline"
+                                      ? (lang === "ne" ? "टाटा टेल्कोलाइन बुकिङ" : "Tata Telcoline booking")
+                                      : (lang === "ne" ? "बोलेरो बुकिङ" : "Bolero booking")}
+                                </p>
+                                <p className="text-slate-400">{when(entry.data.createdAt || entry.data.bookingDate)}</p>
+                              </div>
+                              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">
+                                {entry.data.pickupLocation || (lang === "ne" ? "बुकिङ" : "Booking")}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                        {isOpen ? (
+                          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                            {entry.kind === "order" ? (
+                              <>
+                                <p className="text-slate-500">{entry.data.customerPhone}</p>
+                                <p className="text-slate-500">{entry.data.customerAddress}</p>
+                                {Array.isArray(entry.data.items) ? (
+                                  <div className="mt-2 space-y-1">
+                                    {entry.data.items.map((it: any, i: number) => (
+                                      <div key={i} className="flex justify-between border-t border-slate-100 pt-1">
+                                        <span>{it.productName} ({it.quantity} {it.unit || "pc"})</span>
+                                        <strong>{money(num(it.price) * num(it.quantity))}</strong>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); printOrderSlip(entry.data, lang); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setTab("orders"); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{lang === "ne" ? "अर्डर ट्याबमा →" : "Open in Orders →"}</button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-slate-500">{entry.data.customerPhone}</p>
+                                <p className="text-slate-500">{entry.data.pickupLocation} → {entry.data.destination}</p>
+                                {entry.data.notes ? <p className="mt-1 text-slate-600">{entry.data.notes}</p> : null}
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); printBookingSlip(entry.data, lang); }} className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">🖨️ {lang === "ne" ? "स्लिप प्रिन्ट" : "Print slip"}</button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setTab("orders"); }} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{lang === "ne" ? "बुकिङ ट्याबमा →" : "Open in Bookings →"}</button>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">{money(num(entry.data.totalAmount))}</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-950">#{entry.data.id} {entry.data.customerName}</p>
-                            <p className="text-slate-500">
-                              {entry.data.serviceType === "tractor"
-                                ? (lang === "ne" ? "ट्र्याक्टर बुकिङ" : "Tractor booking")
-                                : entry.data.serviceType === "telcoline"
-                                  ? (lang === "ne" ? "टाटा टेल्कोलाइन बुकिङ" : "Tata Telcoline booking")
-                                  : (lang === "ne" ? "बोलेरो बुकिङ" : "Bolero booking")}
-                            </p>
-                            <p className="text-slate-400">{when(entry.data.createdAt || entry.data.bookingDate)}</p>
-                          </div>
-                          <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-700">
-                            {entry.data.pickupLocation || (lang === "ne" ? "बुकिङ" : "Booking")}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        ) : null}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
 
@@ -1477,7 +1693,14 @@ export function OwnerWorkspaceModern(props: any) {
                   </span>
                 </div>
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-                {(orders || []).slice().reverse().map((order: any) => (
+                {(() => {
+                  const isCompleted = (o: any) => (o.status === "delivered" && o.paymentStatus === "paid") || o.status === "cancelled";
+                  const list = (orders || []).slice().reverse();
+                  const active = list.filter((o: any) => !isCompleted(o));
+                  const completed = list.filter(isCompleted);
+                  const visible = showCompletedOrders ? [...active, ...completed] : active;
+                  return <>
+                {visible.map((order: any) => (
                   <article key={order.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -1570,12 +1793,37 @@ export function OwnerWorkspaceModern(props: any) {
                           {lang === "ne" ? "रद्द" : "Cancel"}
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={() => printOrderSlip(order, lang)}
+                        className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                        title={lang === "ne" ? "बिल/स्लिप प्रिन्ट" : "Print invoice / slip"}
+                      >
+                        🖨️ {lang === "ne" ? "बिल प्रिन्ट" : "Print invoice"}
+                      </button>
                     </div>
                   </article>
                 ))}
-                {(orders || []).length === 0 && (
-                  <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै अर्डर छैन।" : "No product orders yet."}</p>
-                )}
+                {active.length === 0 && !showCompletedOrders ? (
+                  <p className="py-6 text-center text-sm text-slate-400">
+                    {completed.length > 0
+                      ? (lang === "ne" ? "हाल कुनै सक्रिय अर्डर छैन।" : "No active orders right now.")
+                      : (lang === "ne" ? "कुनै अर्डर छैन।" : "No product orders yet.")}
+                  </p>
+                ) : null}
+                {completed.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCompletedOrders((v) => !v)}
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600"
+                  >
+                    {showCompletedOrders
+                      ? (lang === "ne" ? `सम्पन्न लुकाउनुहोस् (${completed.length})` : `Hide completed (${completed.length})`)
+                      : (lang === "ne" ? `सम्पन्न / रद्द हेर्नुहोस् (${completed.length})` : `Show completed / cancelled (${completed.length})`)}
+                  </button>
+                ) : null}
+                  </>;
+                })()}
                 </div>
               </div>
 
