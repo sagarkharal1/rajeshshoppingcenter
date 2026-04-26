@@ -1121,6 +1121,40 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Booking not found" });
     }
 
+    // Sync customer credit balance from all their unpaid bookings
+    if (updated.customerPhone) {
+      const phone = updated.customerPhone.replace(/[^\d+]/g, "");
+      const allCustomers = await db.select().from(customersTable);
+      let customer = allCustomers.find((c: any) =>
+        c.phone && c.phone.replace(/[^\d+]/g, "") === phone
+      );
+
+      // Auto-create customer if not found
+      if (!customer) {
+        const [created] = await db.insert(customersTable).values({
+          name: updated.customerName,
+          phone: updated.customerPhone,
+          customerCode: null,
+        } as any).returning();
+        customer = created;
+      }
+
+      if (customer) {
+        // Recalculate total unpaid from all bookings for this customer
+        const allBookings = await db.select().from(bookingsTable)
+          .where(sql`lower(${bookingsTable.customerPhone}) = lower(${updated.customerPhone})`);
+        const totalDue = allBookings.reduce((sum, b) =>
+          sum + Math.max(0, Number(b.chargedAmount) - Number(b.amountPaid)), 0);
+        const totalSpent = allBookings.reduce((sum, b) => sum + Number(b.chargedAmount), 0);
+
+        await db.update(customersTable).set({
+          creditBalance: totalDue.toFixed(2),
+          totalSpent: totalSpent.toFixed(2),
+          updatedAt: new Date(),
+        } as any).where(eq(customersTable.id, customer.id));
+      }
+    }
+
     res.json({
       ...updated,
       chargedAmount: Number(updated.chargedAmount ?? 0),
@@ -1160,27 +1194,27 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
   } else {
     const refDate = date ? new Date(date) : new Date();
 
-    if (period === "yearly") {
+    if (period === "yearly" || period === "year") {
       startDate = new Date(refDate.getFullYear(), 0, 1);
       endDate = new Date(refDate.getFullYear() + 1, 0, 1);
-    } else if (period === "monthly") {
+    } else if (period === "monthly" || period === "month") {
       startDate = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
       endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1);
-    } else if (period === "weekly") {
+    } else if (period === "weekly" || period === "week") {
       const dayOfWeek = refDate.getDay();
       const diff = refDate.getDate() - dayOfWeek;
       startDate = new Date(refDate.setDate(diff));
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 7);
     } else {
-      // daily
+      // daily / day
       startDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
       endDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 1);
     }
   }
 
   try {
-    const { sql: sqlRaw } = await import("drizzle-orm");
+    const sqlRaw = sql;
 
     // Fetch orders
     let ordersData = [];
