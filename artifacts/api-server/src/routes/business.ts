@@ -229,70 +229,52 @@ router.get("/admin/customers", authMiddleware, async (_req, res) => {
       groupedLedger.set(entry.customerId, list);
     }
 
-    // Include transport booking customers who have unpaid/partial balances
+    // Auto-create real customer records for transport booking customers with unpaid balance
     const unpaidBookings = await db
       .select()
       .from(bookingsTable)
       .where(sql`${bookingsTable.paymentStatus} in ('unpaid', 'partial')`);
 
-    // Group unpaid bookings by phone number to deduplicate
-    const bookingCustomerMap = new Map<string, {
-      name: string; phone: string; bookings: typeof unpaidBookings;
-    }>();
+    const existingPhones = new Set(customers.map(c => c.phone?.trim()).filter(Boolean));
+    const existingNames = new Set(customers.map(c => c.name.toLowerCase().trim()));
+
+    // Group by phone, create real customer records for those not yet in the table
+    const bookingCustomerMap = new Map<string, { name: string; phone: string; bookings: typeof unpaidBookings }>();
     for (const b of unpaidBookings) {
       const key = b.customerPhone?.trim() || b.customerName;
       const existing = bookingCustomerMap.get(key);
-      if (existing) {
-        existing.bookings.push(b);
-      } else {
-        bookingCustomerMap.set(key, { name: b.customerName, phone: b.customerPhone || "", bookings: [b] });
+      if (existing) existing.bookings.push(b);
+      else bookingCustomerMap.set(key, { name: b.customerName, phone: b.customerPhone || "", bookings: [b] });
+    }
+
+    for (const tc of bookingCustomerMap.values()) {
+      if (existingPhones.has(tc.phone) || existingNames.has(tc.name.toLowerCase())) continue;
+      // Create a real customer record so payments/invoices work with a real integer ID
+      const [created] = await db.insert(customersTable).values({
+        name: tc.name,
+        phone: tc.phone || null,
+        customerCode: null,
+        creditBalance: String(tc.bookings.reduce((s, b) => s + Number(b.chargedAmount) - Number(b.amountPaid), 0)),
+        totalSpent: String(tc.bookings.reduce((s, b) => s + Number(b.chargedAmount), 0)),
+      } as any).returning();
+      if (created) {
+        customers.push(created);
+        existingPhones.add(tc.phone);
+        existingNames.add(tc.name.toLowerCase());
       }
     }
 
-    // Build virtual transport customers (only those NOT already in customers table)
-    const existingPhones = new Set(customers.map(c => c.phone?.trim()).filter(Boolean));
-    const transportCustomers = Array.from(bookingCustomerMap.values())
-      .filter(tc => !existingPhones.has(tc.phone))
-      .map((tc, idx) => {
-        const dueAmount = tc.bookings.reduce((sum, b) =>
-          sum + (Number(b.chargedAmount) - Number(b.amountPaid)), 0);
-        return {
-          id: `booking-${tc.phone || idx}`,
-          name: tc.name,
-          phone: tc.phone,
-          email: null,
-          address: null,
-          notes: null,
-          customerCode: null,
-          photoPath: null,
-          rewardPoints: 0,
-          creditBalance: dueAmount,
-          totalSpent: tc.bookings.reduce((sum, b) => sum + Number(b.chargedAmount), 0),
-          createdAt: tc.bookings[0]?.createdAt ?? new Date(),
-          updatedAt: tc.bookings[0]?.createdAt ?? new Date(),
-          isTransportOnly: true,
-          ledger: tc.bookings.map(b => ({
-            id: `bk-${b.id}`,
-            description: `${b.serviceType} booking #${b.id}: ${b.pickupLocation} → ${b.destination}`,
-            debitAmount: Number(b.chargedAmount),
-            creditAmount: Number(b.amountPaid),
-            balanceAfter: Number(b.chargedAmount) - Number(b.amountPaid),
-            createdAt: b.createdAt,
-          })),
-        };
-      });
+    // Re-fetch updated customers to get all including newly created
+    const allCustomers = await db.select().from(customersTable).orderBy(desc(customersTable.updatedAt));
 
-    const result = [
-      ...customers.map((customer) => ({
-        ...customer,
-        rewardPoints: Number(customer.rewardPoints),
-        creditBalance: asNumber(customer.creditBalance),
-        totalSpent: asNumber(customer.totalSpent),
-        isTransportOnly: false,
-        ledger: groupedLedger.get(customer.id) ?? [],
-      })),
-      ...transportCustomers,
-    ];
+    const result = allCustomers.map((customer) => ({
+      ...customer,
+      rewardPoints: Number(customer.rewardPoints ?? 0),
+      creditBalance: asNumber(customer.creditBalance),
+      totalSpent: asNumber(customer.totalSpent),
+      isTransportOnly: false,
+      ledger: groupedLedger.get(customer.id) ?? [],
+    }));
 
     res.json(result);
   } catch (err) {
