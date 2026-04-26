@@ -64,14 +64,14 @@ router.get("/", async (req: Request, res: Response) => {
         id: customersTable.id,
         name: customersTable.name,
         phone: customersTable.phone,
-        code: customersTable.code,
+        code: customersTable.customerCode,
       })
       .from(customersTable)
       .where(
         or(
           ilike(customersTable.name, searchPattern),
           ilike(customersTable.phone, searchPattern),
-          ilike(customersTable.code, searchPattern)
+          ilike(customersTable.customerCode, searchPattern)
         )
       )
       .limit(10);
