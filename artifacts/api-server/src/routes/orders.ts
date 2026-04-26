@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable } from "@workspace/db/schema";
+import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable, stockLedgerTable } from "@workspace/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
@@ -169,8 +169,16 @@ router.post("/orders", async (req, res) => {
         } as any)
         .returning();
 
-      // Reduce stock for each ordered item
+      // Reduce stock for each ordered item and create ledger entries
       for (const item of items) {
+        const [product] = await tx
+          .select({ stockQuantity: productsTable.stockQuantity })
+          .from(productsTable)
+          .where(eq(productsTable.id, item.productId));
+
+        const balanceBefore = product?.stockQuantity || 0;
+        const balanceAfter = Math.max(balanceBefore - item.quantity, 0);
+
         await tx
           .update(productsTable)
           .set({
@@ -178,6 +186,22 @@ router.post("/orders", async (req, res) => {
             inStock: sql`(${productsTable.stockQuantity} - ${item.quantity}) > 0`,
           })
           .where(eq(productsTable.id, item.productId));
+
+        await tx.insert(stockLedgerTable).values({
+          productId: item.productId,
+          transactionType: "order",
+          quantity: -item.quantity,
+          reason: `Sold via order #${order.id}`,
+          linkedEntityType: "order",
+          linkedEntityId: order.id,
+          balanceBefore,
+          balanceAfter,
+          metadata: {
+            productName: item.productName,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+          },
+        });
       }
 
       await tx.insert(customerLedgerTable).values({

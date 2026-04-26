@@ -10,8 +10,10 @@ import {
   customersTable,
   customerPaymentsTable,
   customerLedgerTable,
+  auditLogsTable,
+  stockLedgerTable,
 } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, desc } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -20,6 +22,16 @@ import { invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
 import { sendTelegramMessage } from "../utils/telegram-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
+import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
+import { seedTestData, clearTestData, getTestDataStatus } from "../lib/test-data-seeder.js";
+import {
+  createJsonBackup,
+  createSqlBackup,
+  listLocalBackups,
+  deleteLocalBackup,
+  getBackupStatus,
+  cleanupOldBackups,
+} from "../lib/backup.js";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -641,6 +653,109 @@ router.get("/admin/orders", authMiddleware, async (_req, res) => {
   }
 });
 
+// Get single order for editing
+router.get("/admin/orders/:id", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid order ID" });
+  }
+  try {
+    const [order] = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.id, id))
+      .limit(1);
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({
+      ...order,
+      totalAmount: Number(order.totalAmount || 0),
+    });
+  } catch (err) {
+    console.error("Failed to fetch order:", err);
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
+});
+
+// Update order details
+router.put("/admin/orders/:id", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid order ID" });
+  }
+
+  const { customerPhone, customerEmail, deliveryAddress, notes, paymentMethod, paymentStatus } = req.body;
+
+  try {
+    const updated = await db.transaction(async (tx) => {
+      const [order] = await tx
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, id))
+        .limit(1);
+
+      if (!order) {
+        throw new Error("Order not found");
+      }
+
+      const updates = {
+        customerPhone: customerPhone ?? order.customerPhone,
+        customerEmail: customerEmail ?? order.customerEmail,
+        customerAddress: deliveryAddress ?? order.customerAddress,
+        notes: notes ?? order.notes,
+        paymentMethod: paymentMethod ?? order.paymentMethod,
+        paymentStatus: paymentStatus ?? order.paymentStatus,
+      };
+
+      const [updatedOrder] = await tx
+        .update(ordersTable)
+        .set(updates)
+        .where(eq(ordersTable.id, id))
+        .returning();
+
+      await logAuditEntry(
+        tx,
+        createAuditEntry({
+          entityType: "order",
+          entityId: id,
+          action: "update",
+          oldValues: {
+            customerPhone: order.customerPhone,
+            customerEmail: order.customerEmail,
+            deliveryAddress: order.customerAddress,
+            notes: order.notes,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+          },
+          newValues: updates,
+          metadata: {
+            endpoint: "PUT /admin/orders/:id",
+            ip: (req as any).ip,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      );
+
+      return updatedOrder;
+    });
+
+    res.json({
+      ...updated,
+      totalAmount: Number(updated.totalAmount || 0),
+    });
+  } catch (err) {
+    const errMessage = (err as any)?.message || String(err);
+    console.error("Failed to update order:", err);
+    res.status(errMessage === "Order not found" ? 404 : 500).json({
+      error: "Failed to update order",
+      details: errMessage,
+    });
+  }
+});
+
 const ALLOWED_ORDER_STATUSES = ["order-received", "confirmed", "preparing", "dispatched", "delivered", "cancelled"] as const;
 const ALLOWED_PAYMENT_STATUSES = ["paid", "unpaid"] as const;
 
@@ -794,6 +909,119 @@ router.get("/admin/bookings", authMiddleware, async (_req, res) => {
   }
 });
 
+// Get single booking for editing
+router.get("/admin/bookings/:id", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid booking ID" });
+  }
+  try {
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, id))
+      .limit(1);
+
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    res.json(booking);
+  } catch (err) {
+    console.error("Failed to fetch booking:", err);
+    res.status(500).json({ error: "Failed to fetch booking" });
+  }
+});
+
+// Update booking details
+router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid booking ID" });
+  }
+
+  const {
+    customerPhone,
+    pickupLocation,
+    destination,
+    bookingDate,
+    notes,
+    serviceType,
+    chargedAmount,
+    amountPaid,
+    paymentMethod,
+  } = req.body;
+
+  try {
+    const updated = await db.transaction(async (tx) => {
+      const [booking] = await tx
+        .select()
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, id))
+        .limit(1);
+
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      const updates = {
+        customerPhone: customerPhone ?? booking.customerPhone,
+        pickupLocation: pickupLocation ?? booking.pickupLocation,
+        destination: destination ?? booking.destination,
+        bookingDate: bookingDate ? new Date(bookingDate) : booking.bookingDate,
+        notes: notes ?? booking.notes,
+        serviceType: serviceType ?? booking.serviceType,
+        chargedAmount: chargedAmount !== undefined ? chargedAmount : booking.chargedAmount,
+        amountPaid: amountPaid !== undefined ? amountPaid : booking.amountPaid,
+        paymentMethod: paymentMethod ?? booking.paymentMethod,
+      };
+
+      const [updatedBooking] = await tx
+        .update(bookingsTable)
+        .set(updates)
+        .where(eq(bookingsTable.id, id))
+        .returning();
+
+      await logAuditEntry(
+        tx,
+        createAuditEntry({
+          entityType: "booking",
+          entityId: id,
+          action: "update",
+          oldValues: {
+            customerPhone: booking.customerPhone,
+            pickupLocation: booking.pickupLocation,
+            destination: booking.destination,
+            bookingDate: booking.bookingDate,
+            notes: booking.notes,
+            serviceType: booking.serviceType,
+            chargedAmount: booking.chargedAmount,
+            amountPaid: booking.amountPaid,
+            paymentMethod: booking.paymentMethod,
+          },
+          newValues: updates,
+          metadata: {
+            endpoint: "PUT /admin/bookings/:id",
+            ip: (req as any).ip,
+            timestamp: new Date().toISOString(),
+          },
+        })
+      );
+
+      return updatedBooking;
+    });
+
+    res.json(updated);
+  } catch (err) {
+    const errMessage = (err as any)?.message || String(err);
+    console.error("Failed to update booking:", err);
+    res.status(errMessage === "Booking not found" ? 404 : 500).json({
+      error: "Failed to update booking",
+      details: errMessage,
+    });
+  }
+});
+
 router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
   const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit } = req.body ?? {};
@@ -906,82 +1134,188 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
 
 // ── Analytics: combined shop + transport totals for a date range ──────────────
 router.get("/admin/analytics", authMiddleware, async (req, res) => {
-  const { period = "day", date } = req.query as { period?: string; date?: string };
+  const {
+    period = "month",
+    date,
+    startDate: startDateParam,
+    endDate: endDateParam,
+    type = "all",
+  } = req.query as {
+    period?: string;
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    type?: string;
+  };
 
-  // Build date range based on period
-  const refDate = date ? new Date(date as string) : new Date();
   let startDate: Date;
   let endDate: Date;
 
-  if (period === "year") {
-    startDate = new Date(refDate.getFullYear(), 0, 1);
-    endDate = new Date(refDate.getFullYear() + 1, 0, 1);
-  } else if (period === "month") {
-    startDate = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
-    endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1);
+  // Build date range
+  if (startDateParam && endDateParam) {
+    // Custom date range provided
+    startDate = new Date(startDateParam);
+    endDate = new Date(endDateParam);
+    endDate.setDate(endDate.getDate() + 1); // Include end date
   } else {
-    // day
-    startDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
-    endDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 1);
+    const refDate = date ? new Date(date) : new Date();
+
+    if (period === "yearly") {
+      startDate = new Date(refDate.getFullYear(), 0, 1);
+      endDate = new Date(refDate.getFullYear() + 1, 0, 1);
+    } else if (period === "monthly") {
+      startDate = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+      endDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1);
+    } else if (period === "weekly") {
+      const dayOfWeek = refDate.getDay();
+      const diff = refDate.getDate() - dayOfWeek;
+      startDate = new Date(refDate.setDate(diff));
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 7);
+    } else {
+      // daily
+      startDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate());
+      endDate = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 1);
+    }
   }
 
   try {
     const { sql: sqlRaw } = await import("drizzle-orm");
 
-    // Shop invoices in range
-    const [shopStats] = await db
-      .select({
-        totalBilled: sqlRaw<string>`coalesce(sum(${invoicesTable.subtotalAmount}), 0)`,
-        totalCollected: sqlRaw<string>`coalesce(sum(${invoicesTable.amountPaid}), 0)`,
-        totalCredit: sqlRaw<string>`coalesce(sum(${invoicesTable.dueAmount}), 0)`,
-        invoiceCount: sqlRaw<number>`count(*)`,
-      })
-      .from(invoicesTable)
-      .where(sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate}`);
+    // Fetch orders
+    let ordersData = [];
+    if (type === "all" || type === "orders") {
+      ordersData = await db
+        .select({
+          id: ordersTable.id,
+          customerId: ordersTable.customerId,
+          totalAmount: ordersTable.totalAmount,
+          paymentStatus: ordersTable.paymentStatus,
+          paymentMethod: ordersTable.paymentMethod,
+          createdAt: ordersTable.createdAt,
+          customerName: customersTable.name,
+        })
+        .from(ordersTable)
+        .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
+        .where(
+          sqlRaw`${ordersTable.createdAt} >= ${startDate} AND ${ordersTable.createdAt} < ${endDate}`
+        );
+    }
 
-    // Transport bookings in range (confirmed or completed)
-    const [transportStats] = await db
-      .select({
-        totalBilled: sqlRaw<string>`coalesce(sum(charged_amount), 0)`,
-        totalCollected: sqlRaw<string>`coalesce(sum(amount_paid), 0)`,
-        totalCredit: sqlRaw<string>`coalesce(sum(charged_amount - amount_paid), 0)`,
-        bookingCount: sqlRaw<number>`count(*)`,
-      })
-      .from(bookingsTable)
-      .where(sqlRaw`created_at >= ${startDate} AND created_at < ${endDate} AND status NOT IN ('cancelled', 'pending') AND charged_amount > 0`);
+    // Fetch bookings
+    let bookingsData = [];
+    if (type === "all" || type === "bookings") {
+      bookingsData = await db
+        .select({
+          id: bookingsTable.id,
+          customerId: bookingsTable.customerId,
+          chargedAmount: bookingsTable.chargedAmount,
+          paymentStatus: bookingsTable.paymentStatus,
+          paymentMethod: bookingsTable.paymentMethod,
+          createdAt: bookingsTable.createdAt,
+          customerName: customersTable.name,
+        })
+        .from(bookingsTable)
+        .leftJoin(customersTable, eq(bookingsTable.customerId, customersTable.id))
+        .where(
+          sqlRaw`${bookingsTable.createdAt} >= ${startDate} AND ${bookingsTable.createdAt} < ${endDate}`
+        );
+    }
 
-    const shopBilled = Number(shopStats?.totalBilled ?? 0);
-    const shopCollected = Number(shopStats?.totalCollected ?? 0);
-    const shopCredit = Number(shopStats?.totalCredit ?? 0);
-    const transportBilled = Number(transportStats?.totalBilled ?? 0);
-    const transportCollected = Number(transportStats?.totalCollected ?? 0);
-    const transportCredit = Number(transportStats?.totalCredit ?? 0);
+    // Fetch payments
+    let paymentsData = [];
+    if (type === "all" || type === "payments") {
+      paymentsData = await db
+        .select({
+          id: customerPaymentsTable.id,
+          customerId: customerPaymentsTable.customerId,
+          amount: customerPaymentsTable.amount,
+          paymentDate: customerPaymentsTable.paymentDate,
+          paymentMethod: customerPaymentsTable.paymentMethod,
+          customerName: customersTable.name,
+        })
+        .from(customerPaymentsTable)
+        .leftJoin(customersTable, eq(customerPaymentsTable.customerId, customersTable.id))
+        .where(
+          sqlRaw`${customerPaymentsTable.paymentDate} >= ${startDate} AND ${customerPaymentsTable.paymentDate} < ${endDate}`
+        );
+    }
+
+    // Format transactions
+    const transactions = [
+      ...ordersData.map((order: any) => ({
+        type: "order",
+        id: order.id,
+        customerId: order.customerId,
+        customerName: order.customerName || "Unknown",
+        date: order.createdAt,
+        amount: Number(order.totalAmount || 0),
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+      })),
+      ...bookingsData.map((booking: any) => ({
+        type: "booking",
+        id: booking.id,
+        customerId: booking.customerId,
+        customerName: booking.customerName || "Unknown",
+        date: booking.createdAt,
+        amount: Number(booking.chargedAmount || 0),
+        paymentMethod: booking.paymentMethod,
+        paymentStatus: booking.paymentStatus,
+      })),
+      ...paymentsData.map((payment: any) => ({
+        type: "payment",
+        id: payment.id,
+        customerId: payment.customerId,
+        customerName: payment.customerName || "Unknown",
+        date: payment.paymentDate,
+        amount: Number(payment.amount || 0),
+        paymentMethod: payment.paymentMethod,
+        paymentStatus: "paid",
+      })),
+    ].sort(
+      (a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    // Calculate summary
+    const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalOrders = ordersData.length;
+    const totalOrderAmount = ordersData.reduce(
+      (sum: number, o: any) => sum + Number(o.totalAmount || 0),
+      0
+    );
+    const totalBookings = bookingsData.length;
+    const totalBookingAmount = bookingsData.reduce(
+      (sum: number, b: any) => sum + Number(b.chargedAmount || 0),
+      0
+    );
+    const totalPaymentsMade = paymentsData.reduce(
+      (sum: number, p: any) => sum + Number(p.amount || 0),
+      0
+    );
 
     res.json({
       period,
+      type,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      shop: {
-        totalBilled: shopBilled,
-        totalCollected: shopCollected,
-        totalCredit: shopCredit,
-        invoiceCount: Number(shopStats?.invoiceCount ?? 0),
-      },
-      transport: {
-        totalBilled: transportBilled,
-        totalCollected: transportCollected,
-        totalCredit: transportCredit,
-        bookingCount: Number(transportStats?.bookingCount ?? 0),
-      },
-      combined: {
-        totalBilled: shopBilled + transportBilled,
-        totalCollected: shopCollected + transportCollected,
-        totalCredit: shopCredit + transportCredit,
+      transactions,
+      summary: {
+        totalAmount,
+        totalOrders,
+        totalOrderAmount,
+        totalBookings,
+        totalBookingAmount,
+        totalPaymentsMade,
       },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to load analytics" });
+    console.error("Analytics error:", err);
+    res.status(500).json({
+      error: "Failed to load analytics",
+      details: (err as any)?.message || String(err),
+    });
   }
 });
 
@@ -1003,6 +1337,268 @@ router.put("/admin/settings", authMiddleware, async (req, res) => {
     res.json(created);
   } catch {
     res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
+// Get audit logs
+router.get("/admin/audit-logs", authMiddleware, async (req, res) => {
+  try {
+    const { entityType, entityId, limit = 50, offset = 0 } = req.query;
+    const conditions: any[] = [];
+
+    if (entityType) {
+      conditions.push(eq(auditLogsTable.entityType, String(entityType)));
+    }
+    if (entityId) {
+      conditions.push(eq(auditLogsTable.entityId, Number(entityId)));
+    }
+
+    const logs = await db
+      .select()
+      .from(auditLogsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogsTable.createdAt))
+      .limit(Number(limit))
+      .offset(Number(offset));
+
+    res.json(logs);
+  } catch (err) {
+    console.error("Failed to fetch audit logs:", err);
+    res.status(500).json({ error: "Failed to fetch audit logs" });
+  }
+});
+
+router.put("/products/:id/adjust-stock", async (req, res) => {
+  try {
+    const productId = Number(req.params.id);
+    const { quantity, reason } = req.body;
+
+    if (isNaN(productId) || productId <= 0) {
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
+
+    if (!Number.isInteger(quantity) || quantity === 0) {
+      return res.status(400).json({ error: "Quantity must be a non-zero integer" });
+    }
+
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      return res.status(400).json({ error: "Reason is required" });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [product] = await tx
+        .select({ stockQuantity: productsTable.stockQuantity })
+        .from(productsTable)
+        .where(eq(productsTable.id, productId));
+
+      if (!product) {
+        throw new Error("Product not found");
+      }
+
+      const balanceBefore = product.stockQuantity || 0;
+      const balanceAfter = Math.max(balanceBefore + quantity, 0);
+      const adjustedQuantity = balanceAfter - balanceBefore;
+
+      await tx
+        .update(productsTable)
+        .set({
+          stockQuantity: balanceAfter,
+          inStock: balanceAfter > 0,
+        })
+        .where(eq(productsTable.id, productId));
+
+      await tx.insert(stockLedgerTable).values({
+        productId,
+        transactionType: "adjustment",
+        quantity: adjustedQuantity,
+        reason: reason.trim(),
+        balanceBefore,
+        balanceAfter,
+        metadata: {
+          adjustmentType: quantity > 0 ? "restock" : "loss",
+          requestedQuantity: quantity,
+        },
+      });
+
+      return { productId, balanceBefore, balanceAfter };
+    });
+
+    res.json({
+      success: true,
+      productId: result.productId,
+      balanceBefore: result.balanceBefore,
+      balanceAfter: result.balanceAfter,
+      message: "Stock adjusted successfully",
+    });
+  } catch (err) {
+    console.error("Stock adjustment error:", err);
+    res.status(500).json({
+      error: "Failed to adjust stock",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.post("/admin/test-data/seed", async (req, res) => {
+  try {
+    const { customerCount, orderCount, bookingCount, daysBack } = req.query;
+
+    const options: any = {};
+    if (customerCount) options.customerCount = Number(customerCount);
+    if (orderCount) options.orderCount = Number(orderCount);
+    if (bookingCount) options.bookingCount = Number(bookingCount);
+    if (daysBack) options.daysBack = Number(daysBack);
+
+    const created = await seedTestData(options);
+
+    res.json({
+      success: true,
+      message: "Test data created successfully",
+      created,
+    });
+  } catch (err) {
+    console.error("Test data seeding error:", err);
+    res.status(500).json({
+      error: "Failed to seed test data",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.delete("/admin/test-data/clear", async (req, res) => {
+  try {
+    const cleared = await clearTestData();
+
+    res.json({
+      success: true,
+      message: "Test data cleared successfully",
+      cleared,
+    });
+  } catch (err) {
+    console.error("Clear test data error:", err);
+    res.status(500).json({
+      error: "Failed to clear test data",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.get("/admin/test-data/status", async (req, res) => {
+  try {
+    const status = await getTestDataStatus();
+
+    res.json({
+      success: true,
+      testData: status,
+    });
+  } catch (err) {
+    console.error("Get test data status error:", err);
+    res.status(500).json({
+      error: "Failed to get test data status",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.post("/admin/backup/create", async (req, res) => {
+  try {
+    const { format } = req.query;
+    const backupFormat = format === "sql" ? "sql" : "json";
+
+    let metadata;
+    if (backupFormat === "sql") {
+      metadata = await createSqlBackup();
+    } else {
+      metadata = await createJsonBackup();
+    }
+
+    res.json({
+      success: true,
+      message: `${backupFormat.toUpperCase()} backup created successfully`,
+      backup: metadata,
+    });
+  } catch (err) {
+    console.error("Backup creation error:", err);
+    res.status(500).json({
+      error: "Failed to create backup",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.get("/admin/backup/list", async (req, res) => {
+  try {
+    const backups = await listLocalBackups();
+
+    res.json({
+      success: true,
+      backups,
+      total: backups.length,
+    });
+  } catch (err) {
+    console.error("List backups error:", err);
+    res.status(500).json({
+      error: "Failed to list backups",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.get("/admin/backup/status", async (req, res) => {
+  try {
+    const status = await getBackupStatus();
+
+    res.json({
+      success: true,
+      status,
+    });
+  } catch (err) {
+    console.error("Get backup status error:", err);
+    res.status(500).json({
+      error: "Failed to get backup status",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.delete("/admin/backup/:filename", async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    await deleteLocalBackup(filename);
+
+    res.json({
+      success: true,
+      message: "Backup deleted successfully",
+      deleted: filename,
+    });
+  } catch (err) {
+    console.error("Delete backup error:", err);
+    res.status(500).json({
+      error: "Failed to delete backup",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.post("/admin/backup/cleanup", async (req, res) => {
+  try {
+    const { keepCount } = req.query;
+    const count = keepCount ? Number(keepCount) : 30;
+
+    const deleted = await cleanupOldBackups(count);
+
+    res.json({
+      success: true,
+      message: `Cleanup completed. Deleted ${deleted} old backup(s). Keeping last ${count} backups.`,
+      deleted,
+    });
+  } catch (err) {
+    console.error("Backup cleanup error:", err);
+    res.status(500).json({
+      error: "Failed to cleanup backups",
+      details: (err as any)?.message || String(err),
+    });
   }
 });
 

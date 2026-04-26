@@ -29,6 +29,7 @@ export const ordersTable = pgTable("orders", {
 
 export const bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
+  customerId: integer("customer_id"),
   serviceType: text("service_type").notNull(), // jeep | tractor
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
