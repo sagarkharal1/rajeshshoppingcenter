@@ -86,6 +86,40 @@ router.get("/", async (req: Request, res: Response) => {
       }))
     );
 
+    // Also search transport booking customers by name/phone
+    const bookingCustomers = await db
+      .select({
+        id: bookingsTable.id,
+        customerName: bookingsTable.customerName,
+        customerPhone: bookingsTable.customerPhone,
+        serviceType: bookingsTable.serviceType,
+        paymentStatus: bookingsTable.paymentStatus,
+      })
+      .from(bookingsTable)
+      .where(
+        or(
+          ilike(bookingsTable.customerName, searchPattern),
+          ilike(bookingsTable.customerPhone, searchPattern)
+        )
+      )
+      .limit(10);
+
+    // Deduplicate by phone, only show customers not already in results
+    const existingNames = new Set(results.map(r => r.label.toLowerCase()));
+    const seenPhones = new Set<string>();
+    for (const b of bookingCustomers) {
+      const phone = b.customerPhone || "";
+      if (seenPhones.has(phone) || existingNames.has(b.customerName.toLowerCase())) continue;
+      seenPhones.add(phone);
+      results.push({
+        type: "customer" as const,
+        id: `booking-${phone || b.id}`,
+        label: b.customerName,
+        preview: phone,
+        category: "Transport Customer",
+      });
+    }
+
     // Search orders
     const orders = await db
       .select({
