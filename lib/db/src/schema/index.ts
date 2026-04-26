@@ -4,3 +4,4 @@ export * from "./settings";
 export * from "./business";
 export * from "./audit";
 export * from "./stock";
+export * from "./telegram";

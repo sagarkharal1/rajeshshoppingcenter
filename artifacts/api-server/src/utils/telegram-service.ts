@@ -1,3 +1,7 @@
+import { db } from "@workspace/db";
+import { telegramQueueTable } from "@workspace/db/schema";
+import { eq, and, lt } from "drizzle-orm";
+
 function firstNonEmpty(...values: Array<string | undefined>): string {
   for (const value of values) {
     const trimmed = value?.trim();
@@ -27,44 +31,29 @@ function getTelegramChatIds(): string[] {
     .join(",");
 
   const sanitizeChatId = (value: string) =>
-    value
-      .trim()
-      .replace(/^[[\]"']+/, "")
-      .replace(/[[\]"']+$/, "");
+    value.trim().replace(/^[[\]"']+/, "").replace(/[[\]"']+$/, "");
 
   return Array.from(
     new Set(
-      combined
-        .split(/[\s,;]+/g)
-        .map(sanitizeChatId)
-        .filter(Boolean),
+      combined.split(/[\s,;]+/g).map(sanitizeChatId).filter(Boolean),
     ),
   );
 }
 
 function escapeTelegramHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function formatTelegramDate(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+    day: "numeric", month: "long", year: "numeric",
     timeZone: "Asia/Kathmandu",
   });
 }
 
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -74,140 +63,126 @@ async function fetchWithTimeout(
   }
 }
 
-// Keeps retrying in the background until Telegram confirms success
-async function sendWithPersistentRetry(
-  endpoint: string,
-  htmlMessage: string,
-  plainTextMessage: string,
-  telegramChatId: string,
-): Promise<void> {
-  const TIMEOUT_MS = 10_000;
-  const RETRY_DELAY_MS = 30_000; // 30 seconds between retries
-  const MAX_ATTEMPTS = 240; // keep trying for up to 2 hours
+async function trySendNow(chatId: string, message: string): Promise<boolean> {
+  const token = getTelegramBotToken();
+  if (!token) return false;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const response = await fetchWithTimeout(
-        endpoint,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: telegramChatId,
-            text: htmlMessage,
-            parse_mode: "HTML",
-            disable_web_page_preview: true,
-          }),
-        },
-        TIMEOUT_MS,
-      );
+  const endpoint = `https://api.telegram.org/bot${token}/sendMessage`;
+  const plainText = message.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[^>]+>/g, "");
 
-      if (response.ok) {
-        console.info(
-          `[Telegram] Notification sent successfully on attempt ${attempt}.`,
-          telegramChatId,
-        );
-        return;
-      }
+  try {
+    const res = await fetchWithTimeout(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "HTML", disable_web_page_preview: true }),
+    }, 10_000);
 
-      const fallback = await fetchWithTimeout(
-        endpoint,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: telegramChatId,
-            text: plainTextMessage,
-            disable_web_page_preview: true,
-          }),
-        },
-        TIMEOUT_MS,
-      );
+    if (res.ok) return true;
 
-      if (fallback.ok) {
-        console.info(
-          `[Telegram] Plain text notification sent on attempt ${attempt}.`,
-          telegramChatId,
-        );
-        return;
-      }
+    // Fallback to plain text
+    const fallback = await fetchWithTimeout(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: plainText, disable_web_page_preview: true }),
+    }, 10_000);
 
-      console.warn(
-        `[Telegram] Attempt ${attempt}/${MAX_ATTEMPTS} failed with status ${response.status}. Retrying in 30s...`,
-        telegramChatId,
-      );
-    } catch (error) {
-      console.warn(
-        `[Telegram] Attempt ${attempt}/${MAX_ATTEMPTS} failed (network error). Retrying in 30s...`,
-        telegramChatId,
-        error,
-      );
-    }
-
-    if (attempt < MAX_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-    }
+    return fallback.ok;
+  } catch {
+    return false;
   }
-
-  console.error(
-    `[Telegram] Gave up after ${MAX_ATTEMPTS} attempts (2 hours).`,
-    telegramChatId,
-  );
 }
 
+// Enqueue message to DB then attempt immediately in background
 export function sendTelegramMessage(message: string): void {
-  const telegramBotToken = getTelegramBotToken();
-  const telegramChatIds = getTelegramChatIds();
+  const chatIds = getTelegramChatIds();
+  const token = getTelegramBotToken();
 
-  if (!telegramBotToken || !telegramChatIds.length) {
+  if (!token || !chatIds.length) {
     console.warn("[Telegram] Missing bot token or chat ID env var.");
     return;
   }
 
-  const endpoint = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
-  const plainTextMessage = message
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/?[^>]+>/g, "");
-
   const maxChunkSize = 3500;
-  const htmlChunks: string[] = [];
-  const plainChunks: string[] = [];
+  const chunks = message.length <= maxChunkSize
+    ? [message]
+    : Array.from({ length: Math.ceil(message.length / maxChunkSize) }, (_, i) =>
+        message.slice(i * maxChunkSize, (i + 1) * maxChunkSize));
 
-  if (message.length <= maxChunkSize) {
-    htmlChunks.push(message);
-  } else {
-    for (let i = 0; i < message.length; i += maxChunkSize) {
-      htmlChunks.push(message.slice(i, i + maxChunkSize));
+  for (const chatId of chatIds) {
+    for (const chunk of chunks) {
+      // Save to DB first (survives server restarts), then try immediately
+      db.insert(telegramQueueTable)
+        .values({ message: chunk, chatId, status: "pending" })
+        .returning({ id: telegramQueueTable.id })
+        .then(async ([row]) => {
+          if (!row) return;
+          const sent = await trySendNow(chatId, chunk);
+          if (sent) {
+            await db.update(telegramQueueTable)
+              .set({ status: "sent", sentAt: new Date(), attempts: 1, lastAttemptedAt: new Date() })
+              .where(eq(telegramQueueTable.id, row.id));
+            console.info(`[Telegram] Sent immediately (queue #${row.id})`);
+          } else {
+            await db.update(telegramQueueTable)
+              .set({ attempts: 1, lastAttemptedAt: new Date() })
+              .where(eq(telegramQueueTable.id, row.id));
+            console.warn(`[Telegram] First attempt failed, queued for retry (queue #${row.id})`);
+          }
+        })
+        .catch((err) => {
+          // If DB save fails, fall back to in-memory retry
+          console.error("[Telegram] Failed to queue message, trying directly:", err);
+          trySendNow(chatId, chunk).catch(() => {});
+        });
+    }
+  }
+}
+
+// Background worker — call once on server startup
+export function startTelegramQueueWorker(): void {
+  const INTERVAL_MS = 30_000; // check every 30 seconds
+  const MAX_ATTEMPTS = 240;   // give up after 2 hours
+
+  async function processPending() {
+    try {
+      const pending = await db
+        .select()
+        .from(telegramQueueTable)
+        .where(
+          and(
+            eq(telegramQueueTable.status, "pending"),
+            lt(telegramQueueTable.attempts, MAX_ATTEMPTS),
+          )
+        )
+        .limit(20);
+
+      for (const item of pending) {
+        const sent = await trySendNow(item.chatId, item.message);
+        const newAttempts = item.attempts + 1;
+
+        if (sent) {
+          await db.update(telegramQueueTable)
+            .set({ status: "sent", sentAt: new Date(), attempts: newAttempts, lastAttemptedAt: new Date() })
+            .where(eq(telegramQueueTable.id, item.id));
+          console.info(`[Telegram] Queue #${item.id} sent on attempt ${newAttempts}`);
+        } else if (newAttempts >= MAX_ATTEMPTS) {
+          await db.update(telegramQueueTable)
+            .set({ status: "failed", attempts: newAttempts, lastAttemptedAt: new Date() })
+            .where(eq(telegramQueueTable.id, item.id));
+          console.error(`[Telegram] Queue #${item.id} permanently failed after ${newAttempts} attempts`);
+        } else {
+          await db.update(telegramQueueTable)
+            .set({ attempts: newAttempts, lastAttemptedAt: new Date() })
+            .where(eq(telegramQueueTable.id, item.id));
+        }
+      }
+    } catch (err) {
+      console.error("[Telegram] Queue worker error:", err);
     }
   }
 
-  if (plainTextMessage.length <= maxChunkSize) {
-    plainChunks.push(plainTextMessage);
-  } else {
-    for (let i = 0; i < plainTextMessage.length; i += maxChunkSize) {
-      plainChunks.push(plainTextMessage.slice(i, i + maxChunkSize));
-    }
-  }
-
-  // Fire and forget; runs in background, never blocks order response
-  for (const telegramChatId of telegramChatIds) {
-    const chunkCount = Math.max(htmlChunks.length, plainChunks.length);
-
-    for (let idx = 0; idx < chunkCount; idx++) {
-      const htmlChunk = htmlChunks[idx] ?? plainChunks[idx] ?? "";
-      const plainChunk = plainChunks[idx] ?? htmlChunks[idx] ?? "";
-      if (!htmlChunk && !plainChunk) continue;
-
-      sendWithPersistentRetry(
-        endpoint,
-        htmlChunk,
-        plainChunk,
-        telegramChatId,
-      ).catch((error) => {
-        console.error("[Telegram] Unexpected error in retry loop:", error);
-      });
-    }
-  }
+  setInterval(processPending, INTERVAL_MS);
+  console.info("[Telegram] Queue worker started (checks every 30s)");
 }
 
 export function formatTelegramOrderMessage(order: {
@@ -228,31 +203,20 @@ export function formatTelegramOrderMessage(order: {
     `Customer: ${escapeTelegramHtml(order.customerName)}`,
     `Phone: ${escapeTelegramHtml(order.customerPhone)}`,
   ];
-
-  if (order.customerEmail) {
-    lines.push(`Email: ${escapeTelegramHtml(order.customerEmail)}`);
-  }
-
+  if (order.customerEmail) lines.push(`Email: ${escapeTelegramHtml(order.customerEmail)}`);
   lines.push(`Address: ${escapeTelegramHtml(order.customerAddress)}`);
   lines.push(`Payment: ${escapeTelegramHtml(order.paymentMethod || "bank")}`);
   lines.push(`Payment status: ${escapeTelegramHtml(order.paymentStatus || "unpaid")}`);
   lines.push(`Total: NPR ${Math.round(order.totalAmount)}`);
   lines.push("");
   lines.push("<b>Items</b>");
-
   for (const item of order.items) {
-    lines.push(
-      `- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(
-        item.price * item.quantity,
-      )}`,
-    );
+    lines.push(`- ${escapeTelegramHtml(item.productName)} x${item.quantity} ${escapeTelegramHtml(item.unit || "pc")} = NPR ${Math.round(item.price * item.quantity)}`);
   }
-
   if (order.notes) {
     lines.push("");
     lines.push(`<b>Note</b>: ${escapeTelegramHtml(order.notes)}`);
   }
-
   return lines.join("\n");
 }
 
@@ -267,11 +231,9 @@ export function formatTelegramBookingMessage(booking: {
   notes?: string | null;
 }): string {
   const serviceLabel =
-    booking.serviceType === "jeep"
-      ? "Bolero / Jeep"
-      : booking.serviceType === "telcoline"
-        ? "Tata Telcoline"
-        : "Tractor";
+    booking.serviceType === "jeep" ? "Bolero / Jeep"
+    : booking.serviceType === "telcoline" ? "Tata Telcoline"
+    : "Tractor";
 
   const lines = [
     "<b>New Transport Booking</b>",
@@ -283,10 +245,6 @@ export function formatTelegramBookingMessage(booking: {
     `Destination: ${escapeTelegramHtml(booking.destination)}`,
     `Date: ${escapeTelegramHtml(formatTelegramDate(booking.bookingDate))}`,
   ];
-
-  if (booking.notes) {
-    lines.push(`Notes: ${escapeTelegramHtml(booking.notes)}`);
-  }
-
+  if (booking.notes) lines.push(`Notes: ${escapeTelegramHtml(booking.notes)}`);
   return lines.join("\n");
 }

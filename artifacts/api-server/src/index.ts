@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureBootstrapData } from "./lib/bootstrap";
+import { startTelegramQueueWorker } from "./utils/telegram-service.js";
 
 const rawPort = process.env["PORT"];
 
@@ -31,6 +32,7 @@ void ensureBootstrapData()
       }
 
       logger.info({ port }, "Server listening");
+      startTelegramQueueWorker();
     });
   })
   .catch((err) => {
