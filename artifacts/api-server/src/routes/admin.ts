@@ -1230,14 +1230,14 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
           id: customerPaymentsTable.id,
           customerId: customerPaymentsTable.customerId,
           amount: customerPaymentsTable.amount,
-          paymentDate: customerPaymentsTable.paymentDate,
+          paymentDate: customerPaymentsTable.createdAt,
           paymentMethod: customerPaymentsTable.paymentMethod,
           customerName: customersTable.name,
         })
         .from(customerPaymentsTable)
         .leftJoin(customersTable, eq(customerPaymentsTable.customerId, customersTable.id))
         .where(
-          sqlRaw`${customerPaymentsTable.paymentDate} >= ${startDate} AND ${customerPaymentsTable.paymentDate} < ${endDate}`
+          sqlRaw`${customerPaymentsTable.createdAt} >= ${startDate} AND ${customerPaymentsTable.createdAt} < ${endDate}`
         );
     }
 
