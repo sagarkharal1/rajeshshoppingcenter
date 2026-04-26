@@ -128,30 +128,48 @@ export function GlobalSearch({ onResultClick, lang = "en" }: GlobalSearchProps) 
     setResults([]);
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedIndex >= 0 && results[selectedIndex]) {
+      handleSelectResult(results[selectedIndex]);
+    } else if (query.length >= 2) {
+      performSearch(query);
+      setIsOpen(true);
+    }
+  };
+
   return (
     <div className="relative">
       {/* Search input */}
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          type="text"
-          placeholder={labels[lang].placeholder}
-          value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
-          onFocus={() => {
-            if (query.length >= 2) setIsOpen(true);
-          }}
-          onBlur={() => {
-            setTimeout(() => setIsOpen(false), 200);
-          }}
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        />
-        {isLoading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-          </div>
-        )}
-      </div>
+      <form onSubmit={handleSubmit} className="relative flex gap-2">
+        <div className="relative flex-1">
+          <Input
+            ref={inputRef}
+            type="text"
+            placeholder={labels[lang].placeholder}
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            onFocus={() => {
+              if (query.length >= 2) setIsOpen(true);
+            }}
+            onBlur={() => {
+              setTimeout(() => setIsOpen(false), 200);
+            }}
+            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          {isLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+            </div>
+          )}
+        </div>
+        <button
+          type="submit"
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+        >
+          {lang === "ne" ? "खोज्नुहोस्" : "Search"}
+        </button>
+      </form>
 
       {/* Results dropdown */}
       <AnimatePresence>
