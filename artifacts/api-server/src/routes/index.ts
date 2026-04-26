@@ -6,6 +6,8 @@ import settingsRouter from "./settings";
 import adminRouter from "./admin";
 import storageRouter from "./storage";
 import businessRouter from "./business";
+import searchRouter from "./search";
+import customersRouter from "./customers";
 
 const router = Router();
 
@@ -16,5 +18,7 @@ router.use(settingsRouter);
 router.use(adminRouter);
 router.use(businessRouter);
 router.use(storageRouter);
+router.use("/search", searchRouter);
+router.use("/customers", customersRouter);
 
 export default router;

@@ -3,6 +3,15 @@ import { useEffect, useRef } from "react";
 import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
 import { FlashNotice } from "@/components/flash-notice";
 import { scanBillImage } from "@/lib/bill-ocr";
+import { GlobalSearch } from "@/components/global-search";
+import { CustomerDetailModal } from "@/components/customer-detail-modal";
+import { TransactionHistory } from "@/components/transaction-history";
+import { EditOrderModal } from "@/components/edit-order-modal";
+import { EditBookingModal } from "@/components/edit-booking-modal";
+import { StockTracker } from "@/components/stock-tracker";
+import { PaymentDashboard } from "@/components/payment-dashboard";
+import { CreditManager } from "@/components/credit-manager";
+import { BusinessSummary } from "@/components/business-summary";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
@@ -483,12 +492,13 @@ export function OwnerLoginModern({
 }
 
 // ── BookingList: booking cards with per-booking payment form ─────────────────
-function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shopInfo }: {
+function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shopInfo, onEditBooking }: {
   bookings: any[];
   lang: string;
   updateBookingStatus: (id: number, status: string, payment?: any) => Promise<void>;
   runOwnerAction: (fn: () => Promise<void>, ok: string, fail: string) => Promise<void>;
   shopInfo: ShopInfo;
+  onEditBooking?: (id: number) => void;
 }) {
   const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
   const [showCompletedBookings, setShowCompletedBookings] = useState(false);
@@ -639,6 +649,15 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                   title={lang === "ne" ? "ग्राहकले पैसा पठाएन — उनको उधारो खातामा राख्नुहोस्" : "Customer didn't pay — add to their credit"}
                 >
                   📒 {lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit"}
+                </button>
+              ) : null}
+              {onEditBooking ? (
+                <button
+                  type="button"
+                  onClick={() => onEditBooking(booking.id)}
+                  className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700"
+                >
+                  {lang === "ne" ? "सम्पादन" : "Edit"}
                 </button>
               ) : null}
               {isActive ? (
@@ -814,6 +833,15 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : null}
+
+      {/* Business Summary */}
+      <BusinessSummary lang={lang as "en" | "ne"} />
+
+      {/* Payment Methods Breakdown */}
+      <PaymentDashboard lang={lang as "en" | "ne"} />
+
+      {/* Transaction History */}
+      <TransactionHistory lang={lang as "en" | "ne"} />
     </section>
   );
 }
@@ -846,6 +874,9 @@ export function OwnerWorkspaceModern(props: any) {
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null);
   const [expandedRecentId, setExpandedRecentId] = useState<string | null>(null);
   const [showCompletedOrders, setShowCompletedOrders] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
   const filteredCustomers = customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
     if (!query) return true;
@@ -956,6 +987,28 @@ export function OwnerWorkspaceModern(props: any) {
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-800">{text.ownerWorkspace}</p>
               <h1 className="truncate text-2xl font-bold text-slate-950">{shopName}</h1>
               <p className="truncate text-xs text-slate-500">{shopAddress}</p>
+            </div>
+          </div>
+          <div className="hidden md:flex flex-1 px-4">
+            <div className="w-full max-w-sm">
+              <GlobalSearch
+                lang={lang as "en" | "ne"}
+                onResultClick={(result: any) => {
+                  if (result.type === "product") {
+                    setTab("products");
+                    setProductSearch(result.label);
+                  } else if (result.type === "customer") {
+                    setTab("customers");
+                    setCustomerSearch(result.label);
+                  } else if (result.type === "order") {
+                    setTab("orders");
+                  } else if (result.type === "booking") {
+                    setTab("orders");
+                  } else if (result.type === "invoice") {
+                    setTab("billing");
+                  }
+                }}
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1842,6 +1895,13 @@ export function OwnerWorkspaceModern(props: any) {
                       ) : null}
                       <button
                         type="button"
+                        onClick={() => setEditingOrderId(order.id)}
+                        className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700"
+                      >
+                        {lang === "ne" ? "सम्पादन" : "Edit"}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => printOrderSlip(order, lang, shopInfo)}
                         className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
                         title={lang === "ne" ? "बिल/स्लिप प्रिन्ट" : "Print invoice / slip"}
@@ -1894,6 +1954,7 @@ export function OwnerWorkspaceModern(props: any) {
                   updateBookingStatus={updateBookingStatus}
                   runOwnerAction={runOwnerAction}
                   shopInfo={shopInfo}
+                  onEditBooking={setEditingBookingId}
                 />
               </div>
 
@@ -1902,7 +1963,12 @@ export function OwnerWorkspaceModern(props: any) {
         ) : null}
 
         {tab === "customers" ? (
-          <section className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
+          <section className="space-y-5">
+            {/* Credit Manager */}
+            <CreditManager customers={customers} lang={lang as "en" | "ne"} />
+
+            {/* Customer Ledger and Forms */}
+            <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.customerLedger}</h3>
               <div className="mt-4 grid gap-3">
@@ -1920,6 +1986,7 @@ export function OwnerWorkspaceModern(props: any) {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setSelectedCustomerId(customer.id)} className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">{lang === "ne" ? "विवरण" : "Details"}</button>
                       <button type="button" onClick={() => startEditCustomer(customer)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
                       <button type="button" onClick={() => runOwnerAction(() => deleteCustomer(customer.id), lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.", lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                     </div>
@@ -1979,11 +2046,17 @@ export function OwnerWorkspaceModern(props: any) {
                 </div>
               </form>
             </div>
+            </div>
           </section>
         ) : null}
 
         {tab === "products" ? (
-          <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+          <section className="space-y-5">
+            {/* Stock Tracker */}
+            <StockTracker products={products} lang={lang as "en" | "ne"} />
+
+            {/* Product Costs & Management */}
+            <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -2184,6 +2257,7 @@ export function OwnerWorkspaceModern(props: any) {
                 <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingProductId ? text.updateProduct : text.saveProduct}</button>
               </div>
             </form>
+            </div>
           </section>
         ) : null}
 
@@ -2387,6 +2461,29 @@ export function OwnerWorkspaceModern(props: any) {
           </section>
         ) : null}
       </main>
+
+      <CustomerDetailModal
+        isOpen={selectedCustomerId !== null}
+        onClose={() => setSelectedCustomerId(null)}
+        customerId={selectedCustomerId || 0}
+        lang={lang as "en" | "ne"}
+      />
+
+      <EditOrderModal
+        isOpen={editingOrderId !== null}
+        onClose={() => setEditingOrderId(null)}
+        orderId={editingOrderId || 0}
+        onSave={() => window.location.reload()}
+        lang={lang as "en" | "ne"}
+      />
+
+      <EditBookingModal
+        isOpen={editingBookingId !== null}
+        onClose={() => setEditingBookingId(null)}
+        bookingId={editingBookingId || 0}
+        onSave={() => window.location.reload()}
+        lang={lang as "en" | "ne"}
+      />
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-background/96 px-3 pb-3 pt-2 backdrop-blur-xl md:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 gap-2">
