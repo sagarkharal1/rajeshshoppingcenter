@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, Send, TrendingDown } from "lucide-react";
+import { AlertCircle, TrendingDown } from "lucide-react";
 
 interface CustomerCredit {
   id: number;
@@ -16,6 +16,7 @@ interface CustomerCredit {
 interface CreditManagerProps {
   customers: any[];
   lang?: "en" | "ne";
+  onRefresh?: () => void;
 }
 
 const labels = {
@@ -55,7 +56,7 @@ const labels = {
   },
 };
 
-export function CreditManager({ customers, lang = "en" }: CreditManagerProps) {
+export function CreditManager({ customers, lang = "en", onRefresh }: CreditManagerProps) {
   const dict = labels[lang];
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: "", notes: "" });
@@ -78,24 +79,32 @@ export function CreditManager({ customers, lang = "en" }: CreditManagerProps) {
     if (!amount || amount <= 0) return;
 
     try {
-      // In a real app, this would call an API to record the payment
+      const token = localStorage.getItem("owner_token");
+      const res = await fetch("/api/admin/payments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          customerId,
+          amount,
+          paymentMethod: "cash",
+          referenceNote: paymentForm.notes || undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Payment failed");
+
       setMessage(dict.paymentRecorded);
       setPaymentForm({ amount: "", notes: "" });
       setSelectedCustomer(null);
-
       setTimeout(() => setMessage(""), 3000);
+      if (onRefresh) onRefresh();
     } catch (err) {
       console.error("Failed to record payment:", err);
-    }
-  };
-
-  const handleSendReminder = async (customerId: number, phone: string) => {
-    try {
-      // In a real app, this would call an API to send SMS/WhatsApp reminder
-      setMessage(dict.reminderSent);
+      setMessage(lang === "ne" ? "भुक्तानी दर्ता गर्न सकिएन।" : "Failed to record payment.");
       setTimeout(() => setMessage(""), 3000);
-    } catch (err) {
-      console.error("Failed to send reminder:", err);
     }
   };
 
@@ -214,13 +223,6 @@ export function CreditManager({ customers, lang = "en" }: CreditManagerProps) {
                   className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
                   {lang === "ne" ? "भुक्तानी दर्ता" : "Record Payment"}
-                </button>
-                <button
-                  onClick={() => handleSendReminder(customer.id, customer.phone)}
-                  className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 transition flex items-center justify-center gap-2"
-                >
-                  <Send className="h-4 w-4" />
-                  {lang === "ne" ? "सूचना" : "Remind"}
                 </button>
               </div>
 

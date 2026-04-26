@@ -60,7 +60,7 @@ const invoiceItemSchema = z.object({
 
 const createInvoiceSchema = z.object({
   customerId: z.number().int().positive(),
-  items: z.array(invoiceItemSchema).min(1).max(100),
+  items: z.array(invoiceItemSchema).max(100).default([]),
   paymentMethod: z.enum(["cash", "credit", "esewa", "khalti", "bank"]),
   amountPaid: z.number().nonnegative().default(0),
   note: z.string().max(1000).optional(),
@@ -412,28 +412,24 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         throw new Error("CUSTOMER_NOT_FOUND");
       }
 
-      const productIds = parsed.data.items.map((item) => item.productId);
-      const products = await tx
-        .select()
-        .from(productsTable)
-        .where(sql`${productsTable.id} = any(array[${sql.join(productIds.map((id) => sql`${id}`), sql.raw(","))}]::int[])`);
+      let detailedItems: any[] = [];
+      if (parsed.data.items.length > 0) {
+        const productIds = parsed.data.items.map((item) => item.productId);
+        const products = await tx
+          .select()
+          .from(productsTable)
+          .where(sql`${productsTable.id} = any(array[${sql.join(productIds.map((id) => sql`${id}`), sql.raw(","))}]::int[])`);
 
-      const productMap = new Map(products.map((product) => [product.id, product]));
-      const detailedItems = parsed.data.items.map((item) => {
-        const product = productMap.get(item.productId);
-        if (!product) {
-          throw new Error(`PRODUCT_NOT_FOUND:${item.productId}`);
-        }
-        if (product.stockQuantity < item.quantity) {
-          throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
-        }
-        const unitCost =
-          asNumber(product.buyingPrice) +
-          asNumber(product.transportationCost) +
-          asNumber(product.extraCost);
-        const lineTotal = asNumber(product.price) * item.quantity;
-        return { item, product, unitCost, lineTotal };
-      });
+        const productMap = new Map(products.map((product) => [product.id, product]));
+        detailedItems = parsed.data.items.map((item) => {
+          const product = productMap.get(item.productId);
+          if (!product) throw new Error(`PRODUCT_NOT_FOUND:${item.productId}`);
+          if (product.stockQuantity < item.quantity) throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
+          const unitCost = asNumber(product.buyingPrice) + asNumber(product.transportationCost) + asNumber(product.extraCost);
+          const lineTotal = asNumber(product.price) * item.quantity;
+          return { item, product, unitCost, lineTotal };
+        });
+      }
 
       const subtotalAmount = detailedItems.reduce((sum, entry) => sum + entry.lineTotal, 0);
       const previousDueAmount = asNumber(customer.creditBalance);
@@ -467,18 +463,20 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         })
         .returning();
 
-      await tx.insert(invoiceItemsTable).values(
-        detailedItems.map(({ item, product, unitCost, lineTotal }) => ({
-          invoiceId: invoice.id,
-          productId: product.id,
-          productName: product.name,
-          quantity: item.quantity,
-          unit: product.unit,
-          unitPrice: asNumber(product.price).toFixed(2),
-          unitCost: unitCost.toFixed(2),
-          lineTotal: lineTotal.toFixed(2),
-        })),
-      );
+      if (detailedItems.length > 0) {
+        await tx.insert(invoiceItemsTable).values(
+          detailedItems.map(({ item, product, unitCost, lineTotal }) => ({
+            invoiceId: invoice.id,
+            productId: product.id,
+            productName: product.name,
+            quantity: item.quantity,
+            unit: product.unit,
+            unitPrice: asNumber(product.price).toFixed(2),
+            unitCost: unitCost.toFixed(2),
+            lineTotal: lineTotal.toFixed(2),
+          })),
+        );
+      }
 
       for (const { item, product } of detailedItems) {
         await tx
