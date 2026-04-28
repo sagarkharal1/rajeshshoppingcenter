@@ -221,6 +221,7 @@ export default function AdminSettingsScreen() {
   const [totpCode, setTotpCode] = useState("");
   const [disableCode, setDisableCode] = useState("");
   const [totpLoading, setTotpLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
 
   useEffect(() => {
     const checkTotp = async () => {
@@ -334,6 +335,48 @@ export default function AdminSettingsScreen() {
       Alert.alert("Success", "Password changed successfully! Use your new password next time you log in.");
     } catch {
       Alert.alert("Failed", "Current password is incorrect. Please try again.");
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    setBackupLoading(true);
+    try {
+      const token = await secureGet(ADMIN_TOKEN_KEY);
+      const createRes = await fetch(`${getApiBase()}/admin/backup/create?format=json`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const created = await createRes.json();
+      if (!createRes.ok) throw new Error(created.error || "Could not create backup");
+
+      const filename = created.backup?.filename;
+      if (Platform.OS === "web" && filename) {
+        const downloadRes = await fetch(`${getApiBase()}/admin/backup/${encodeURIComponent(filename)}/download`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!downloadRes.ok) throw new Error("Backup was created but download failed");
+
+        const blob = await downloadRes.blob();
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+      }
+
+      Alert.alert(
+        "Backup ready",
+        filename
+          ? `Backup created: ${filename}`
+          : "Backup created successfully. You can download it from the server backups list."
+      );
+    } catch (e: any) {
+      Alert.alert("Backup failed", e.message || "Could not create backup");
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -618,6 +661,38 @@ export default function AdminSettingsScreen() {
           </LinearGradient>
         </Pressable>
 
+        {/* DATA BACKUP */}
+        <Text style={[styles.sectionLabel, { color: theme.textMuted, fontFamily: "Inter_600SemiBold" }]}>
+          DATA BACKUP
+        </Text>
+        <View style={[styles.card, { backgroundColor: theme.card }]}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+            <MaterialIcons name="backup" size={24} color={Colors.primary} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[{ color: theme.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }]}>
+                Download a shop data backup
+              </Text>
+              <Text style={[{ color: theme.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }]}>
+                Creates a protected JSON backup of products, customers, orders, invoices, payments, settings, audit logs, and stock history.
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.changePwBtn, { opacity: pressed || backupLoading ? 0.8 : 1, backgroundColor: Colors.primary }]}
+            onPress={handleCreateBackup}
+            disabled={backupLoading}
+          >
+            {backupLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Feather name="download-cloud" size={18} color="#fff" />
+                <Text style={[styles.changePwBtnText, { fontFamily: "Inter_600SemiBold" }]}>Create Backup</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+
         {/* 2-FACTOR AUTHENTICATION */}
         <Text style={[styles.sectionLabel, { color: theme.textMuted, fontFamily: "Inter_600SemiBold" }]}>
           2-FACTOR AUTHENTICATION
@@ -827,6 +902,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sectionLabel: { fontSize: 11, letterSpacing: 1 },
+  field: { gap: 6 },
+  fieldLabel: { fontSize: 13 },
   card: {
     borderRadius: 16,
     padding: 16,

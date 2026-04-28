@@ -1,4 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { existsSync } from "fs";
+import path from "path";
 import { db } from "@workspace/db";
 import {
   productsTable,
@@ -47,6 +49,9 @@ const ALLOWED_OWNER_IDENTIFIERS = new Set([
 ]);
 const DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const OTP_TTL_MINUTES = 10;
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const loginAttempts = new Map<string, { count: number; firstAttemptAt: number }>();
 const categorySchema = z.object({
   name: z.string().min(1).max(120).transform((value) => value.trim()),
   description: z.string().max(400).optional(),
@@ -60,6 +65,47 @@ function verifyTotp(token: string, secret: string): boolean {
   } catch {
     return false;
   }
+}
+
+function getClientKey(req: Request, identifier = ""): string {
+  const forwardedFor = String(req.headers["x-forwarded-for"] || "");
+  const ip = forwardedFor.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+  return `${ip}:${identifier.trim().toLowerCase()}`;
+}
+
+function isLoginRateLimited(req: Request, identifier = ""): boolean {
+  const key = getClientKey(req, identifier);
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+
+  if (!attempt || now - attempt.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 0, firstAttemptAt: now });
+    return false;
+  }
+
+  return attempt.count >= MAX_LOGIN_ATTEMPTS;
+}
+
+function recordFailedLogin(req: Request, identifier = "") {
+  const key = getClientKey(req, identifier);
+  const now = Date.now();
+  const attempt = loginAttempts.get(key);
+
+  if (!attempt || now - attempt.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: now });
+    return;
+  }
+
+  attempt.count += 1;
+}
+
+function clearFailedLogins(req: Request, identifier = "") {
+  loginAttempts.delete(getClientKey(req, identifier));
+}
+
+function rejectInvalidCredentials(req: Request, res: Response, identifier = "") {
+  recordFailedLogin(req, identifier);
+  return res.status(401).json({ error: "Invalid credentials" });
 }
 
 async function hashPassword(password: string): Promise<string> {
@@ -168,19 +214,24 @@ router.post("/admin/login/request-otp", async (req, res) => {
     return res.status(400).json({ error: "Username/email/phone and password are required" });
   }
 
+  if (isLoginRateLimited(req, identifier)) {
+    return res.status(429).json({ error: "Too many login attempts. Please wait 10 minutes and try again." });
+  }
+
   const settings = await getSettings();
 
   if (!matchesIdentifier(identifier, settings)) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    return rejectInvalidCredentials(req, res, identifier);
   }
 
   const storedHash = settings?.adminPasswordHash ?? null;
   const passwordOk = await isOwnerPasswordValid(password, storedHash);
 
   if (!passwordOk) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    return rejectInvalidCredentials(req, res, identifier);
   }
 
+  clearFailedLogins(req, identifier);
   const otp = generateOtp();
   const expiry = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
   await upsertSettings({
@@ -211,17 +262,21 @@ router.post("/admin/login", async (req, res) => {
     return res.status(400).json({ error: "Username/email/phone and password are required" });
   }
 
+  if (isLoginRateLimited(req, identifier)) {
+    return res.status(429).json({ error: "Too many login attempts. Please wait 10 minutes and try again." });
+  }
+
   const settings = await getSettings();
 
   if (!matchesIdentifier(identifier, settings)) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    return rejectInvalidCredentials(req, res, identifier);
   }
 
   const storedHash = settings?.adminPasswordHash ?? null;
   const passwordOk = await isOwnerPasswordValid(password, storedHash);
 
   if (!passwordOk) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    return rejectInvalidCredentials(req, res, identifier);
   }
 
   // ── TOTP check ────────────────────────────────────────────────────────────
@@ -238,6 +293,7 @@ router.post("/admin/login", async (req, res) => {
   }
 
   await upsertSettings({ adminOtp: null, adminOtpExpiry: null });
+  clearFailedLogins(req, identifier);
   const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "7d" });
   res.json({ token, message: "Login successful" });
 });
@@ -1534,7 +1590,7 @@ router.get("/admin/test-data/status", async (req, res) => {
   }
 });
 
-router.post("/admin/backup/create", async (req, res) => {
+router.post("/admin/backup/create", authMiddleware, async (req, res) => {
   try {
     const { format } = req.query;
     const backupFormat = format === "sql" ? "sql" : "json";
@@ -1560,7 +1616,7 @@ router.post("/admin/backup/create", async (req, res) => {
   }
 });
 
-router.get("/admin/backup/list", async (req, res) => {
+router.get("/admin/backup/list", authMiddleware, async (req, res) => {
   try {
     const backups = await listLocalBackups();
 
@@ -1578,7 +1634,7 @@ router.get("/admin/backup/list", async (req, res) => {
   }
 });
 
-router.get("/admin/backup/status", async (req, res) => {
+router.get("/admin/backup/status", authMiddleware, async (req, res) => {
   try {
     const status = await getBackupStatus();
 
@@ -1595,9 +1651,32 @@ router.get("/admin/backup/status", async (req, res) => {
   }
 });
 
-router.delete("/admin/backup/:filename", async (req, res) => {
+router.get("/admin/backup/:filename/download", authMiddleware, async (req, res) => {
   try {
-    const { filename } = req.params;
+    const filename = path.basename(String(req.params.filename));
+    if (!filename.startsWith("backup-") || (!filename.endsWith(".json.gz") && !filename.endsWith(".sql.gz"))) {
+      return res.status(400).json({ error: "Invalid backup filename" });
+    }
+
+    const backupPath = path.resolve(process.cwd(), "backups", filename);
+    const backupDir = path.resolve(process.cwd(), "backups");
+    if (!backupPath.startsWith(backupDir) || !existsSync(backupPath)) {
+      return res.status(404).json({ error: "Backup not found" });
+    }
+
+    res.download(backupPath, filename);
+  } catch (err) {
+    console.error("Download backup error:", err);
+    res.status(500).json({
+      error: "Failed to download backup",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.delete("/admin/backup/:filename", authMiddleware, async (req, res) => {
+  try {
+    const filename = String(req.params.filename);
 
     await deleteLocalBackup(filename);
 
@@ -1615,7 +1694,7 @@ router.delete("/admin/backup/:filename", async (req, res) => {
   }
 });
 
-router.post("/admin/backup/cleanup", async (req, res) => {
+router.post("/admin/backup/cleanup", authMiddleware, async (req, res) => {
   try {
     const { keepCount } = req.query;
     const count = keepCount ? Number(keepCount) : 30;
