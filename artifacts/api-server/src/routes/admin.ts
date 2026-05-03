@@ -1085,13 +1085,55 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
         chargedAmount: chargedAmount !== undefined ? chargedAmount : booking.chargedAmount,
         amountPaid: amountPaid !== undefined ? amountPaid : booking.amountPaid,
         paymentMethod: paymentMethod ?? booking.paymentMethod,
-      };
+      } as Record<string, any>;
+
+      const nextCharged = Number(updates.chargedAmount ?? 0);
+      const nextPaid = Number(updates.amountPaid ?? 0);
+      updates.paymentStatus = nextPaid <= 0 ? "unpaid" : nextPaid >= nextCharged ? "paid" : "partial";
+
+      const oldDue = bookingDue(booking);
+      const candidateBooking = { ...booking, ...updates };
+      const customer = await findOrCreateCustomerForBooking(tx, candidateBooking);
+      updates.customerId = customer.id;
 
       const [updatedBooking] = await tx
         .update(bookingsTable)
         .set(updates)
         .where(eq(bookingsTable.id, id))
         .returning();
+
+      const newDue = bookingDue(updatedBooking);
+      const spentDelta = Math.max(0, Number(updatedBooking.chargedAmount || 0) - Number(booking.chargedAmount || 0));
+
+      if (booking.customerId && booking.customerId !== customer.id) {
+        const [oldCustomer] = await tx
+          .select()
+          .from(customersTable)
+          .where(eq(customersTable.id, booking.customerId))
+          .limit(1);
+
+        if (oldCustomer) {
+          await tx
+            .update(customersTable)
+            .set({
+              creditBalance: Math.max(0, Number(oldCustomer.creditBalance ?? 0) - oldDue).toFixed(2),
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(customersTable.id, oldCustomer.id));
+        }
+      }
+
+      const creditDelta = booking.customerId && booking.customerId !== customer.id ? newDue : newDue - oldDue;
+      const newCustomerBalance = Math.max(0, Number(customer.creditBalance ?? 0) + creditDelta);
+
+      await tx
+        .update(customersTable)
+        .set({
+          creditBalance: newCustomerBalance.toFixed(2),
+          totalSpent: (Number(customer.totalSpent ?? 0) + spentDelta).toFixed(2),
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(customersTable.id, customer.id));
 
       await logAuditEntry(
         tx,
@@ -1118,6 +1160,25 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
           },
         })
       );
+
+      await tx.insert(customerLedgerTable).values({
+        customerId: customer.id,
+        entryType: creditDelta >= 0 ? "transport_edit_charge" : "transport_edit_payment",
+        description: `Transport booking #${updatedBooking.id} edited`,
+        debitAmount: creditDelta > 0 ? creditDelta.toFixed(2) : "0.00",
+        creditAmount: creditDelta < 0 ? Math.abs(creditDelta).toFixed(2) : "0.00",
+        balanceAfter: newCustomerBalance.toFixed(2),
+        metadata: {
+          bookingId: updatedBooking.id,
+          serviceType: updatedBooking.serviceType,
+          pickupLocation: updatedBooking.pickupLocation,
+          destination: updatedBooking.destination,
+          chargedAmount: Number(updatedBooking.chargedAmount || 0),
+          amountPaid: Number(updatedBooking.amountPaid || 0),
+          paymentMethod: updatedBooking.paymentMethod,
+          paymentStatus: updatedBooking.paymentStatus,
+        },
+      });
 
       return updatedBooking;
     });
@@ -1363,6 +1424,13 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         );
     }
 
+    const [currentCustomerCredit] = await db
+      .select({
+        totalCredit: sql<string>`coalesce(sum(${customersTable.creditBalance}), 0)`,
+      })
+      .from(customersTable);
+    const currentCustomerCreditDue = Number(currentCustomerCredit?.totalCredit ?? 0);
+
     // Format transactions
     const transactions = [
       ...invoicesData.map((invoice: any) => ({
@@ -1467,7 +1535,8 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
     const combined = {
       totalBilled: shop.totalBilled + transport.totalBilled,
       totalCollected: shop.totalCollected + transport.totalCollected + totalPaymentsMade,
-      totalCredit: shop.totalCredit + transport.totalCredit,
+      totalCredit: currentCustomerCreditDue,
+      rawRecordCredit: shop.totalCredit + transport.totalCredit,
     };
 
     res.json({
@@ -1495,6 +1564,8 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         totalBilled: combined.totalBilled,
         totalCollected: combined.totalCollected,
         totalCredit: combined.totalCredit,
+        rawRecordCredit: combined.rawRecordCredit,
+        currentCustomerCreditDue,
       },
     });
   } catch (err) {

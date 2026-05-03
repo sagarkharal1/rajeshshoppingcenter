@@ -11,6 +11,7 @@ interface OrderEditModalProps {
   orderId: number;
   onSave?: () => void;
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -58,6 +59,7 @@ export function EditOrderModal({
   orderId,
   onSave,
   lang = "en",
+  api,
 }: OrderEditModalProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(false);
@@ -81,21 +83,21 @@ export function EditOrderModal({
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`/api/admin/orders/${orderId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setOrder(data);
-          setFormData({
-            customerPhone: data.customerPhone || "",
-            customerEmail: data.customerEmail || "",
-            deliveryAddress: data.customerAddress || "",
-            notes: data.notes || "",
-            paymentMethod: data.paymentMethod || "cash",
-            paymentStatus: data.paymentStatus || "unpaid",
-          });
-        } else {
-          setError(dict.error);
-        }
+        const data = api
+          ? await api(`/admin/orders/${orderId}`)
+          : await fetch(`/api/admin/orders/${orderId}`).then((response) => {
+              if (!response.ok) throw new Error("Failed to load order");
+              return response.json();
+            });
+        setOrder(data);
+        setFormData({
+          customerPhone: data.customerPhone || "",
+          customerEmail: data.customerEmail || "",
+          deliveryAddress: data.customerAddress || "",
+          notes: data.notes || "",
+          paymentMethod: data.paymentMethod || "cash",
+          paymentStatus: data.paymentStatus || "unpaid",
+        });
       } catch (err) {
         console.error("Failed to fetch order:", err);
         setError(dict.error);
@@ -110,18 +112,21 @@ export function EditOrderModal({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/orders/${orderId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        onSave?.();
-        onClose();
+      if (api) {
+        await api(`/admin/orders/${orderId}`, {
+          method: "PUT",
+          body: JSON.stringify(formData),
+        });
       } else {
-        setError("Failed to save order");
+        const response = await fetch(`/api/admin/orders/${orderId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (!response.ok) throw new Error("Failed to save order");
       }
+      onSave?.();
+      onClose();
     } catch (err) {
       console.error("Failed to save order:", err);
       setError("Failed to save order");

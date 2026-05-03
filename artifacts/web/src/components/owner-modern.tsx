@@ -2517,16 +2517,18 @@ export function OwnerWorkspaceModern(props: any) {
         isOpen={editingOrderId !== null}
         onClose={() => setEditingOrderId(null)}
         orderId={editingOrderId || 0}
-        onSave={() => window.location.reload()}
+        onSave={props.reloadOwnerData}
         lang={lang as "en" | "ne"}
+        api={props.api}
       />
 
       <EditBookingModal
         isOpen={editingBookingId !== null}
         onClose={() => setEditingBookingId(null)}
         bookingId={editingBookingId || 0}
-        onSave={() => window.location.reload()}
+        onSave={props.reloadOwnerData}
         lang={lang as "en" | "ne"}
+        api={props.api}
       />
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-background/96 px-3 pb-3 pt-2 backdrop-blur-xl md:hidden">

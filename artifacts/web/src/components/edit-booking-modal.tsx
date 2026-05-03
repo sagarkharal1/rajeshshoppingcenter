@@ -11,6 +11,7 @@ interface BookingEditModalProps {
   bookingId: number;
   onSave?: () => void;
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -60,6 +61,7 @@ export function EditBookingModal({
   bookingId,
   onSave,
   lang = "en",
+  api,
 }: BookingEditModalProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(false);
@@ -86,24 +88,24 @@ export function EditBookingModal({
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`/api/admin/bookings/${bookingId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setBooking(data);
-          setFormData({
-            customerPhone: data.customerPhone || "",
-            pickupLocation: data.pickupLocation || "",
-            destination: data.destination || "",
-            bookingDate: data.bookingDate?.split("T")[0] || "",
-            notes: data.notes || "",
-            serviceType: data.serviceType || "bolero",
-            chargedAmount: Number(data.chargedAmount || 0),
-            amountPaid: Number(data.amountPaid || 0),
-            paymentMethod: data.paymentMethod || "cash",
-          });
-        } else {
-          setError(dict.error);
-        }
+        const data = api
+          ? await api(`/admin/bookings/${bookingId}`)
+          : await fetch(`/api/admin/bookings/${bookingId}`).then((response) => {
+              if (!response.ok) throw new Error("Failed to load booking");
+              return response.json();
+            });
+        setBooking(data);
+        setFormData({
+          customerPhone: data.customerPhone || "",
+          pickupLocation: data.pickupLocation || "",
+          destination: data.destination || "",
+          bookingDate: data.bookingDate?.split("T")[0] || "",
+          notes: data.notes || "",
+          serviceType: data.serviceType || "bolero",
+          chargedAmount: Number(data.chargedAmount || 0),
+          amountPaid: Number(data.amountPaid || 0),
+          paymentMethod: data.paymentMethod || "cash",
+        });
       } catch (err) {
         console.error("Failed to fetch booking:", err);
         setError(dict.error);
@@ -118,18 +120,21 @@ export function EditBookingModal({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/bookings/${bookingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        onSave?.();
-        onClose();
+      if (api) {
+        await api(`/admin/bookings/${bookingId}`, {
+          method: "PUT",
+          body: JSON.stringify(formData),
+        });
       } else {
-        setError("Failed to save booking");
+        const response = await fetch(`/api/admin/bookings/${bookingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (!response.ok) throw new Error("Failed to save booking");
       }
+      onSave?.();
+      onClose();
     } catch (err) {
       console.error("Failed to save booking:", err);
       setError("Failed to save booking");
