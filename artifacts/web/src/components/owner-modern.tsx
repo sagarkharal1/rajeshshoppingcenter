@@ -1986,20 +1986,27 @@ export function OwnerWorkspaceModern(props: any) {
         {tab === "customers" ? (
           <section className="space-y-5">
             {/* Credit Manager */}
-            <CreditManager customers={customers} lang={lang as "en" | "ne"} />
+            <CreditManager
+              customers={customers}
+              lang={lang as "en" | "ne"}
+              api={props.api}
+              onRefresh={props.reloadOwnerData}
+              onOpenCustomer={setSelectedCustomerId}
+            />
 
             {/* Customer Ledger and Forms */}
             <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.customerLedger}</h3>
               <div className="mt-4 grid gap-3">
-                {customers.map((customer: any) => (
+                {filteredCustomers.map((customer: any) => (
                   <article key={customer.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h4 className="text-lg font-bold text-slate-950">{customer.name}</h4>
                         <p className="text-sm text-slate-500">{customer.phone || text.noPhoneSaved}</p>
                         <p className="text-sm text-slate-500">{customer.address || text.noAddressSaved}</p>
+                        <p className="mt-1 text-sm font-semibold text-rose-700">{lang === "ne" ? "कुल बाँकी" : "Total due"}: {money(num(customer.creditBalance))}</p>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs">
                         <span className="rounded-full bg-amber-50 px-3 py-1.5 text-amber-900">{text.due}: {money(num(customer.creditBalance))}</span>
@@ -2008,6 +2015,20 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => setSelectedCustomerId(customer.id)} className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">{lang === "ne" ? "विवरण" : "Details"}</button>
+                      {num(customer.creditBalance) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setPaymentForm((v: any) => ({
+                            ...v,
+                            customerId: customer.id,
+                            amount: String(num(customer.creditBalance)),
+                            referenceNote: lang === "ne" ? "पूरा उधारो भुक्तानी" : "Full credit repayment",
+                          }))}
+                          className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
+                        >
+                          {lang === "ne" ? "पूरा तिर्नुहोस्" : "Pay full"}
+                        </button>
+                      ) : null}
                       <button type="button" onClick={() => startEditCustomer(customer)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
                       <button type="button" onClick={() => runOwnerAction(() => deleteCustomer(customer.id), lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.", lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                     </div>
@@ -2488,6 +2509,8 @@ export function OwnerWorkspaceModern(props: any) {
         onClose={() => setSelectedCustomerId(null)}
         customerId={selectedCustomerId || 0}
         lang={lang as "en" | "ne"}
+        api={props.api}
+        onRefresh={props.reloadOwnerData}
       />
 
       <EditOrderModal

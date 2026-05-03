@@ -1,71 +1,82 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, TrendingDown } from "lucide-react";
-
-interface CustomerCredit {
-  id: number;
-  name: string;
-  phone: string;
-  creditBalance: number;
-  rewardPoints: number;
-  totalSpent: number;
-}
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, CheckCircle2, Eye, ReceiptText, TrendingDown } from "lucide-react";
 
 interface CreditManagerProps {
   customers: any[];
   lang?: "en" | "ne";
-  onRefresh?: () => void;
+  api?: (url: string, opts?: any) => Promise<any>;
+  onRefresh?: () => Promise<void> | void;
+  onOpenCustomer?: (id: number) => void;
 }
 
 const labels = {
   en: {
-    title: "Customer Credit Management",
+    title: "Customer Credit Collection",
+    subtitle: "Search, review, and collect product + transport credit in one place.",
     dueAmount: "Due Amount",
-    customer: "Customer",
-    phone: "Phone",
+    totalDue: "Total Due",
+    customersWithDue: "Customers With Due",
+    highestDue: "Highest Due",
     totalSpent: "Total Spent",
     rewardPoints: "Reward Points",
     noDue: "All customers have no pending credit",
-    sendReminder: "Send Reminder",
     recordPayment: "Record Payment",
-    amount: "Amount",
-    notes: "Notes",
-    pay: "Pay",
+    payFull: "Pay Full",
+    save: "Save Payment",
     cancel: "Cancel",
-    paymentRecorded: "Payment recorded successfully",
-    reminderSent: "Reminder sent to customer",
+    amount: "Amount",
+    notes: "Note / receipt reference",
+    method: "Method",
+    details: "Details",
+    paymentRecorded: "Payment saved and customer balance updated.",
+    paymentFailed: "Could not record the payment.",
   },
   ne: {
-    title: "ग्राहक उधारो व्यवस्थापन",
-    dueAmount: "बकाया रकम",
-    customer: "ग्राहक",
-    phone: "फोन",
+    title: "ग्राहक उधारो असुली",
+    subtitle: "सामान र ट्रान्सपोर्ट उधारो एउटै ठाउँबाट हेर्नुहोस् र भुक्तानी राख्नुहोस्।",
+    dueAmount: "बाँकी रकम",
+    totalDue: "कुल बाँकी",
+    customersWithDue: "उधारो ग्राहक",
+    highestDue: "सबैभन्दा धेरै बाँकी",
     totalSpent: "कुल खर्च",
     rewardPoints: "पुरस्कार अंक",
-    noDue: "सबै ग्राहकको कुनै बकाया उधारो छैन",
-    sendReminder: "सूचना पठाउनुहोस्",
-    recordPayment: "भुक्तानी दर्ता गर्नुहोस्",
+    noDue: "कुनै ग्राहकको उधारो बाँकी छैन",
+    recordPayment: "भुक्तानी राख्नुहोस्",
+    payFull: "पूरा तिर्नुहोस्",
+    save: "भुक्तानी सेभ",
+    cancel: "रद्द",
     amount: "रकम",
-    notes: "नोट",
-    pay: "भुक्तानी गर्नुहोस्",
-    cancel: "रद्द गर्नुहोस्",
-    paymentRecorded: "भुक्तानी दर्ता भयो",
-    reminderSent: "ग्राहकलाई सूचना पठाइयो",
+    notes: "नोट / रसिद विवरण",
+    method: "तरिका",
+    details: "विवरण",
+    paymentRecorded: "भुक्तानी सेभ भयो र ग्राहक हिसाब अपडेट भयो।",
+    paymentFailed: "भुक्तानी राख्न सकिएन।",
   },
 };
 
-export function CreditManager({ customers, lang = "en", onRefresh }: CreditManagerProps) {
+export function CreditManager({
+  customers,
+  lang = "en",
+  api,
+  onRefresh,
+  onOpenCustomer,
+}: CreditManagerProps) {
   const dict = labels[lang];
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: "", notes: "" });
-  const [message, setMessage] = useState("");
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    paymentMethod: "cash",
+    referenceNote: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Filter customers with due amount
   const customersWithDue = customers
-    .filter((c: any) => Number(c.creditBalance || 0) > 0)
-    .sort((a: any, b: any) => Number(b.creditBalance) - Number(a.creditBalance));
+    .filter((customer: any) => Number(customer.creditBalance || 0) > 0)
+    .sort((a: any, b: any) => Number(b.creditBalance || 0) - Number(a.creditBalance || 0));
 
   const money = (value: number) =>
     new Intl.NumberFormat("en-NP", {
@@ -74,221 +85,227 @@ export function CreditManager({ customers, lang = "en", onRefresh }: CreditManag
       maximumFractionDigits: 0,
     }).format(value);
 
+  const resetPaymentForm = () => {
+    setSelectedCustomer(null);
+    setPaymentForm({ amount: "", paymentMethod: "cash", referenceNote: "" });
+  };
+
   const handleRecordPayment = async (customerId: number) => {
     const amount = Number(paymentForm.amount);
-    if (!amount || amount <= 0) return;
+    if (!amount || amount <= 0 || !api) return;
 
+    setBusy(true);
+    setMessage(null);
     try {
-      const token = localStorage.getItem("owner_token");
-      const res = await fetch("/api/admin/payments", {
+      await api("/admin/payments", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           customerId,
           amount,
-          paymentMethod: "cash",
-          referenceNote: paymentForm.notes || undefined,
+          paymentMethod: paymentForm.paymentMethod,
+          referenceNote: paymentForm.referenceNote || "Customer credit repayment",
         }),
       });
 
-      if (!res.ok) throw new Error("Payment failed");
-
-      setMessage(dict.paymentRecorded);
-      setPaymentForm({ amount: "", notes: "" });
-      setSelectedCustomer(null);
-      setTimeout(() => setMessage(""), 3000);
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error("Failed to record payment:", err);
-      setMessage(lang === "ne" ? "भुक्तानी दर्ता गर्न सकिएन।" : "Failed to record payment.");
-      setTimeout(() => setMessage(""), 3000);
+      resetPaymentForm();
+      await onRefresh?.();
+      setMessage({ type: "success", text: dict.paymentRecorded });
+      window.setTimeout(() => setMessage(null), 3500);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : dict.paymentFailed,
+      });
+    } finally {
+      setBusy(false);
     }
   };
 
+  const totalDue = customersWithDue.reduce((sum, customer) => sum + Number(customer.creditBalance || 0), 0);
+  const highestDue = customersWithDue.length ? Number(customersWithDue[0].creditBalance || 0) : 0;
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-2xl font-bold text-slate-950 flex items-center gap-2 mb-2">
-          <TrendingDown className="h-6 w-6" />
-          {dict.title}
-        </h3>
-        <p className="text-sm text-slate-600">
-          {lang === "ne"
-            ? "बकाया उधारो भएका ग्राहकहरूलाई व्यवस्थापन गर्नुहोस्"
-            : "Manage customers with pending credit balance"}
-        </p>
+    <section className="space-y-5">
+      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-2xl font-bold text-slate-950">
+              <TrendingDown className="h-6 w-6 text-rose-600" />
+              {dict.title}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">{dict.subtitle}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Summary */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl bg-orange-50 border border-orange-200 p-4">
-          <p className="text-sm font-semibold text-orange-700 mb-1">
-            {lang === "ne" ? "बकाया ग्राहकहरू" : "Customers with Due"}
-          </p>
-          <p className="text-3xl font-bold text-orange-900">
-            {customersWithDue.length}
-          </p>
+        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+          <p className="text-sm font-semibold text-orange-700">{dict.customersWithDue}</p>
+          <p className="mt-1 text-3xl font-bold text-orange-950">{customersWithDue.length}</p>
         </div>
-
-        <div className="rounded-xl bg-red-50 border border-red-200 p-4">
-          <p className="text-sm font-semibold text-red-700 mb-1">
-            {dict.dueAmount}
-          </p>
-          <p className="text-3xl font-bold text-red-900">
-            {money(
-              customersWithDue.reduce(
-                (sum, c) => sum + Number(c.creditBalance || 0),
-                0
-              )
-            )}
-          </p>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+          <p className="text-sm font-semibold text-rose-700">{dict.totalDue}</p>
+          <p className="mt-1 text-3xl font-bold text-rose-950">{money(totalDue)}</p>
         </div>
-
-        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
-          <p className="text-sm font-semibold text-blue-700 mb-1">
-            {lang === "ne" ? "सर्वोच्च बकाया" : "Highest Due"}
-          </p>
-          <p className="text-3xl font-bold text-blue-900">
-            {customersWithDue.length > 0
-              ? money(Number(customersWithDue[0].creditBalance || 0))
-              : money(0)}
-          </p>
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-semibold text-blue-700">{dict.highestDue}</p>
+          <p className="mt-1 text-3xl font-bold text-blue-950">{money(highestDue)}</p>
         </div>
       </div>
 
-      {/* Message */}
       <AnimatePresence>
-        {message && (
+        {message ? (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="rounded-xl bg-green-50 border border-green-200 p-4"
+            exit={{ opacity: 0, y: -8 }}
+            className={`rounded-2xl border p-4 ${
+              message.type === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-rose-200 bg-rose-50 text-rose-800"
+            }`}
           >
-            <p className="text-green-700 font-semibold">✅ {message}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              {message.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              {message.text}
+            </p>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
-      {/* Customer List */}
       {customersWithDue.length > 0 ? (
         <div className="space-y-3">
-          {customersWithDue.map((customer: any) => (
-            <motion.div
-              key={customer.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-slate-200 bg-white p-4 hover:shadow-md transition"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{customer.name}</p>
-                  <p className="text-sm text-slate-600">{customer.phone}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-red-600">
-                    {money(Number(customer.creditBalance || 0))}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {dict.dueAmount}
-                  </p>
-                </div>
-              </div>
+          {customersWithDue.map((customer: any) => {
+            const due = Number(customer.creditBalance || 0);
+            const isSelected = selectedCustomer === customer.id;
 
-              <div className="grid grid-cols-2 gap-2 mb-3 text-sm">
-                <div className="bg-slate-50 rounded p-2">
-                  <p className="text-xs text-slate-600">{dict.totalSpent}</p>
-                  <p className="font-semibold text-slate-900">
-                    {money(Number(customer.totalSpent || 0))}
-                  </p>
-                </div>
-                <div className="bg-slate-50 rounded p-2">
-                  <p className="text-xs text-slate-600">{dict.rewardPoints}</p>
-                  <p className="font-semibold text-slate-900">
-                    {customer.rewardPoints || 0}
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedCustomer(
-                    selectedCustomer === customer.id ? null : customer.id
-                  )}
-                  className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
-                >
-                  {lang === "ne" ? "भुक्तानी दर्ता" : "Record Payment"}
-                </button>
-              </div>
-
-              {/* Payment Form */}
-              <AnimatePresence>
-                {selectedCustomer === customer.id && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="mt-3 border-t border-slate-200 pt-3 space-y-2"
-                  >
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder={dict.amount}
-                      value={paymentForm.amount}
-                      onChange={(e) =>
-                        setPaymentForm((prev) => ({
-                          ...prev,
-                          amount: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <textarea
-                      placeholder={dict.notes}
-                      value={paymentForm.notes}
-                      onChange={(e) =>
-                        setPaymentForm((prev) => ({
-                          ...prev,
-                          notes: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      rows={2}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleRecordPayment(customer.id)}
-                        disabled={!paymentForm.amount}
-                        className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-sm font-semibold text-white hover:bg-green-600 transition disabled:opacity-50"
-                      >
-                        {dict.pay}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedCustomer(null);
-                          setPaymentForm({ amount: "", notes: "" });
-                        }}
-                        className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
-                      >
-                        {dict.cancel}
-                      </button>
+            return (
+              <article key={customer.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-lg font-bold text-slate-950">{customer.name}</h4>
+                    <p className="text-sm text-slate-600">{customer.phone || customer.customerCode || "-"}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                        {dict.totalSpent}: {money(Number(customer.totalSpent || 0))}
+                      </span>
+                      <span className="rounded-full bg-purple-100 px-3 py-1 font-semibold text-purple-700">
+                        {dict.rewardPoints}: {Number(customer.rewardPoints || 0)}
+                      </span>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ))}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-rose-600">{dict.dueAmount}</p>
+                    <p className="text-2xl font-extrabold text-rose-700">{money(due)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCustomer(isSelected ? null : customer.id);
+                      setPaymentForm((current) => ({
+                        ...current,
+                        amount: isSelected ? "" : current.amount,
+                      }));
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700"
+                  >
+                    <ReceiptText className="h-4 w-4" />
+                    {dict.recordPayment}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenCustomer?.(customer.id)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700"
+                  >
+                    <Eye className="h-4 w-4" />
+                    {dict.details}
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {isSelected ? (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="mt-4 overflow-hidden border-t border-slate-200 pt-4"
+                    >
+                      <div className="grid gap-3 md:grid-cols-[1fr_150px]">
+                        <input
+                          type="number"
+                          min="0"
+                          value={paymentForm.amount}
+                          onChange={(event) =>
+                            setPaymentForm((current) => ({ ...current, amount: event.target.value }))
+                          }
+                          placeholder={dict.amount}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaymentForm((current) => ({
+                              ...current,
+                              amount: String(due),
+                            }))
+                          }
+                          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                        >
+                          {dict.payFull}
+                        </button>
+                        <select
+                          value={paymentForm.paymentMethod}
+                          onChange={(event) =>
+                            setPaymentForm((current) => ({ ...current, paymentMethod: event.target.value }))
+                          }
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                          aria-label={dict.method}
+                        >
+                          {["cash", "esewa", "khalti", "bank"].map((method) => (
+                            <option key={method} value={method}>
+                              {method}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={busy || Number(paymentForm.amount) <= 0}
+                          onClick={() => handleRecordPayment(customer.id)}
+                          className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {busy ? "..." : dict.save}
+                        </button>
+                        <textarea
+                          value={paymentForm.referenceNote}
+                          onChange={(event) =>
+                            setPaymentForm((current) => ({ ...current, referenceNote: event.target.value }))
+                          }
+                          placeholder={dict.notes}
+                          className="min-h-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm md:col-span-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={resetPaymentForm}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 md:col-span-2"
+                        >
+                          {dict.cancel}
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <div className="rounded-xl bg-green-50 border border-green-200 p-6 text-center">
-          <p className="text-green-700 font-semibold">✅ {dict.noDue}</p>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+          <p className="font-semibold text-emerald-700">{dict.noDue}</p>
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -67,6 +67,8 @@ interface CustomerDetailModalProps {
   onClose: () => void;
   customerId: number;
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
+  onRefresh?: () => Promise<void> | void;
 }
 
 const labels = {
@@ -125,6 +127,8 @@ export function CustomerDetailModal({
   onClose,
   customerId,
   lang = "en",
+  api,
+  onRefresh,
 }: CustomerDetailModalProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -132,29 +136,60 @@ export function CustomerDetailModal({
     "orders"
   );
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: "", paymentMethod: "cash", referenceNote: "" });
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
 
   const dict = labels[lang];
+
+  const fetchCustomerData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/customers/${customerId}/full-profile`);
+      if (response.ok) {
+        const data = await response.json();
+        setCustomer(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch customer data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen || !customerId) return;
 
-    const fetchCustomerData = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/customers/${customerId}/full-profile`);
-        if (response.ok) {
-          const data = await response.json();
-          setCustomer(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch customer data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCustomerData();
   }, [isOpen, customerId]);
+
+  const savePayment = async () => {
+    if (!api || !customer) return;
+    const amount = Number(paymentForm.amount);
+    if (!amount || amount <= 0) return;
+    setPaymentBusy(true);
+    setPaymentMessage("");
+    try {
+      await api("/admin/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: customer.id,
+          amount,
+          paymentMethod: paymentForm.paymentMethod,
+          referenceNote: paymentForm.referenceNote || "Customer account payment",
+        }),
+      });
+      setPaymentForm({ amount: "", paymentMethod: "cash", referenceNote: "" });
+      setPaymentMessage(lang === "ne" ? "भुक्तानी सेभ भयो" : "Payment saved");
+      await fetchCustomerData();
+      await onRefresh?.();
+      window.setTimeout(() => setPaymentMessage(""), 3000);
+    } catch (err) {
+      setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -267,6 +302,66 @@ export function CustomerDetailModal({
                   </p>
                 </div>
               </div>
+
+              {customer.creditBalance > 0 ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-emerald-950">
+                        {lang === "ne" ? "उधारो भुक्तानी लिनुहोस्" : "Collect Credit Payment"}
+                      </h3>
+                      <p className="text-sm text-emerald-700">
+                        {lang === "ne" ? "सामान र ट्रान्सपोर्ट दुबैको कुल बाँकी" : "Total due across products and transport"}: Rs. {customer.creditBalance.toLocaleString()}
+                      </p>
+                    </div>
+                    {paymentMessage ? (
+                      <p className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-emerald-700">
+                        {paymentMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_140px]">
+                    <input
+                      type="number"
+                      min="0"
+                      value={paymentForm.amount}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))}
+                      placeholder={dict.amount}
+                      className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPaymentForm((current) => ({ ...current, amount: String(customer.creditBalance) }))}
+                      className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-700"
+                    >
+                      {lang === "ne" ? "पूरा तिर्नुहोस्" : "Pay Full"}
+                    </button>
+                    <select
+                      value={paymentForm.paymentMethod}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, paymentMethod: event.target.value }))}
+                      className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm"
+                    >
+                      {["cash", "esewa", "khalti", "bank"].map((method) => (
+                        <option key={method} value={method}>{method}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={paymentBusy || Number(paymentForm.amount) <= 0}
+                      onClick={savePayment}
+                      className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {paymentBusy ? "..." : (lang === "ne" ? "भुक्तानी सेभ" : "Save Payment")}
+                    </button>
+                    <textarea
+                      value={paymentForm.referenceNote}
+                      onChange={(event) => setPaymentForm((current) => ({ ...current, referenceNote: event.target.value }))}
+                      placeholder={lang === "ne" ? "नोट / रसिद विवरण" : "Note / receipt reference"}
+                      className="min-h-20 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm md:col-span-2"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {/* Tabs */}
               <div className="border-b border-gray-200">
@@ -466,8 +561,8 @@ export function CustomerDetailModal({
 
                 {activeTab === "ledger" && (
                   <div className="space-y-3">
-                    {customer.ledgerEntries?.length > 0 ? (
-                      customer.ledgerEntries.map((entry, i) => (
+                    {(customer.ledgerEntries?.length ?? 0) > 0 ? (
+                      customer.ledgerEntries?.map((entry, i) => (
                         <div
                           key={i}
                           className={`border rounded-lg p-4 flex items-start justify-between ${
