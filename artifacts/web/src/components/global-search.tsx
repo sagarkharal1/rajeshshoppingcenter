@@ -32,7 +32,7 @@ export function GlobalSearch({ onResultClick, lang = "en" }: GlobalSearchProps) 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<NodeJS.Timeout>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const labels = {
     en: {

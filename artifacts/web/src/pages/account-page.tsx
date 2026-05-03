@@ -146,6 +146,50 @@ ${itemsHtml ? `
   popup.document.close();
 }
 
+function escapeHtml(value: string) {
+  const entities: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
+  return value.replace(/[&<>"']/g, (char) => entities[char] ?? char);
+}
+
+function printVoucher(title: string, rows: string[]) {
+  const popup = window.open("", "_blank", "width=420,height=640");
+  if (!popup) return;
+
+  const rowsHtml = rows
+    .filter(Boolean)
+    .map((row) => `<li>${escapeHtml(row)}</li>`)
+    .join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<style>
+  body { font-family: sans-serif; max-width: 380px; margin: 20px auto; padding: 20px; color: #1e293b; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  .header { border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; margin-bottom: 16px; }
+  .info { font-size: 13px; color: #64748b; margin: 4px 0; }
+  ul { list-style: none; margin: 0; padding: 0; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  li { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+  li:last-child { border-bottom: none; }
+  @media print { button { display: none; } }
+</style>
+</head><body>
+<div class="header">
+  <h2>Rajesh Shopping Center</h2>
+  <p class="info">${escapeHtml(title)}</p>
+</div>
+<ul>${rowsHtml}</ul>
+<button onclick="window.print()" style="margin-top: 16px; width: 100%; padding: 10px; background: #1e3a5f; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600;">Print</button>
+</body></html>`;
+
+  popup.document.write(html);
+  popup.document.close();
+}
+
 function getOrderStatusMeta(status: string, lang: "en" | "ne") {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "delivered") {
