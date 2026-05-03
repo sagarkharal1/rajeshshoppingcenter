@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
 
 interface BusinessSummaryProps {
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -47,7 +48,7 @@ const labels = {
   },
 };
 
-export function BusinessSummary({ lang = "en" }: BusinessSummaryProps) {
+export function BusinessSummary({ lang = "en", api }: BusinessSummaryProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
@@ -57,18 +58,18 @@ export function BusinessSummary({ lang = "en" }: BusinessSummaryProps) {
       setLoading(true);
       try {
         // Fetch current month data
-        const currentResponse = await fetch(
-          `/api/admin/analytics?period=monthly&date=${new Date().toISOString().split("T")[0]}`
-        );
-        const currentData = currentResponse.ok ? await currentResponse.json() : null;
+        const currentPath = `/admin/analytics?period=monthly&date=${new Date().toISOString().split("T")[0]}`;
+        const currentData = api
+          ? await api(currentPath)
+          : await fetch(`/api${currentPath}`).then((response) => response.ok ? response.json() : null);
 
         // Fetch last month data
         const lastMonthDate = new Date();
         lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-        const lastResponse = await fetch(
-          `/api/admin/analytics?period=monthly&date=${lastMonthDate.toISOString().split("T")[0]}`
-        );
-        const lastData = lastResponse.ok ? await lastResponse.json() : null;
+        const lastPath = `/admin/analytics?period=monthly&date=${lastMonthDate.toISOString().split("T")[0]}`;
+        const lastData = api
+          ? await api(lastPath)
+          : await fetch(`/api${lastPath}`).then((response) => response.ok ? response.json() : null);
 
         setSummary({
           current: currentData?.summary || {},
@@ -82,7 +83,7 @@ export function BusinessSummary({ lang = "en" }: BusinessSummaryProps) {
     };
 
     fetchSummary();
-  }, []);
+  }, [api]);
 
   if (loading) {
     return (

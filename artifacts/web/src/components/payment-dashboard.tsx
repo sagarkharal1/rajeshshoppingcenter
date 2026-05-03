@@ -13,6 +13,7 @@ interface PaymentMethod {
 
 interface PaymentDashboardProps {
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -49,7 +50,7 @@ const METHOD_COLORS = {
   bank: { bg: "bg-cyan-50", border: "border-cyan-200", icon: "🏦", label: "Bank" },
 };
 
-export function PaymentDashboard({ lang = "en" }: PaymentDashboardProps) {
+export function PaymentDashboard({ lang = "en", api }: PaymentDashboardProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(true);
   const [paymentData, setPaymentData] = useState<any>(null);
@@ -60,12 +61,14 @@ export function PaymentDashboard({ lang = "en" }: PaymentDashboardProps) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch("/api/admin/analytics?period=monthly");
-        if (response.ok) {
-          const data = await response.json();
+        const path = "/admin/analytics?period=monthly";
+        const data = api
+          ? await api(path)
+          : await fetch(`/api${path}`).then((response) => response.ok ? response.json() : null);
 
+        if (data) {
           // Process payment data
-          const totalCollected = data.summary?.totalPaymentsMade || 0;
+          const totalCollected = data.summary?.totalCollected || data.summary?.totalPaymentsMade || 0;
           const paymentsByMethod = data.summary?.paymentsByMethod || {
             cash: 0,
             esewa: 0,
@@ -97,7 +100,7 @@ export function PaymentDashboard({ lang = "en" }: PaymentDashboardProps) {
     };
 
     fetchData();
-  }, [dict.error]);
+  }, [api, dict.error]);
 
   if (loading) {
     return (

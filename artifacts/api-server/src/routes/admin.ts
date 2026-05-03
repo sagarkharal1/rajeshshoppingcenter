@@ -1272,8 +1272,31 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
   try {
     const sqlRaw = sql;
 
+    // Fetch shop invoices
+    let invoicesData: any[] = [];
+    if (type === "all" || type === "invoices" || type === "shop") {
+      invoicesData = await db
+        .select({
+          id: invoicesTable.id,
+          customerId: invoicesTable.customerId,
+          invoiceNumber: invoicesTable.invoiceNumber,
+          totalAmount: invoicesTable.totalAmount,
+          amountPaid: invoicesTable.amountPaid,
+          dueAmount: invoicesTable.dueAmount,
+          paymentStatus: invoicesTable.paymentStatus,
+          paymentMethod: invoicesTable.paymentMethod,
+          createdAt: invoicesTable.createdAt,
+          customerName: customersTable.name,
+        })
+        .from(invoicesTable)
+        .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+        .where(
+          sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate}`
+        );
+    }
+
     // Fetch orders
-    let ordersData = [];
+    let ordersData: any[] = [];
     if (type === "all" || type === "orders") {
       ordersData = await db
         .select({
@@ -1293,13 +1316,14 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
     }
 
     // Fetch bookings
-    let bookingsData = [];
+    let bookingsData: any[] = [];
     if (type === "all" || type === "bookings") {
       bookingsData = await db
         .select({
           id: bookingsTable.id,
           customerId: bookingsTable.customerId,
           chargedAmount: bookingsTable.chargedAmount,
+          amountPaid: bookingsTable.amountPaid,
           paymentStatus: bookingsTable.paymentStatus,
           paymentMethod: bookingsTable.paymentMethod,
           createdAt: bookingsTable.createdAt,
@@ -1313,7 +1337,7 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
     }
 
     // Fetch payments
-    let paymentsData = [];
+    let paymentsData: any[] = [];
     if (type === "all" || type === "payments") {
       paymentsData = await db
         .select({
@@ -1333,6 +1357,19 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
 
     // Format transactions
     const transactions = [
+      ...invoicesData.map((invoice: any) => ({
+        type: "invoice",
+        id: invoice.id,
+        customerId: invoice.customerId,
+        customerName: invoice.customerName || "Unknown",
+        date: invoice.createdAt,
+        amount: Number(invoice.totalAmount || 0),
+        amountPaid: Number(invoice.amountPaid || 0),
+        creditAmount: Number(invoice.dueAmount || 0),
+        paymentMethod: invoice.paymentMethod,
+        paymentStatus: invoice.paymentStatus,
+        reference: invoice.invoiceNumber,
+      })),
       ...ordersData.map((order: any) => ({
         type: "order",
         id: order.id,
@@ -1350,6 +1387,8 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         customerName: booking.customerName || "Unknown",
         date: booking.createdAt,
         amount: Number(booking.chargedAmount || 0),
+        amountPaid: Number(booking.amountPaid || 0),
+        creditAmount: Math.max(0, Number(booking.chargedAmount || 0) - Number(booking.amountPaid || 0)),
         paymentMethod: booking.paymentMethod,
         paymentStatus: booking.paymentStatus,
       })),
@@ -1370,6 +1409,19 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
 
     // Calculate summary
     const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalInvoices = invoicesData.length;
+    const totalInvoiceAmount = invoicesData.reduce(
+      (sum: number, invoice: any) => sum + Number(invoice.totalAmount || 0),
+      0
+    );
+    const totalInvoicePaid = invoicesData.reduce(
+      (sum: number, invoice: any) => sum + Number(invoice.amountPaid || 0),
+      0
+    );
+    const totalInvoiceCredit = invoicesData.reduce(
+      (sum: number, invoice: any) => sum + Number(invoice.dueAmount || 0),
+      0
+    );
     const totalOrders = ordersData.length;
     const totalOrderAmount = ordersData.reduce(
       (sum: number, o: any) => sum + Number(o.totalAmount || 0),
@@ -1380,10 +1432,35 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       (sum: number, b: any) => sum + Number(b.chargedAmount || 0),
       0
     );
+    const totalBookingPaid = bookingsData.reduce(
+      (sum: number, b: any) => sum + Number(b.amountPaid || 0),
+      0
+    );
+    const totalBookingCredit = bookingsData.reduce(
+      (sum: number, b: any) => sum + Math.max(0, Number(b.chargedAmount || 0) - Number(b.amountPaid || 0)),
+      0
+    );
     const totalPaymentsMade = paymentsData.reduce(
       (sum: number, p: any) => sum + Number(p.amount || 0),
       0
     );
+    const shop = {
+      invoiceCount: totalInvoices,
+      totalBilled: totalInvoiceAmount,
+      totalCollected: totalInvoicePaid,
+      totalCredit: totalInvoiceCredit,
+    };
+    const transport = {
+      bookingCount: totalBookings,
+      totalBilled: totalBookingAmount,
+      totalCollected: totalBookingPaid,
+      totalCredit: totalBookingCredit,
+    };
+    const combined = {
+      totalBilled: shop.totalBilled + transport.totalBilled,
+      totalCollected: shop.totalCollected + transport.totalCollected + totalPaymentsMade,
+      totalCredit: shop.totalCredit + transport.totalCredit,
+    };
 
     res.json({
       period,
@@ -1391,13 +1468,25 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       transactions,
+      combined,
+      shop,
+      transport,
       summary: {
         totalAmount,
+        totalInvoices,
+        totalInvoiceAmount,
+        totalInvoicePaid,
+        totalInvoiceCredit,
         totalOrders,
         totalOrderAmount,
         totalBookings,
         totalBookingAmount,
+        totalBookingPaid,
+        totalBookingCredit,
         totalPaymentsMade,
+        totalBilled: combined.totalBilled,
+        totalCollected: combined.totalCollected,
+        totalCredit: combined.totalCredit,
       },
     });
   } catch (err) {

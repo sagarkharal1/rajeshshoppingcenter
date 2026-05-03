@@ -6,7 +6,7 @@ import { Calendar, Filter, Download, TrendingUp, TrendingDown } from "lucide-rea
 
 interface Transaction {
   id: string | number;
-  type: "order" | "booking" | "payment";
+  type: "invoice" | "order" | "booking" | "payment";
   date: string;
   customerId: number;
   customerName: string;
@@ -18,6 +18,7 @@ interface Transaction {
 
 interface TransactionHistoryProps {
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -98,7 +99,7 @@ const VIEW_TYPES = {
   custom: "custom",
 } as const;
 
-export function TransactionHistory({ lang = "en" }: TransactionHistoryProps) {
+export function TransactionHistory({ lang = "en", api }: TransactionHistoryProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -125,13 +126,15 @@ export function TransactionHistory({ lang = "en" }: TransactionHistoryProps) {
       const params = new URLSearchParams({
         startDate: fromDate,
         endDate: toDate,
-        type: filterType === "all" ? "all" : filterType.slice(0, -4), // Remove "Only" suffix
+        type: filterType,
         period: viewType,
       });
 
-      const response = await fetch(`/api/admin/analytics?${params}`);
-      if (response.ok) {
-        const data = await response.json();
+      const path = `/admin/analytics?${params}`;
+      const data = api
+        ? await api(path)
+        : await fetch(`/api${path}`).then((response) => response.ok ? response.json() : null);
+      if (data) {
         setTransactions(data.transactions || []);
         setSummary(data.summary || {});
       }
@@ -144,9 +147,10 @@ export function TransactionHistory({ lang = "en" }: TransactionHistoryProps) {
 
   useEffect(() => {
     fetchTransactions();
-  }, [viewType, fromDate, toDate, filterType]);
+  }, [viewType, fromDate, toDate, filterType, api]);
 
   const getTypeIcon = (type: string) => {
+    if (type === "invoice") return "🧾";
     if (type === "order") return "📋";
     if (type === "booking") return "🚗";
     if (type === "payment") return "💰";
@@ -350,7 +354,9 @@ export function TransactionHistory({ lang = "en" }: TransactionHistoryProps) {
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900">
-                        {txn.type === "order"
+                        {txn.type === "invoice"
+                          ? `Invoice #${txn.id}`
+                          : txn.type === "order"
                           ? `Order #${txn.id}`
                           : txn.type === "booking"
                           ? `Booking #${txn.id}`

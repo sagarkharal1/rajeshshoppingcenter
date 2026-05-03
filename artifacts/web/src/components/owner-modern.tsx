@@ -731,6 +731,27 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
   useEffect(() => { load(); }, [period, date]);
 
   const fmt = (v: number) => money(v);
+  const report = data
+    ? {
+        combined: {
+          totalBilled: num(data.combined?.totalBilled ?? data.summary?.totalBilled ?? data.summary?.totalAmount),
+          totalCollected: num(data.combined?.totalCollected ?? data.summary?.totalCollected ?? data.summary?.totalPaymentsMade),
+          totalCredit: num(data.combined?.totalCredit ?? data.summary?.totalCredit),
+        },
+        shop: {
+          invoiceCount: num(data.shop?.invoiceCount ?? data.summary?.totalInvoices ?? data.summary?.totalOrders),
+          totalBilled: num(data.shop?.totalBilled ?? data.summary?.totalInvoiceAmount ?? data.summary?.totalOrderAmount),
+          totalCollected: num(data.shop?.totalCollected ?? data.summary?.totalInvoicePaid),
+          totalCredit: num(data.shop?.totalCredit ?? data.summary?.totalInvoiceCredit),
+        },
+        transport: {
+          bookingCount: num(data.transport?.bookingCount ?? data.summary?.totalBookings),
+          totalBilled: num(data.transport?.totalBilled ?? data.summary?.totalBookingAmount),
+          totalCollected: num(data.transport?.totalCollected ?? data.summary?.totalBookingPaid),
+          totalCredit: num(data.transport?.totalCredit ?? data.summary?.totalBookingCredit),
+        },
+      }
+    : null;
 
   return (
     <section className="space-y-5">
@@ -772,9 +793,9 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           {/* Combined totals */}
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { label: lang === "ne" ? "कुल बिल" : "Total Billed", value: fmt(data.combined.totalBilled), cls: "text-slate-950" },
-              { label: lang === "ne" ? "नगद/डिजिटल उठेको" : "Total Collected", value: fmt(data.combined.totalCollected), cls: "text-emerald-700" },
-              { label: lang === "ne" ? "बाँकी उधारो" : "Total Credit Due", value: fmt(data.combined.totalCredit), cls: "text-rose-700" },
+              { label: lang === "ne" ? "कुल बिल" : "Total Billed", value: fmt(report?.combined.totalBilled ?? 0), cls: "text-slate-950" },
+              { label: lang === "ne" ? "नगद/डिजिटल उठेको" : "Total Collected", value: fmt(report?.combined.totalCollected ?? 0), cls: "text-emerald-700" },
+              { label: lang === "ne" ? "बाँकी उधारो" : "Total Credit Due", value: fmt(report?.combined.totalCredit ?? 0), cls: "text-rose-700" },
             ].map(({ label, value, cls }) => (
               <div key={label} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
@@ -787,13 +808,13 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
             <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
               <span className="rounded-lg bg-primary/10 px-2 py-1 text-primary text-xs font-bold uppercase">🛒 {lang === "ne" ? "पसल बिक्री" : "Shop Sales"}</span>
-              <span className="text-sm font-normal text-slate-400">({data.shop.invoiceCount} {lang === "ne" ? "बिल" : "invoices"})</span>
+              <span className="text-sm font-normal text-slate-400">({report?.shop.invoiceCount ?? 0} {lang === "ne" ? "बिल" : "invoices"})</span>
             </h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
-                { label: lang === "ne" ? "बिल रकम" : "Billed", value: fmt(data.shop.totalBilled) },
-                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(data.shop.totalCollected), cls: "text-emerald-700" },
-                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(data.shop.totalCredit), cls: "text-rose-700" },
+                { label: lang === "ne" ? "बिल रकम" : "Billed", value: fmt(report?.shop.totalBilled ?? 0) },
+                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(report?.shop.totalCollected ?? 0), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(report?.shop.totalCredit ?? 0), cls: "text-rose-700" },
               ].map(({ label, value, cls = "text-slate-950" }) => (
                 <div key={label} className="rounded-2xl bg-slate-50 px-4 py-3">
                   <p className="text-xs text-slate-500">{label}</p>
@@ -807,13 +828,13 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/30 p-5 shadow-sm">
             <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
               <span className="rounded-lg bg-amber-100 px-2 py-1 text-amber-800 text-xs font-bold uppercase">🚗 {lang === "ne" ? "ट्रान्सपोर्ट" : "Transport"}</span>
-              <span className="text-sm font-normal text-slate-400">({data.transport.bookingCount} {lang === "ne" ? "बुकिङ" : "bookings"})</span>
+              <span className="text-sm font-normal text-slate-400">({report?.transport.bookingCount ?? 0} {lang === "ne" ? "बुकिङ" : "bookings"})</span>
             </h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
-                { label: lang === "ne" ? "शुल्क रकम" : "Charged", value: fmt(data.transport.totalBilled) },
-                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(data.transport.totalCollected), cls: "text-emerald-700" },
-                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(data.transport.totalCredit), cls: "text-rose-700" },
+                { label: lang === "ne" ? "शुल्क रकम" : "Charged", value: fmt(report?.transport.totalBilled ?? 0) },
+                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(report?.transport.totalCollected ?? 0), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(report?.transport.totalCredit ?? 0), cls: "text-rose-700" },
               ].map(({ label, value, cls = "text-slate-950" }) => (
                 <div key={label} className="rounded-2xl bg-white px-4 py-3">
                   <p className="text-xs text-slate-500">{label}</p>
@@ -821,9 +842,9 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
                 </div>
               ))}
             </div>
-            {data.transport.totalCredit > 0 ? (
+            {(report?.transport.totalCredit ?? 0) > 0 ? (
               <p className="mt-3 text-xs text-amber-700">
-                ⚠ {lang === "ne" ? `NPR ${data.transport.totalCredit.toFixed(0)} ट्रान्सपोर्ट शुल्क बाँकी छ।` : `NPR ${data.transport.totalCredit.toFixed(0)} transport charge is still unpaid.`}
+                ⚠ {lang === "ne" ? `NPR ${(report?.transport.totalCredit ?? 0).toFixed(0)} ट्रान्सपोर्ट शुल्क बाँकी छ।` : `NPR ${(report?.transport.totalCredit ?? 0).toFixed(0)} transport charge is still unpaid.`}
               </p>
             ) : null}
           </div>
@@ -835,13 +856,13 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
       ) : null}
 
       {/* Business Summary */}
-      <BusinessSummary lang={lang as "en" | "ne"} />
+      <BusinessSummary lang={lang as "en" | "ne"} api={api} />
 
       {/* Payment Methods Breakdown */}
-      <PaymentDashboard lang={lang as "en" | "ne"} />
+      <PaymentDashboard lang={lang as "en" | "ne"} api={api} />
 
       {/* Transaction History */}
-      <TransactionHistory lang={lang as "en" | "ne"} />
+      <TransactionHistory lang={lang as "en" | "ne"} api={api} />
     </section>
   );
 }
