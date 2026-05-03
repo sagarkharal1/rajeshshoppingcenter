@@ -4,10 +4,11 @@ import {
   customersTable,
   ordersTable,
   bookingsTable,
+  invoicesTable,
   customerPaymentsTable,
   customerLedgerTable,
 } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -26,48 +27,56 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Customer not found" });
     }
 
-    // Get all orders for this customer
-    const orders = await db
-      .select()
-      .from(ordersTable)
-      .where(eq(ordersTable.customerId, customerId))
-      .orderBy(desc(ordersTable.createdAt));
+    const phoneDigits = String(customer.phone || "").replace(/\D/g, "");
+    const orderMatch = phoneDigits
+      ? or(eq(ordersTable.customerId, customerId), sql`regexp_replace(${ordersTable.customerPhone}, '[^0-9]', '', 'g') = ${phoneDigits}`)
+      : eq(ordersTable.customerId, customerId);
+    const bookingMatch = phoneDigits
+      ? or(eq(bookingsTable.customerId, customerId), sql`regexp_replace(${bookingsTable.customerPhone}, '[^0-9]', '', 'g') = ${phoneDigits}`)
+      : eq(bookingsTable.customerId, customerId);
 
-    // Get all bookings for this customer
-    const bookings = await db
-      .select()
-      .from(bookingsTable)
-      .where(eq(bookingsTable.customerId, customerId))
-      .orderBy(desc(bookingsTable.bookingDate));
-
-    // Get all payments for this customer
-    const payments = await db
-      .select()
-      .from(customerPaymentsTable)
-      .where(eq(customerPaymentsTable.customerId, customerId))
-      .orderBy(desc(customerPaymentsTable.paymentDate));
-
-    // Get ledger entries for this customer
-    const ledgerEntries = await db
-      .select()
-      .from(customerLedgerTable)
-      .where(eq(customerLedgerTable.customerId, customerId))
-      .orderBy(desc(customerLedgerTable.date));
+    const [orders, bookings, invoices, payments, ledgerEntries] = await Promise.all([
+      db
+        .select()
+        .from(ordersTable)
+        .where(orderMatch)
+        .orderBy(desc(ordersTable.createdAt)),
+      db
+        .select()
+        .from(bookingsTable)
+        .where(bookingMatch)
+        .orderBy(desc(bookingsTable.createdAt)),
+      db
+        .select()
+        .from(invoicesTable)
+        .where(eq(invoicesTable.customerId, customerId))
+        .orderBy(desc(invoicesTable.createdAt)),
+      db
+        .select()
+        .from(customerPaymentsTable)
+        .where(eq(customerPaymentsTable.customerId, customerId))
+        .orderBy(desc(customerPaymentsTable.createdAt)),
+      db
+        .select()
+        .from(customerLedgerTable)
+        .where(eq(customerLedgerTable.customerId, customerId))
+        .orderBy(desc(customerLedgerTable.createdAt)),
+    ]);
 
     // Calculate totals
-    const totalSpent = orders.reduce(
-      (sum, order) => sum + Number(order.totalAmount || 0),
-      0
-    );
+    const orderTotal = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const invoiceTotal = invoices.reduce((sum, invoice) => sum + Number(invoice.subtotalAmount || 0), 0);
+    const bookingTotal = bookings.reduce((sum, booking) => sum + Number(booking.chargedAmount || 0), 0);
 
     res.json({
       id: customer.id,
       name: customer.name,
       phone: customer.phone,
-      code: customer.code,
+      customerCode: customer.customerCode,
+      code: customer.customerCode,
       address: customer.address,
       email: customer.email,
-      totalSpent,
+      totalSpent: Number(customer.totalSpent || 0) || orderTotal + invoiceTotal + bookingTotal,
       rewardPoints: Number(customer.rewardPoints || 0),
       creditBalance: Number(customer.creditBalance || 0),
       orders: orders.map((order) => ({
@@ -79,6 +88,19 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
         createdAt: order.createdAt,
         customerName: customer.name,
         items: (order.items as any) || [],
+      })),
+      invoices: invoices.map((invoice) => ({
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        subtotalAmount: Number(invoice.subtotalAmount || 0),
+        previousDueAmount: Number(invoice.previousDueAmount || 0),
+        totalAmount: Number(invoice.totalAmount || 0),
+        amountPaid: Number(invoice.amountPaid || 0),
+        dueAmount: Number(invoice.dueAmount || 0),
+        paymentStatus: invoice.paymentStatus,
+        paymentMethod: invoice.paymentMethod,
+        createdAt: invoice.createdAt,
+        note: invoice.note,
       })),
       bookings: bookings.map((booking) => ({
         id: booking.id,
@@ -96,14 +118,25 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
         id: payment.id,
         amount: Number(payment.amount || 0),
         method: payment.paymentMethod,
-        date: payment.paymentDate,
+        date: payment.createdAt,
+        createdAt: payment.createdAt,
         referenceNote: payment.referenceNote,
       })),
       ledgerEntries: ledgerEntries.map((entry) => ({
-        date: entry.date,
-        type: entry.type === "credit" ? "credit" : "debit",
-        amount: Number(entry.amount || 0),
-        reason: entry.reason,
+        id: entry.id,
+        date: entry.createdAt,
+        type: Number(entry.creditAmount || 0) > 0 ? "credit" : "debit",
+        amount: Math.max(Number(entry.debitAmount || 0), Number(entry.creditAmount || 0)),
+        reason: entry.description,
+        createdAt: entry.createdAt,
+        entryType: entry.entryType,
+        description: entry.description,
+        debitAmount: Number(entry.debitAmount || 0),
+        creditAmount: Number(entry.creditAmount || 0),
+        balanceAfter: Number(entry.balanceAfter || 0),
+        invoiceId: entry.invoiceId,
+        paymentId: entry.paymentId,
+        metadata: entry.metadata,
       })),
     });
   } catch (err) {

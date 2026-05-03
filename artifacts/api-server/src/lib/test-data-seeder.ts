@@ -261,9 +261,10 @@ export async function clearTestData() {
 
       // Delete stock ledger entries from test orders
       for (const orderId of testOrderIds) {
-        cleared.stockLedgers += await db
+        const result = await db
           .delete(stockLedgerTable)
           .where(`${stockLedgerTable.linkedEntityId} = ${orderId}` as any);
+        cleared.stockLedgers += Number((result as any)?.rowCount ?? 0);
       }
 
       // Delete test orders

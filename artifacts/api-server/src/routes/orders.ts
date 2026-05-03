@@ -433,19 +433,81 @@ router.post("/bookings", async (req, res) => {
   try {
     const { serviceType, customerName, customerPhone, pickupLocation, destination, bookingDate, notes } = parsed.data;
 
-    const [booking] = await db
-      .insert(bookingsTable)
-      .values({
-        serviceType,
-        customerName,
-        customerPhone,
-        pickupLocation,
-        destination,
-        bookingDate,
-        status: "pending",
-        notes: notes || null,
-      })
-      .returning();
+    const booking = await db.transaction(async (tx) => {
+      const existingCustomers = await tx
+        .select()
+        .from(customersTable)
+        .orderBy(desc(customersTable.updatedAt));
+
+      const normalizedPhone = normalizePhone(customerPhone);
+      let customer: any = existingCustomers.find(
+        (entry) => entry.phone && normalizePhone(entry.phone) === normalizedPhone
+      );
+
+      if (customer) {
+        const [updatedCustomer] = await tx
+          .update(customersTable)
+          .set({
+            name: customerName,
+            phone: customerPhone,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(customersTable.id, customer.id))
+          .returning();
+        customer = updatedCustomer;
+      } else {
+        const [createdCustomer] = await tx
+          .insert(customersTable)
+          .values({
+            name: customerName,
+            phone: customerPhone,
+          } as any)
+          .returning();
+
+        const [codedCustomer] = await tx
+          .update(customersTable)
+          .set({
+            customerCode: buildCustomerCode(createdCustomer.id),
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(customersTable.id, createdCustomer.id))
+          .returning();
+        customer = codedCustomer;
+      }
+
+      const [createdBooking] = await tx
+        .insert(bookingsTable)
+        .values({
+          customerId: customer.id,
+          serviceType,
+          customerName,
+          customerPhone,
+          pickupLocation,
+          destination,
+          bookingDate,
+          status: "pending",
+          notes: notes || null,
+        })
+        .returning();
+
+      await tx.insert(customerLedgerTable).values({
+        customerId: customer.id,
+        entryType: "booking_request",
+        description: `Transport booking request #${createdBooking.id}`,
+        debitAmount: "0.00",
+        creditAmount: "0.00",
+        balanceAfter: customer.creditBalance,
+        metadata: {
+          bookingId: createdBooking.id,
+          serviceType,
+          pickupLocation,
+          destination,
+          bookingDate,
+        },
+      });
+
+      return createdBooking;
+    });
 
     sendTelegramMessage(formatTelegramBookingMessage({
       id: booking.id,

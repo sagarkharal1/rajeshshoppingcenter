@@ -53,7 +53,7 @@ router.get("/", async (req: Request, res: Response) => {
         type: "product" as const,
         id: p.id,
         label: p.name,
-        preview: p.sku,
+        preview: p.sku || undefined,
         category: p.category || "General",
       }))
     );
@@ -81,7 +81,7 @@ router.get("/", async (req: Request, res: Response) => {
         type: "customer" as const,
         id: c.id,
         label: c.name,
-        preview: c.phone || c.code,
+        preview: c.phone || c.code || undefined,
         category: "Customer",
       }))
     );
@@ -155,7 +155,9 @@ router.get("/", async (req: Request, res: Response) => {
         customerId: bookingsTable.customerId,
         serviceType: bookingsTable.serviceType,
         chargedAmount: bookingsTable.chargedAmount,
-        customerName: customersTable.name,
+        customerName: bookingsTable.customerName,
+        customerPhone: bookingsTable.customerPhone,
+        linkedCustomerName: customersTable.name,
       })
       .from(bookingsTable)
       .leftJoin(customersTable, sql`${bookingsTable.customerId} = ${customersTable.id}`)
@@ -163,6 +165,8 @@ router.get("/", async (req: Request, res: Response) => {
         or(
           ilike(sql`CAST(${bookingsTable.id} as TEXT)`, searchPattern),
           ilike(customersTable.name, searchPattern),
+          ilike(bookingsTable.customerName, searchPattern),
+          ilike(bookingsTable.customerPhone, searchPattern),
           ilike(bookingsTable.serviceType, searchPattern)
         )
       )
@@ -173,7 +177,7 @@ router.get("/", async (req: Request, res: Response) => {
         type: "booking" as const,
         id: b.id,
         label: `Booking #${b.id}`,
-        preview: `${b.customerName} - ${b.serviceType} - Rs. ${b.chargedAmount}`,
+        preview: `${b.linkedCustomerName || b.customerName} (${b.customerPhone}) - ${b.serviceType} - Rs. ${b.chargedAmount}`,
         category: "Transport Booking",
       }))
     );

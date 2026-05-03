@@ -23,6 +23,7 @@ interface StockHistory {
 interface StockTrackerProps {
   products: Product[];
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -56,7 +57,7 @@ const labels = {
   },
 };
 
-export function StockTracker({ products, lang = "en" }: StockTrackerProps) {
+export function StockTracker({ products, lang = "en", api }: StockTrackerProps) {
   const dict = labels[lang];
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [stockHistories, setStockHistories] = useState<Record<number, StockHistory[]>>({});
@@ -79,9 +80,11 @@ export function StockTracker({ products, lang = "en" }: StockTrackerProps) {
       if (!expandedProductId) return;
 
       try {
-        const response = await fetch(`/api/admin/products/${expandedProductId}/stock-history`);
-        if (response.ok) {
-          const data = await response.json();
+        const path = `/admin/products/${expandedProductId}/stock-history`;
+        const data = api
+          ? await api(path)
+          : await fetch(`/api${path}`).then((response) => response.ok ? response.json() : null);
+        if (data) {
           setStockHistories((prev) => ({
             ...prev,
             [expandedProductId]: data.history || [],
@@ -93,7 +96,7 @@ export function StockTracker({ products, lang = "en" }: StockTrackerProps) {
     };
 
     fetchHistory();
-  }, [expandedProductId]);
+  }, [expandedProductId, api]);
 
   const StockCard = ({ product }: { product: Product }) => {
     const status = getStockStatus(product);

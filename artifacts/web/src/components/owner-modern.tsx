@@ -2074,7 +2074,7 @@ export function OwnerWorkspaceModern(props: any) {
         {tab === "products" ? (
           <section className="space-y-5">
             {/* Stock Tracker */}
-            <StockTracker products={products} lang={lang as "en" | "ne"} />
+            <StockTracker products={products} lang={lang as "en" | "ne"} api={props.api} />
 
             {/* Product Costs & Management */}
             <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">

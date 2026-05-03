@@ -189,6 +189,61 @@ function matchesIdentifier(identifier: string, settings: any): boolean {
   );
 }
 
+function normalizePhone(value: string | null | undefined): string {
+  return String(value || "").replace(/[^\d+]/g, "");
+}
+
+function buildCustomerCode(id: number): string {
+  return `CUST-${String(id).padStart(5, "0")}`;
+}
+
+async function findOrCreateCustomerForBooking(tx: any, booking: any) {
+  const phone = normalizePhone(booking.customerPhone);
+  const customers = await tx.select().from(customersTable);
+  let customer = customers.find((entry: any) => entry.phone && normalizePhone(entry.phone) === phone);
+
+  if (!customer) {
+    customer = customers.find(
+      (entry: any) =>
+        entry.name.trim().toLowerCase() === String(booking.customerName || "").trim().toLowerCase()
+    );
+  }
+
+  if (customer) {
+    const [updated] = await tx
+      .update(customersTable)
+      .set({
+        name: booking.customerName || customer.name,
+        phone: booking.customerPhone || customer.phone,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(customersTable.id, customer.id))
+      .returning();
+    return updated;
+  }
+
+  const [created] = await tx
+    .insert(customersTable)
+    .values({
+      name: booking.customerName,
+      phone: booking.customerPhone || null,
+      customerCode: null,
+    } as any)
+    .returning();
+
+  const [coded] = await tx
+    .update(customersTable)
+    .set({ customerCode: buildCustomerCode(created.id), updatedAt: new Date() } as any)
+    .where(eq(customersTable.id, created.id))
+    .returning();
+
+  return coded;
+}
+
+function bookingDue(booking: any): number {
+  return Math.max(0, Number(booking?.chargedAmount || 0) - Number(booking?.amountPaid || 0));
+}
+
 function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) {
@@ -1024,7 +1079,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
         customerPhone: customerPhone ?? booking.customerPhone,
         pickupLocation: pickupLocation ?? booking.pickupLocation,
         destination: destination ?? booking.destination,
-        bookingDate: bookingDate ? new Date(bookingDate) : booking.bookingDate,
+        bookingDate: bookingDate ? String(bookingDate) : booking.bookingDate,
         notes: notes ?? booking.notes,
         serviceType: serviceType ?? booking.serviceType,
         chargedAmount: chargedAmount !== undefined ? chargedAmount : booking.chargedAmount,
@@ -1091,134 +1146,87 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   }
 
   try {
-    // If adding to credit, fetch booking first to get customer ID
-    if (addToCredit) {
-      const [booking] = await db
+    const updated = await db.transaction(async (tx) => {
+      const [booking] = await tx
         .select()
         .from(bookingsTable)
         .where(eq(bookingsTable.id, id))
         .limit(1);
 
-      if (!booking) {
-        return res.status(404).json({ error: "Booking not found" });
+      if (!booking) throw new Error("BOOKING_NOT_FOUND");
+
+      const customer = await findOrCreateCustomerForBooking(tx, booking);
+      const oldDue = bookingDue(booking);
+      const nextCharged = Number(chargedAmount ?? booking.chargedAmount ?? 0);
+      const nextPaid = addToCredit ? 0 : Number(amountPaid ?? booking.amountPaid ?? 0);
+
+      const updates: Record<string, any> = {
+        status: addToCredit ? "completed" : status.trim(),
+        customerId: customer.id,
+      };
+
+      if (chargedAmount !== undefined || addToCredit) updates.chargedAmount = nextCharged.toFixed(2);
+      if (amountPaid !== undefined || addToCredit) updates.amountPaid = nextPaid.toFixed(2);
+      if (paymentMethod !== undefined || addToCredit) updates.paymentMethod = paymentMethod || booking.paymentMethod;
+      if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
+
+      if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
+        const charged = Number(updates.chargedAmount);
+        const paid = Number(updates.amountPaid);
+        updates.paymentStatus = paid <= 0 ? "unpaid" : paid >= charged ? "paid" : "partial";
       }
 
-      // Use transaction to atomically update booking and customer credit
-      await db.transaction(async (tx) => {
-        const chargedAmt = Number(chargedAmount ?? booking.chargedAmount ?? 0);
-
-        // Update booking status to completed and mark as delivered
-        await tx
-          .update(bookingsTable)
-          .set({
-            status: "completed",
-            chargedAmount: chargedAmt.toFixed(2),
-            amountPaid: "0",
-            paymentStatus: "unpaid",
-            paymentMethod: paymentMethod || booking.paymentMethod,
-          } as any)
-          .where(eq(bookingsTable.id, id));
-
-        // Find customer by phone number (booking might not have explicit customer ID)
-        const customers = await tx.select().from(customersTable);
-        const customer = customers.find((c: any) =>
-          c.phone && c.phone.replace(/[^\d+]/g, "") === booking.customerPhone.replace(/[^\d+]/g, "")
-        );
-
-        if (customer) {
-          // Add the charged amount to customer's credit balance
-          const currentCredit = Number(customer.creditBalance ?? 0);
-          await tx
-            .update(customersTable)
-            .set({
-              creditBalance: (currentCredit + chargedAmt).toFixed(2),
-              updatedAt: new Date(),
-            } as any)
-            .where(eq(customersTable.id, customer.id));
-        }
-      });
-
-      const [updated] = await db
-        .select()
-        .from(bookingsTable)
+      const [updatedBooking] = await tx
+        .update(bookingsTable)
+        .set(updates as any)
         .where(eq(bookingsTable.id, id))
-        .limit(1);
+        .returning();
 
-      return res.json({
-        ...updated,
-        chargedAmount: Number(updated.chargedAmount ?? 0),
-        amountPaid: Number(updated.amountPaid ?? 0),
-      });
-    }
+      const newDue = bookingDue(updatedBooking);
+      const creditDelta = newDue - oldDue;
+      const spentDelta = Math.max(0, Number(updatedBooking.chargedAmount || 0) - Number(booking.chargedAmount || 0));
+      const newCustomerBalance = Math.max(0, Number(customer.creditBalance ?? 0) + creditDelta);
 
-    // Standard booking status update (no credit addition)
-    const updates: Record<string, any> = { status: status.trim() };
-
-    // Accept payment fields when provided
-    if (chargedAmount !== undefined) updates.chargedAmount = Number(chargedAmount).toFixed(2);
-    if (amountPaid !== undefined) updates.amountPaid = Number(amountPaid).toFixed(2);
-    if (paymentMethod !== undefined) updates.paymentMethod = paymentMethod;
-    if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
-
-    // Auto-derive paymentStatus if not provided explicitly
-    if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
-      const charged = Number(updates.chargedAmount);
-      const paid = Number(updates.amountPaid);
-      updates.paymentStatus = paid <= 0 ? "unpaid" : paid >= charged ? "paid" : "partial";
-    }
-
-    const [updated] = await db
-      .update(bookingsTable)
-      .set(updates as any)
-      .where(eq(bookingsTable.id, id))
-      .returning();
-
-    if (!updated) {
-      return res.status(404).json({ error: "Booking not found" });
-    }
-
-    // Sync customer credit balance from all their unpaid bookings
-    if (updated.customerPhone) {
-      const phone = updated.customerPhone.replace(/[^\d+]/g, "");
-      const allCustomers = await db.select().from(customersTable);
-      let customer = allCustomers.find((c: any) =>
-        c.phone && c.phone.replace(/[^\d+]/g, "") === phone
-      );
-
-      // Auto-create customer if not found
-      if (!customer) {
-        const [created] = await db.insert(customersTable).values({
-          name: updated.customerName,
-          phone: updated.customerPhone,
-          customerCode: null,
-        } as any).returning();
-        customer = created;
-      }
-
-      if (customer) {
-        // Recalculate total unpaid from all bookings for this customer
-        const allBookings = await db.select().from(bookingsTable)
-          .where(sql`lower(${bookingsTable.customerPhone}) = lower(${updated.customerPhone})`);
-        const totalDue = allBookings.reduce((sum, b) =>
-          sum + Math.max(0, Number(b.chargedAmount) - Number(b.amountPaid)), 0);
-        const totalSpent = allBookings.reduce((sum, b) => sum + Number(b.chargedAmount), 0);
-
-        await db.update(customersTable).set({
-          creditBalance: totalDue.toFixed(2),
-          totalSpent: totalSpent.toFixed(2),
+      await tx
+        .update(customersTable)
+        .set({
+          creditBalance: newCustomerBalance.toFixed(2),
+          totalSpent: (Number(customer.totalSpent ?? 0) + spentDelta).toFixed(2),
           updatedAt: new Date(),
-        } as any).where(eq(customersTable.id, customer.id));
-      }
-    }
+        } as any)
+        .where(eq(customersTable.id, customer.id));
 
-    res.json({
+      await tx.insert(customerLedgerTable).values({
+        customerId: customer.id,
+        entryType: creditDelta >= 0 ? "transport_charge" : "transport_payment",
+        description: `Transport booking #${updatedBooking.id} ${updates.status}`,
+        debitAmount: creditDelta > 0 ? creditDelta.toFixed(2) : "0.00",
+        creditAmount: creditDelta < 0 ? Math.abs(creditDelta).toFixed(2) : "0.00",
+        balanceAfter: newCustomerBalance.toFixed(2),
+        metadata: {
+          bookingId: updatedBooking.id,
+          serviceType: updatedBooking.serviceType,
+          pickupLocation: updatedBooking.pickupLocation,
+          destination: updatedBooking.destination,
+          chargedAmount: Number(updatedBooking.chargedAmount || 0),
+          amountPaid: Number(updatedBooking.amountPaid || 0),
+          paymentMethod: updatedBooking.paymentMethod,
+          paymentStatus: updatedBooking.paymentStatus,
+        },
+      });
+
+      return updatedBooking;
+    });
+
+    return res.json({
       ...updated,
       chargedAmount: Number(updated.chargedAmount ?? 0),
       amountPaid: Number(updated.amountPaid ?? 0),
     });
   } catch (err) {
     console.error("Booking update error:", err);
-    res.status(500).json({ error: "Failed to update booking status" });
+    const message = err instanceof Error ? err.message : "";
+    res.status(message === "BOOKING_NOT_FOUND" ? 404 : 500).json({ error: "Failed to update booking status" });
   }
 });
 
@@ -1547,10 +1555,21 @@ router.get("/admin/audit-logs", authMiddleware, async (req, res) => {
   }
 });
 
-router.put("/products/:id/adjust-stock", async (req, res) => {
+router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) => {
   try {
     const productId = Number(req.params.id);
-    const { quantity, reason } = req.body;
+    const {
+      quantity,
+      reason,
+      transactionType,
+      dealerName,
+      dealerPhone,
+      billNumber,
+      billAmount,
+      paidAmount,
+      returnStatus,
+      damagedReason,
+    } = req.body;
 
     if (isNaN(productId) || productId <= 0) {
       return res.status(400).json({ error: "Invalid product ID" });
@@ -1586,16 +1605,31 @@ router.put("/products/:id/adjust-stock", async (req, res) => {
         })
         .where(eq(productsTable.id, productId));
 
+      const requestedType = typeof transactionType === "string" ? transactionType.trim().toLowerCase() : "";
+      const ledgerType =
+        requestedType ||
+        (quantity > 0 ? "purchase" : reason.toLowerCase().includes("damage") ? "damaged" : reason.toLowerCase().includes("return") ? "return" : "adjustment");
+      const dealerBill = Number(billAmount ?? 0);
+      const dealerPaid = Number(paidAmount ?? 0);
+
       await tx.insert(stockLedgerTable).values({
         productId,
-        transactionType: "adjustment",
+        transactionType: ledgerType,
         quantity: adjustedQuantity,
         reason: reason.trim(),
         balanceBefore,
         balanceAfter,
         metadata: {
-          adjustmentType: quantity > 0 ? "restock" : "loss",
+          adjustmentType: quantity > 0 ? "stock-in" : "stock-out",
           requestedQuantity: quantity,
+          dealerName: typeof dealerName === "string" ? dealerName.trim() || null : null,
+          dealerPhone: typeof dealerPhone === "string" ? dealerPhone.trim() || null : null,
+          billNumber: typeof billNumber === "string" ? billNumber.trim() || null : null,
+          billAmount: dealerBill,
+          paidAmount: dealerPaid,
+          dealerDue: Math.max(0, dealerBill - dealerPaid),
+          returnStatus: typeof returnStatus === "string" ? returnStatus.trim() || null : null,
+          damagedReason: typeof damagedReason === "string" ? damagedReason.trim() || null : null,
         },
       });
 
@@ -1760,6 +1794,37 @@ router.get("/admin/backup/:filename/download", authMiddleware, async (req, res) 
       error: "Failed to download backup",
       details: (err as any)?.message || String(err),
     });
+  }
+});
+
+router.get("/admin/products/:id/stock-history", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid product ID" });
+  }
+
+  try {
+    const history = await db
+      .select({
+        id: stockLedgerTable.id,
+        date: stockLedgerTable.createdAt,
+        quantity: stockLedgerTable.balanceAfter,
+        change: stockLedgerTable.quantity,
+        reason: stockLedgerTable.reason,
+        transactionType: stockLedgerTable.transactionType,
+        linkedEntityType: stockLedgerTable.linkedEntityType,
+        linkedEntityId: stockLedgerTable.linkedEntityId,
+        metadata: stockLedgerTable.metadata,
+      })
+      .from(stockLedgerTable)
+      .where(eq(stockLedgerTable.productId, id))
+      .orderBy(desc(stockLedgerTable.createdAt))
+      .limit(100);
+
+    res.json({ history });
+  } catch (err) {
+    console.error("Failed to fetch stock history:", err);
+    res.status(500).json({ error: "Failed to fetch stock history" });
   }
 });
 
