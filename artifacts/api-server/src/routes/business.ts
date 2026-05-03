@@ -12,12 +12,51 @@ import {
   productsTable,
   rewardTransactionsTable,
   settingsTable,
+  stockLedgerTable,
 } from "@workspace/db/schema";
 import jwt from "jsonwebtoken";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 
 const router: IRouter = Router();
 const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "rajesh-shopping-secret-2024";
+
+function summarizeDealerEntries(entries: Array<{ transactionType: string | null; metadata: Record<string, any> | null }>) {
+  const dealerMap = new Map<string, { billed: number; paid: number; returns: number; damaged: number }>();
+
+  for (const entry of entries) {
+    const metadata = entry.metadata || {};
+    const dealerName = String(metadata.dealerName || "").trim();
+    if (!dealerName) continue;
+
+    const dealerPhone = String(metadata.dealerPhone || "").trim();
+    const key = `${dealerName.toLowerCase()}|${dealerPhone}`;
+    const current = dealerMap.get(key) ?? { billed: 0, paid: 0, returns: 0, damaged: 0 };
+    const type = String(entry.transactionType || "").toLowerCase();
+    const billAmount = Number(metadata.billAmount || 0);
+    const paidAmount = Number(metadata.paidAmount || 0);
+
+    if (type === "dealer_payment") {
+      current.paid += paidAmount;
+    } else {
+      current.billed += billAmount;
+      current.paid += paidAmount;
+    }
+    if (type.includes("return")) current.returns += 1;
+    if (type.includes("damage")) current.damaged += 1;
+
+    dealerMap.set(key, current);
+  }
+
+  const dealers = Array.from(dealerMap.values());
+  return {
+    dealerCount: dealers.length,
+    totalBilled: dealers.reduce((sum, dealer) => sum + dealer.billed, 0),
+    totalPaid: dealers.reduce((sum, dealer) => sum + dealer.paid, 0),
+    totalDue: dealers.reduce((sum, dealer) => sum + Math.max(0, dealer.billed - dealer.paid), 0),
+    returnCount: dealers.reduce((sum, dealer) => sum + dealer.returns, 0),
+    damagedCount: dealers.reduce((sum, dealer) => sum + dealer.damaged, 0),
+  };
+}
 
 function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
@@ -152,6 +191,15 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
       .from(invoicesTable)
       .where(sql`${invoicesTable.createdAt} >= ${today} AND ${invoicesTable.createdAt} < ${tomorrow}`);
 
+    const dealerEntries = await db
+      .select({
+        transactionType: stockLedgerTable.transactionType,
+        metadata: stockLedgerTable.metadata,
+      })
+      .from(stockLedgerTable);
+    const dealerTotals = summarizeDealerEntries(dealerEntries);
+    const customerCreditDue = asNumber(customerStats?.totalCreditBalance);
+
     const recentInvoices = await db
       .select({
         id: invoicesTable.id,
@@ -176,8 +224,15 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
         inventoryCost: asNumber(productStats?.inventoryCost),
         inventoryRevenue: asNumber(productStats?.inventoryRevenue),
         totalCustomers: Number(customerStats?.totalCustomers ?? 0),
-        totalCreditBalance: asNumber(customerStats?.totalCreditBalance),
+        totalCreditBalance: customerCreditDue,
         totalRewardPoints: Number(customerStats?.totalRewardPoints ?? 0),
+        dealerCount: dealerTotals.dealerCount,
+        dealerTotalBilled: dealerTotals.totalBilled,
+        dealerTotalPaid: dealerTotals.totalPaid,
+        dealerTotalDue: dealerTotals.totalDue,
+        dealerReturnCount: dealerTotals.returnCount,
+        dealerDamagedCount: dealerTotals.damagedCount,
+        netCreditPosition: customerCreditDue - dealerTotals.totalDue,
         totalOnlineOrders: Number(onlineOrderStats?.totalOrders ?? 0),
         pendingOnlineOrders: Number(onlineOrderStats?.pendingPayment ?? 0),
         confirmedOnlineRevenue: asNumber(onlineOrderStats?.confirmedRevenue),

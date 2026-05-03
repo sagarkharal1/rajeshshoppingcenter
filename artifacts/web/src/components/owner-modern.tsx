@@ -751,6 +751,16 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           totalCollected: num(data.transport?.totalCollected ?? data.summary?.totalBookingPaid),
           totalCredit: num(data.transport?.totalCredit ?? data.summary?.totalBookingCredit),
         },
+        dealer: {
+          dealerCount: num(data.dealer?.dealerCount ?? data.summary?.dealerCount),
+          totalBilled: num(data.dealer?.totalBilled ?? data.summary?.dealerTotalBilled),
+          totalPaid: num(data.dealer?.totalPaid ?? data.summary?.dealerTotalPaid),
+          totalDue: num(data.dealer?.totalDue ?? data.summary?.dealerTotalDue),
+          currentDue: num(data.dealer?.currentDue ?? data.summary?.dealerCurrentDue),
+          returnCount: num(data.dealer?.returnCount ?? data.summary?.dealerReturnCount),
+          damagedCount: num(data.dealer?.damagedCount ?? data.summary?.dealerDamagedCount),
+          netCreditPosition: num(data.dealer?.netCreditPosition ?? data.summary?.netCreditPosition),
+        },
       }
     : null;
 
@@ -805,6 +815,24 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
             ))}
           </div>
 
+          <div className="rounded-[1.5rem] border border-blue-100 bg-blue-50/40 p-5 shadow-sm">
+            <h4 className="text-lg font-bold text-slate-950">
+              {lang === "ne" ? "उधारो स्थिति" : "Credit Position"}
+            </h4>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: lang === "ne" ? "ग्राहकले हामीलाई दिनुपर्ने" : "Customers owe us", value: fmt(report?.combined.totalCredit ?? 0), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "हामीले डिलरलाई दिनुपर्ने" : "We owe dealers", value: fmt(report?.dealer.currentDue ?? 0), cls: "text-rose-700" },
+                { label: lang === "ne" ? "नेट स्थिति" : "Net position", value: fmt(report?.dealer.netCreditPosition ?? 0), cls: (report?.dealer.netCreditPosition ?? 0) >= 0 ? "text-blue-700" : "text-rose-700" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Shop breakdown */}
           <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
             <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
@@ -848,6 +876,29 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
                 ⚠ {lang === "ne" ? `NPR ${(report?.transport.totalCredit ?? 0).toFixed(0)} ट्रान्सपोर्ट शुल्क बाँकी छ।` : `NPR ${(report?.transport.totalCredit ?? 0).toFixed(0)} transport charge is still unpaid.`}
               </p>
             ) : null}
+          </div>
+
+          <div className="rounded-[1.5rem] border border-rose-100 bg-rose-50/30 p-5 shadow-sm">
+            <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+              <span className="rounded-lg bg-rose-100 px-2 py-1 text-rose-800 text-xs font-bold uppercase">
+                {lang === "ne" ? "डिलर / साहु" : "Dealers / Creditors"}
+              </span>
+              <span className="text-sm font-normal text-slate-400">({report?.dealer.dealerCount ?? 0} {lang === "ne" ? "डिलर" : "dealers"})</span>
+            </h4>
+            <div className="mt-4 grid gap-3 sm:grid-cols-5">
+              {[
+                { label: lang === "ne" ? "खरिद" : "Bought", value: fmt(report?.dealer.totalBilled ?? 0) },
+                { label: lang === "ne" ? "तिरेको" : "Paid", value: fmt(report?.dealer.totalPaid ?? 0), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "यो अवधिको बाँकी" : "Period due", value: fmt(report?.dealer.totalDue ?? 0), cls: "text-rose-700" },
+                { label: lang === "ne" ? "फिर्ता" : "Returns", value: String(report?.dealer.returnCount ?? 0) },
+                { label: lang === "ne" ? "ड्यामेज" : "Damaged", value: String(report?.dealer.damagedCount ?? 0), cls: "text-rose-700" },
+              ].map(({ label, value, cls = "text-slate-950" }) => (
+                <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       ) : loading ? (
@@ -1193,6 +1244,48 @@ export function OwnerWorkspaceModern(props: any) {
                   </div>
                 </article>
               ))}
+            </div>
+            <div className="rounded-[1.5rem] border border-blue-100 bg-blue-50/40 p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-950">
+                    {lang === "ne" ? "उधारो र डिलर स्थिति" : "Credit and Dealer Position"}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {lang === "ne" ? "ग्राहकबाट उठाउनुपर्ने र डिलरलाई तिर्नुपर्ने रकम।" : "What customers owe us versus what we owe dealers."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTab("products")}
+                  className="rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700"
+                >
+                  {lang === "ne" ? "डिलर हेर्नुहोस्" : "View dealers"}
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[
+                  { label: lang === "ne" ? "ग्राहकले हामीलाई दिनुपर्ने" : "Customers owe us", value: money(summary.totals.totalCreditBalance), cls: "text-emerald-700" },
+                  { label: lang === "ne" ? "हामीले डिलरलाई दिनुपर्ने" : "We owe dealers", value: money(summary.totals.dealerTotalDue || 0), cls: "text-rose-700" },
+                  { label: lang === "ne" ? "नेट स्थिति" : "Net position", value: money(summary.totals.netCreditPosition || 0), cls: num(summary.totals.netCreditPosition) >= 0 ? "text-blue-700" : "text-rose-700" },
+                ].map(({ label, value, cls }) => (
+                  <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{label}</p>
+                    <p className={`mt-2 text-2xl font-extrabold ${cls}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                  {lang === "ne" ? "डिलर" : "Dealers"}: <strong>{summary.totals.dealerCount || 0}</strong>
+                </div>
+                <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                  {lang === "ne" ? "फिर्ता" : "Returns"}: <strong>{summary.totals.dealerReturnCount || 0}</strong>
+                </div>
+                <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                  {lang === "ne" ? "ड्यामेज" : "Damaged"}: <strong>{summary.totals.dealerDamagedCount || 0}</strong>
+                </div>
+              </div>
             </div>
             {/* Online order revenue summary */}
             {summary.totals.totalOnlineOrders > 0 ? (
