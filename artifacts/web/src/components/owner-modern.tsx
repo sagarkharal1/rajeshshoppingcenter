@@ -1021,6 +1021,7 @@ export function OwnerWorkspaceModern(props: any) {
                   } else if (result.type === "customer") {
                     setTab("customers");
                     setCustomerSearch(result.label);
+                    setSelectedCustomerId(Number(result.id));
                   } else if (result.type === "order") {
                     setTab("orders");
                   } else if (result.type === "booking") {

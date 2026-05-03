@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Printer, Download, ArrowUp, ArrowDown, Phone, MapPin, Gift } from "lucide-react";
+import { X, Printer, ArrowUp, ArrowDown, Phone, MapPin, Gift, ReceiptText, Truck, CreditCard } from "lucide-react";
 
 interface Order {
   id: number;
@@ -41,6 +41,20 @@ interface Payment {
   referenceNote?: string;
 }
 
+interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  subtotalAmount: number;
+  previousDueAmount: number;
+  totalAmount: number;
+  amountPaid: number;
+  dueAmount: number;
+  paymentStatus: string;
+  paymentMethod: string;
+  createdAt: string;
+  note?: string | null;
+}
+
 interface CustomerData {
   id: number;
   name: string;
@@ -52,6 +66,7 @@ interface CustomerData {
   rewardPoints: number;
   creditBalance: number;
   orders: Order[];
+  invoices: Invoice[];
   bookings: Booking[];
   payments: Payment[];
   ledgerEntries?: Array<{
@@ -78,11 +93,17 @@ const labels = {
     orders: "Orders",
     bookings: "Bookings",
     payments: "Payments",
+    invoices: "Product Bills",
+    allActivity: "All Activity",
+    productDue: "Product Due",
+    transportDue: "Transport Due",
+    totalDue: "Total Due",
     creditHistory: "Credit History",
     totalSpent: "Total Spent",
     rewardPoints: "Reward Points",
     creditBalance: "Credit Balance",
     noOrders: "No orders yet",
+    noInvoices: "No product bills yet",
     noBookings: "No bookings yet",
     noPayments: "No payments yet",
     print: "Print",
@@ -132,24 +153,26 @@ export function CustomerDetailModal({
 }: CustomerDetailModalProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"orders" | "bookings" | "payments" | "ledger">(
-    "orders"
+  const [activeTab, setActiveTab] = useState<"all" | "invoices" | "orders" | "bookings" | "payments" | "ledger">(
+    "all"
   );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: "", paymentMethod: "cash", referenceNote: "" });
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
 
-  const dict = labels[lang];
+  const dict: any = { ...labels.en, ...labels[lang] };
 
   const fetchCustomerData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/customers/${customerId}/full-profile`);
-      if (response.ok) {
-        const data = await response.json();
-        setCustomer(data);
-      }
+      const data = api
+        ? await api(`/customers/${customerId}/full-profile`)
+        : await fetch(`/api/customers/${customerId}/full-profile`).then((response) => {
+            if (!response.ok) throw new Error("Failed to load customer");
+            return response.json();
+          });
+      setCustomer(data);
     } catch (err) {
       console.error("Failed to fetch customer data:", err);
     } finally {
@@ -193,6 +216,48 @@ export function CustomerDetailModal({
 
   if (!isOpen) return null;
 
+  const productDue = customer
+    ? (customer.invoices || []).reduce((sum, invoice) => sum + Number(invoice.dueAmount || 0), 0)
+    : 0;
+  const transportDue = customer
+    ? (customer.bookings || []).reduce((sum, booking) => {
+        const status = String(booking.status || "").toLowerCase();
+        if (status === "cancelled") return sum;
+        return sum + Math.max(0, Number(booking.chargedAmount || 0) - Number(booking.amountPaid || 0));
+      }, 0)
+    : 0;
+  const activity = customer
+    ? [
+        ...(customer.invoices || []).map((invoice) => ({
+          id: `invoice-${invoice.id}`,
+          date: invoice.createdAt,
+          title: `Bill ${invoice.invoiceNumber}`,
+          meta: `${invoice.paymentMethod} - ${invoice.paymentStatus}`,
+          amount: Number(invoice.totalAmount || 0),
+          due: Number(invoice.dueAmount || 0),
+          kind: "invoice" as const,
+        })),
+        ...(customer.bookings || []).map((booking) => ({
+          id: `booking-${booking.id}`,
+          date: booking.bookingDate,
+          title: `Transport #${booking.id}`,
+          meta: `${booking.serviceType}: ${booking.pickupLocation} -> ${booking.destination}`,
+          amount: Number(booking.chargedAmount || 0),
+          due: Math.max(0, Number(booking.chargedAmount || 0) - Number(booking.amountPaid || 0)),
+          kind: "booking" as const,
+        })),
+        ...(customer.payments || []).map((payment) => ({
+          id: `payment-${payment.id}`,
+          date: payment.date,
+          title: payment.referenceNote || "Payment received",
+          meta: payment.method,
+          amount: Number(payment.amount || 0),
+          due: 0,
+          kind: "payment" as const,
+        })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
+
   return (
     <AnimatePresence>
       <motion.div
@@ -207,7 +272,7 @@ export function CustomerDetailModal({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl"
+          className="relative w-full max-w-5xl max-h-[90vh] overflow-auto rounded-2xl bg-white shadow-2xl"
         >
           {/* Header */}
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4">
@@ -303,6 +368,27 @@ export function CustomerDetailModal({
                 </div>
               </div>
 
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  { label: dict.productDue, value: productDue, icon: ReceiptText, className: "border-blue-200 bg-blue-50 text-blue-900" },
+                  { label: dict.transportDue, value: transportDue, icon: Truck, className: "border-amber-200 bg-amber-50 text-amber-900" },
+                  {
+                    label: dict.totalDue,
+                    value: customer.creditBalance,
+                    icon: CreditCard,
+                    className: customer.creditBalance > 0 ? "border-rose-200 bg-rose-50 text-rose-900" : "border-emerald-200 bg-emerald-50 text-emerald-900",
+                  },
+                ].map((card) => (
+                  <div key={card.label} className={`rounded-2xl border p-4 ${card.className}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold uppercase tracking-wider">{card.label}</p>
+                      <card.icon className="h-5 w-5" />
+                    </div>
+                    <p className="mt-2 text-2xl font-extrabold">Rs. {Number(card.value || 0).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+
               {customer.creditBalance > 0 ? (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -368,6 +454,8 @@ export function CustomerDetailModal({
                 <div className="flex gap-1 flex-wrap">
                   {(
                     [
+                      { id: "all" as const, label: dict.allActivity },
+                      { id: "invoices" as const, label: dict.invoices },
                       { id: "orders" as const, label: dict.orders },
                       { id: "bookings" as const, label: dict.bookings },
                       { id: "payments" as const, label: dict.payments },
@@ -389,6 +477,11 @@ export function CustomerDetailModal({
                           {customer.orders.length}
                         </span>
                       )}
+                      {tab.id === "invoices" && customer.invoices.length > 0 && (
+                        <span className="ml-2 inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                          {customer.invoices.length}
+                        </span>
+                      )}
                       {tab.id === "bookings" && customer.bookings.length > 0 && (
                         <span className="ml-2 inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
                           {customer.bookings.length}
@@ -401,6 +494,69 @@ export function CustomerDetailModal({
 
               {/* Tab Content */}
               <div>
+                {activeTab === "all" && (
+                  <div className="space-y-3">
+                    {activity.length > 0 ? (
+                      activity.map((item) => {
+                        const Icon = item.kind === "invoice" ? ReceiptText : item.kind === "booking" ? Truck : CreditCard;
+                        const color = item.kind === "payment" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : item.due > 0 ? "text-rose-700 bg-rose-50 border-rose-200" : "text-slate-700 bg-slate-50 border-slate-200";
+                        return (
+                          <div key={item.id} className={`rounded-2xl border p-4 ${color}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex min-w-0 gap-3">
+                                <Icon className="mt-1 h-5 w-5 shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-950">{item.title}</p>
+                                  <p className="text-sm text-slate-600">{item.meta}</p>
+                                  <p className="text-xs text-slate-500">{new Date(item.date).toLocaleString()}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-extrabold text-slate-950">
+                                  {item.kind === "payment" ? "+" : ""}Rs. {item.amount.toLocaleString()}
+                                </p>
+                                {item.due > 0 ? (
+                                  <p className="text-sm font-bold text-rose-700">Due: Rs. {item.due.toLocaleString()}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-center py-8 text-gray-500">No account activity yet</p>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "invoices" && (
+                  <div className="space-y-3">
+                    {customer.invoices.length > 0 ? (
+                      customer.invoices.map((invoice) => (
+                        <div key={invoice.id} className="rounded-2xl border border-gray-200 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-gray-900">{invoice.invoiceNumber}</p>
+                              <p className="text-sm text-gray-600">{new Date(invoice.createdAt).toLocaleString()}</p>
+                              <p className="text-xs text-gray-500">{invoice.paymentMethod} - {invoice.paymentStatus}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-gray-900">Rs. {invoice.totalAmount.toLocaleString()}</p>
+                              {invoice.dueAmount > 0 ? (
+                                <p className="text-sm font-bold text-rose-700">Due: Rs. {invoice.dueAmount.toLocaleString()}</p>
+                              ) : (
+                                <p className="text-sm font-bold text-emerald-700">Paid</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-center py-8 text-gray-500">{dict.noInvoices}</p>
+                    )}
+                  </div>
+                )}
+
                 {activeTab === "orders" && (
                   <div className="space-y-3">
                     {customer.orders.length > 0 ? (
