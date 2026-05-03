@@ -1868,6 +1868,156 @@ router.get("/admin/backup/:filename/download", authMiddleware, async (req, res) 
   }
 });
 
+router.get("/admin/dealers", authMiddleware, async (_req, res) => {
+  try {
+    const entries = await db
+      .select({
+        id: stockLedgerTable.id,
+        productId: stockLedgerTable.productId,
+        productName: productsTable.name,
+        transactionType: stockLedgerTable.transactionType,
+        quantity: stockLedgerTable.quantity,
+        reason: stockLedgerTable.reason,
+        date: stockLedgerTable.createdAt,
+        metadata: stockLedgerTable.metadata,
+      })
+      .from(stockLedgerTable)
+      .leftJoin(productsTable, eq(stockLedgerTable.productId, productsTable.id))
+      .orderBy(desc(stockLedgerTable.createdAt))
+      .limit(500);
+
+    const dealerMap = new Map<string, any>();
+
+    for (const entry of entries) {
+      const metadata = (entry.metadata || {}) as Record<string, any>;
+      const dealerName = String(metadata.dealerName || "").trim();
+      if (!dealerName) continue;
+
+      const dealerPhone = String(metadata.dealerPhone || "").trim();
+      const key = `${dealerName.toLowerCase()}|${dealerPhone}`;
+      const billAmount = Number(metadata.billAmount || 0);
+      const paidAmount = Number(metadata.paidAmount || 0);
+      const dealerDue = Math.max(0, billAmount - paidAmount);
+      const isPayment = String(entry.transactionType || "").toLowerCase() === "dealer_payment";
+      const paymentAmount = isPayment ? paidAmount : 0;
+
+      const dealer = dealerMap.get(key) ?? {
+        name: dealerName,
+        phone: dealerPhone,
+        totalBilled: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        purchaseCount: 0,
+        returnCount: 0,
+        damagedCount: 0,
+        lastActivity: entry.date,
+        entries: [],
+      };
+
+      dealer.totalBilled += isPayment ? 0 : billAmount;
+      dealer.totalPaid += isPayment ? paymentAmount : paidAmount;
+      dealer.totalDue += isPayment ? -paymentAmount : dealerDue;
+      dealer.purchaseCount += String(entry.transactionType || "").toLowerCase() === "purchase" ? 1 : 0;
+      dealer.returnCount += String(entry.transactionType || "").toLowerCase().includes("return") ? 1 : 0;
+      dealer.damagedCount += String(entry.transactionType || "").toLowerCase().includes("damage") ? 1 : 0;
+      dealer.lastActivity = entry.date > dealer.lastActivity ? entry.date : dealer.lastActivity;
+      dealer.entries.push({
+        id: entry.id,
+        productId: entry.productId,
+        productName: entry.productName,
+        transactionType: entry.transactionType,
+        quantity: entry.quantity,
+        reason: entry.reason,
+        date: entry.date,
+        billNumber: metadata.billNumber || null,
+        billAmount,
+        paidAmount: isPayment ? paymentAmount : paidAmount,
+        dealerDue: isPayment ? 0 : dealerDue,
+        returnStatus: metadata.returnStatus || null,
+        damagedReason: metadata.damagedReason || null,
+      });
+
+      dealerMap.set(key, dealer);
+    }
+
+    const dealers = Array.from(dealerMap.values())
+      .map((dealer) => ({
+        ...dealer,
+        totalDue: Math.max(0, dealer.totalDue),
+      }))
+      .sort((a, b) => b.totalDue - a.totalDue || new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+
+    res.json({
+      dealers,
+      totals: {
+        dealerCount: dealers.length,
+        totalBilled: dealers.reduce((sum, dealer) => sum + Number(dealer.totalBilled || 0), 0),
+        totalPaid: dealers.reduce((sum, dealer) => sum + Number(dealer.totalPaid || 0), 0),
+        totalDue: dealers.reduce((sum, dealer) => sum + Number(dealer.totalDue || 0), 0),
+      },
+    });
+  } catch (err) {
+    console.error("Failed to fetch dealer records:", err);
+    res.status(500).json({ error: "Failed to fetch dealer records" });
+  }
+});
+
+router.post("/admin/dealer-payments", authMiddleware, async (req, res) => {
+  try {
+    const productId = Number(req.body?.productId);
+    const amount = Number(req.body?.amount);
+    const dealerName = String(req.body?.dealerName || "").trim();
+    const dealerPhone = String(req.body?.dealerPhone || "").trim();
+    const note = String(req.body?.note || "Dealer payment").trim();
+
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return res.status(400).json({ error: "Product is required for dealer payment record" });
+    }
+    if (!dealerName) {
+      return res.status(400).json({ error: "Dealer name is required" });
+    }
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "Payment amount must be greater than zero" });
+    }
+
+    const [product] = await db
+      .select({ stockQuantity: productsTable.stockQuantity })
+      .from(productsTable)
+      .where(eq(productsTable.id, productId))
+      .limit(1);
+
+    if (!product) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    const [entry] = await db
+      .insert(stockLedgerTable)
+      .values({
+        productId,
+        transactionType: "dealer_payment",
+        quantity: 0,
+        reason: note,
+        balanceBefore: product.stockQuantity || 0,
+        balanceAfter: product.stockQuantity || 0,
+        metadata: {
+          adjustmentType: "dealer-payment",
+          dealerName,
+          dealerPhone: dealerPhone || null,
+          billAmount: 0,
+          paidAmount: amount,
+          dealerDue: 0,
+          note,
+        },
+      })
+      .returning();
+
+    res.status(201).json({ success: true, entry });
+  } catch (err) {
+    console.error("Failed to record dealer payment:", err);
+    res.status(500).json({ error: "Failed to record dealer payment" });
+  }
+});
+
 router.get("/admin/products/:id/stock-history", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {

@@ -12,6 +12,7 @@ import { StockTracker } from "@/components/stock-tracker";
 import { PaymentDashboard } from "@/components/payment-dashboard";
 import { CreditManager } from "@/components/credit-manager";
 import { BusinessSummary } from "@/components/business-summary";
+import { DealerRecords } from "@/components/dealer-records";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
@@ -2095,6 +2096,8 @@ export function OwnerWorkspaceModern(props: any) {
 
         {tab === "products" ? (
           <section className="space-y-5">
+            <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} />
+
             {/* Stock Tracker */}
             <StockTracker products={products} lang={lang as "en" | "ne"} api={props.api} />
 
