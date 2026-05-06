@@ -13,6 +13,7 @@ import {
   customersTable,
   customerPaymentsTable,
   customerLedgerTable,
+  rewardTransactionsTable,
   auditLogsTable,
   stockLedgerTable,
 } from "@workspace/db/schema";
@@ -1832,6 +1833,9 @@ router.delete("/admin/test-records/codex", authMiddleware, async (_req, res) => 
       if (customerIds.length > 0) {
         paymentConditions.push(inArray(customerPaymentsTable.customerId, customerIds) as any);
       }
+      if (invoiceIds.length > 0) {
+        paymentConditions.push(inArray(customerPaymentsTable.invoiceId, invoiceIds) as any);
+      }
       const testPayments = await tx
         .select({ id: customerPaymentsTable.id })
         .from(customerPaymentsTable)
@@ -1869,6 +1873,7 @@ router.delete("/admin/test-records/codex", authMiddleware, async (_req, res) => 
       }
       if (invoiceIds.length > 0) {
         await tx.delete(invoiceItemsTable).where(inArray(invoiceItemsTable.invoiceId, invoiceIds));
+        await tx.delete(rewardTransactionsTable).where(inArray(rewardTransactionsTable.invoiceId, invoiceIds));
       }
       if (paymentIds.length > 0) {
         await tx.delete(customerPaymentsTable).where(inArray(customerPaymentsTable.id, paymentIds));
