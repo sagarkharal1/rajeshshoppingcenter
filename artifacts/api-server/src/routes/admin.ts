@@ -8,6 +8,7 @@ import {
   ordersTable,
   bookingsTable,
   invoicesTable,
+  invoiceItemsTable,
   settingsTable,
   customersTable,
   customerPaymentsTable,
@@ -15,7 +16,7 @@ import {
   auditLogsTable,
   stockLedgerTable,
 } from "@workspace/db/schema";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, ilike, inArray, or } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -1791,7 +1792,131 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
   }
 });
 
-router.post("/admin/test-data/seed", async (req, res) => {
+router.delete("/admin/test-records/codex", authMiddleware, async (_req, res) => {
+  try {
+    const cleared = await db.transaction(async (tx) => {
+      const testCustomers = await tx
+        .select({ id: customersTable.id })
+        .from(customersTable)
+        .where(
+          or(
+            ilike(customersTable.name, "%TEST CUSTOMER CODEX%"),
+            ilike(customersTable.notes, "%Temporary live smoke test customer%")
+          )
+        );
+      const customerIds = testCustomers.map((row) => row.id);
+
+      const testProducts = await tx
+        .select({ id: productsTable.id })
+        .from(productsTable)
+        .where(
+          or(
+            ilike(productsTable.name, "%TEST PRODUCT CODEX%"),
+            ilike(productsTable.sku, "TEST-CODEX%"),
+            ilike(productsTable.description, "%Temporary live smoke test product%")
+          )
+        );
+      const productIds = testProducts.map((row) => row.id);
+
+      const invoiceConditions = [ilike(invoicesTable.note, "%TEST credit invoice%")];
+      if (customerIds.length > 0) {
+        invoiceConditions.push(inArray(invoicesTable.customerId, customerIds) as any);
+      }
+      const testInvoices = await tx
+        .select({ id: invoicesTable.id })
+        .from(invoicesTable)
+        .where(or(...invoiceConditions));
+      const invoiceIds = testInvoices.map((row) => row.id);
+
+      const paymentConditions = [ilike(customerPaymentsTable.referenceNote, "%TEST customer payment%")];
+      if (customerIds.length > 0) {
+        paymentConditions.push(inArray(customerPaymentsTable.customerId, customerIds) as any);
+      }
+      const testPayments = await tx
+        .select({ id: customerPaymentsTable.id })
+        .from(customerPaymentsTable)
+        .where(or(...paymentConditions));
+      const paymentIds = testPayments.map((row) => row.id);
+
+      const stockConditions = [
+        ilike(stockLedgerTable.reason, "%TEST dealer%"),
+        sql`${stockLedgerTable.metadata}->>'dealerName' ilike ${"%TEST DEALER CODEX%"}`,
+      ];
+      if (productIds.length > 0) {
+        stockConditions.push(inArray(stockLedgerTable.productId, productIds) as any);
+      }
+      const testStockEntries = await tx
+        .select({ id: stockLedgerTable.id })
+        .from(stockLedgerTable)
+        .where(or(...stockConditions));
+      const stockLedgerIds = testStockEntries.map((row) => row.id);
+
+      const ledgerConditions = [];
+      if (customerIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.customerId, customerIds));
+      if (invoiceIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.invoiceId, invoiceIds));
+      if (paymentIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.paymentId, paymentIds));
+      const testLedgerEntries =
+        ledgerConditions.length > 0
+          ? await tx
+              .select({ id: customerLedgerTable.id })
+              .from(customerLedgerTable)
+              .where(or(...ledgerConditions))
+          : [];
+      const customerLedgerIds = testLedgerEntries.map((row) => row.id);
+
+      if (customerLedgerIds.length > 0) {
+        await tx.delete(customerLedgerTable).where(inArray(customerLedgerTable.id, customerLedgerIds));
+      }
+      if (invoiceIds.length > 0) {
+        await tx.delete(invoiceItemsTable).where(inArray(invoiceItemsTable.invoiceId, invoiceIds));
+      }
+      if (paymentIds.length > 0) {
+        await tx.delete(customerPaymentsTable).where(inArray(customerPaymentsTable.id, paymentIds));
+      }
+      if (invoiceIds.length > 0) {
+        await tx.delete(invoicesTable).where(inArray(invoicesTable.id, invoiceIds));
+      }
+      if (stockLedgerIds.length > 0) {
+        await tx.delete(stockLedgerTable).where(inArray(stockLedgerTable.id, stockLedgerIds));
+      }
+      if (productIds.length > 0) {
+        await tx
+          .delete(auditLogsTable)
+          .where(and(eq(auditLogsTable.entityType, "product"), inArray(auditLogsTable.entityId, productIds)));
+        await tx.delete(productsTable).where(inArray(productsTable.id, productIds));
+      }
+      if (customerIds.length > 0) {
+        await tx
+          .delete(auditLogsTable)
+          .where(and(eq(auditLogsTable.entityType, "customer"), inArray(auditLogsTable.entityId, customerIds)));
+        await tx.delete(customersTable).where(inArray(customersTable.id, customerIds));
+      }
+
+      return {
+        customers: customerIds.length,
+        products: productIds.length,
+        invoices: invoiceIds.length,
+        payments: paymentIds.length,
+        customerLedgerEntries: customerLedgerIds.length,
+        stockLedgerEntries: stockLedgerIds.length,
+      };
+    });
+
+    res.json({
+      success: true,
+      message: "Codex smoke-test records cleared successfully",
+      cleared,
+    });
+  } catch (err) {
+    console.error("Clear Codex test records error:", err);
+    res.status(500).json({
+      error: "Failed to clear Codex test records",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.post("/admin/test-data/seed", authMiddleware, async (req, res) => {
   try {
     const { customerCount, orderCount, bookingCount, daysBack } = req.query;
 
@@ -1817,7 +1942,7 @@ router.post("/admin/test-data/seed", async (req, res) => {
   }
 });
 
-router.delete("/admin/test-data/clear", async (req, res) => {
+router.delete("/admin/test-data/clear", authMiddleware, async (req, res) => {
   try {
     const cleared = await clearTestData();
 
@@ -1835,7 +1960,7 @@ router.delete("/admin/test-data/clear", async (req, res) => {
   }
 });
 
-router.get("/admin/test-data/status", async (req, res) => {
+router.get("/admin/test-data/status", authMiddleware, async (req, res) => {
   try {
     const status = await getTestDataStatus();
 
