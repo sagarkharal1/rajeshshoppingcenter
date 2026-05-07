@@ -38,6 +38,7 @@ function formatWhen(value?: string) {
 export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanelProps) {
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [status, setStatus] = useState<any>(null);
+  const [schedule, setSchedule] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"" | "json" | "sql" | string>("");
   const [error, setError] = useState("");
@@ -47,12 +48,14 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
     setLoading(true);
     setError("");
     try {
-      const [listResult, statusResult] = await Promise.all([
+      const [listResult, statusResult, scheduleResult] = await Promise.all([
         api("/admin/backup/list"),
         api("/admin/backup/status"),
+        api("/admin/backup/schedule/status").catch(() => null),
       ]);
       setBackups(listResult.backups || []);
-      setStatus(statusResult);
+      setStatus(statusResult.status || statusResult);
+      setSchedule(scheduleResult?.schedule || null);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : (lang === "ne" ? "ब्याकअप सूची लोड गर्न सकिएन।" : "Could not load backups."));
     } finally {
@@ -111,6 +114,23 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
       setNotice(lang === "ne" ? "ब्याकअप डाउनलोड भयो।" : "Backup downloaded.");
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : (lang === "ne" ? "डाउनलोड गर्न सकिएन।" : "Download failed."));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const runAutomaticBackupNow = async () => {
+    setBusy("scheduled");
+    setError("");
+    setNotice("");
+    try {
+      const result = await api("/admin/backup/schedule/run-now", { method: "POST" });
+      setSchedule(result.schedule || null);
+      if (result.schedule?.lastError) throw new Error(result.schedule.lastError);
+      setNotice(lang === "ne" ? "स्वचालित ब्याकअप अहिले चल्यो।" : "Automatic backup ran now.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : (lang === "ne" ? "स्वचालित ब्याकअप चलाउन सकिएन।" : "Could not run automatic backup."));
     } finally {
       setBusy("");
     }
@@ -191,6 +211,56 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
           <p className="mt-1 text-sm font-bold text-slate-950">{formatBytes(status?.totalSize ?? backups.reduce((sum, item) => sum + (item.size || 0), 0))}</p>
         </div>
       </div>
+
+      {schedule ? (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-slate-950">{lang === "ne" ? "स्वचालित ब्याकअप" : "Automatic Backup"}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {schedule.enabled
+                  ? (lang === "ne" ? `हरेक ${schedule.intervalHours} घण्टामा ${String(schedule.format).toUpperCase()} ब्याकअप` : `${String(schedule.format).toUpperCase()} backup every ${schedule.intervalHours} hours`)
+                  : (lang === "ne" ? "बन्द छ" : "Disabled")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={runAutomaticBackupNow}
+              disabled={Boolean(busy)}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-60"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              {lang === "ne" ? "अहिले चलाउनुहोस्" : "Run now"}
+            </button>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">{lang === "ne" ? "अर्को समय" : "Next Run"}</p>
+              <p className="text-sm font-semibold text-slate-900">{schedule.nextRunAt ? formatWhen(schedule.nextRunAt) : "-"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">{lang === "ne" ? "अन्तिम सफल" : "Last Success"}</p>
+              <p className="text-sm font-semibold text-slate-900">{schedule.lastSuccessAt ? formatWhen(schedule.lastSuccessAt) : "-"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2">
+              <p className="text-xs text-slate-500">{lang === "ne" ? "बाहिरी स्टोरेज" : "Outside Storage"}</p>
+              <p className={`text-sm font-semibold ${schedule.remote?.configured ? "text-emerald-700" : "text-amber-700"}`}>
+                {schedule.remote?.configured
+                  ? (lang === "ne" ? "कन्फिगर छ" : "Configured")
+                  : (lang === "ne" ? "कन्फिगर गर्न बाँकी" : "Needs setup")}
+              </p>
+            </div>
+          </div>
+          {schedule.lastError ? <p className="mt-3 text-xs font-semibold text-rose-700">{schedule.lastError}</p> : null}
+          {!schedule.remote?.configured ? (
+            <p className="mt-3 text-xs text-slate-500">
+              {lang === "ne"
+                ? "DigitalOcean Spaces env vars थपेपछि ब्याकअप server बाहिर पनि जानेछ।"
+                : "After DigitalOcean Spaces env vars are added, backups will also copy outside the server."}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {backups.length > 0 ? (
         <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">

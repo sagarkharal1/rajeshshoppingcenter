@@ -36,6 +36,7 @@ import {
   getBackupStatus,
   cleanupOldBackups,
 } from "../lib/backup.js";
+import { getScheduledBackupStatus, runScheduledBackup } from "../lib/scheduled-backup.js";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -2046,6 +2047,37 @@ router.get("/admin/backup/status", authMiddleware, async (req, res) => {
     console.error("Get backup status error:", err);
     res.status(500).json({
       error: "Failed to get backup status",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.get("/admin/backup/schedule/status", authMiddleware, async (_req, res) => {
+  try {
+    res.json({
+      success: true,
+      schedule: getScheduledBackupStatus(),
+    });
+  } catch (err) {
+    console.error("Get scheduled backup status error:", err);
+    res.status(500).json({
+      error: "Failed to get scheduled backup status",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+router.post("/admin/backup/schedule/run-now", authMiddleware, async (_req, res) => {
+  try {
+    const schedule = await runScheduledBackup("manual");
+    res.json({
+      success: !schedule.lastError,
+      schedule,
+    });
+  } catch (err) {
+    console.error("Run scheduled backup error:", err);
+    res.status(500).json({
+      error: "Failed to run scheduled backup",
       details: (err as any)?.message || String(err),
     });
   }

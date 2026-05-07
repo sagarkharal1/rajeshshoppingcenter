@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureBootstrapData } from "./lib/bootstrap";
+import { startScheduledBackups } from "./lib/scheduled-backup.js";
 import { startTelegramQueueWorker } from "./utils/telegram-service.js";
 
 const rawPort = process.env["PORT"];
@@ -33,6 +34,7 @@ void ensureBootstrapData()
 
       logger.info({ port }, "Server listening");
       startTelegramQueueWorker();
+      startScheduledBackups();
     });
   })
   .catch((err) => {
