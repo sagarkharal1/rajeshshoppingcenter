@@ -18,6 +18,7 @@ type ProofRecord = {
   status?: string | null;
   note?: string | null;
   proofStatus?: string | null;
+  proofPath?: string | null;
 };
 
 type ProofRegisterProps = {
@@ -166,6 +167,13 @@ export function ProofRegister({ lang = "en", api }: ProofRegisterProps) {
               <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">{record.proofStatus || "saved"}</span>
             </div>
             {record.note ? <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm text-slate-600">{record.note}</p> : null}
+            {record.proofPath ? (
+              <img
+                src={record.proofPath}
+                alt={`${record.reference} proof`}
+                className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 bg-white object-contain p-2"
+              />
+            ) : null}
           </article>
         ))}
         {!loading && records.length === 0 ? (

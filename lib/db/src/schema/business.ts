@@ -49,6 +49,7 @@ export const invoicesTable = pgTable("invoices", {
   paymentStatus: text("payment_status").notNull().default("paid"),
   rewardPointsEarned: integer("reward_points_earned").notNull().default(0),
   note: text("note"),
+  proofPath: text("proof_path"),
   printedAt: timestamp("printed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -77,6 +78,7 @@ export const customerPaymentsTable = pgTable("customer_payments", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull().default("cash"),
   referenceNote: text("reference_note"),
+  proofPath: text("proof_path"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

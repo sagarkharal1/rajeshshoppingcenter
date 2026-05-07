@@ -31,6 +31,7 @@ interface Booking {
   destination: string;
   bookingDate: string;
   customerName: string;
+  proofPath?: string | null;
 }
 
 interface Payment {
@@ -39,6 +40,7 @@ interface Payment {
   method: string;
   date: string;
   referenceNote?: string;
+  proofPath?: string | null;
 }
 
 interface Invoice {
@@ -53,6 +55,7 @@ interface Invoice {
   paymentMethod: string;
   createdAt: string;
   note?: string | null;
+  proofPath?: string | null;
 }
 
 interface CustomerData {
@@ -549,6 +552,9 @@ export function CustomerDetailModal({
                               )}
                             </div>
                           </div>
+                          {invoice.proofPath ? (
+                            <img src={invoice.proofPath} alt="Invoice proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                          ) : null}
                         </div>
                       ))
                     ) : (
@@ -676,6 +682,9 @@ export function CustomerDetailModal({
                               </p>
                             )}
                           </div>
+                          {booking.proofPath ? (
+                            <img src={booking.proofPath} alt="Booking proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                          ) : null}
                         </div>
                       ))
                     ) : (
@@ -690,21 +699,24 @@ export function CustomerDetailModal({
                   <div className="space-y-3">
                     {customer.payments?.length > 0 ? (
                       customer.payments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="border border-gray-200 rounded-lg p-4 flex items-center justify-between"
-                        >
-                          <div>
-                            <p className="font-semibold text-gray-900">
-                              {payment.method}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {new Date(payment.date).toLocaleString()}
+                        <div key={payment.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {payment.method}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {new Date(payment.date).toLocaleString()}
+                              </p>
+                            </div>
+                            <p className="font-bold text-green-600">
+                              +Rs. {payment.amount.toLocaleString()}
                             </p>
                           </div>
-                          <p className="font-bold text-green-600">
-                            +Rs. {payment.amount.toLocaleString()}
-                          </p>
+                          {payment.referenceNote ? <p className="mt-2 text-sm text-gray-600">{payment.referenceNote}</p> : null}
+                          {payment.proofPath ? (
+                            <img src={payment.proofPath} alt="Payment proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                          ) : null}
                         </div>
                       ))
                     ) : (

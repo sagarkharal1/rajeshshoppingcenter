@@ -103,13 +103,15 @@ const createInvoiceSchema = z.object({
   paymentMethod: z.enum(["cash", "credit", "esewa", "khalti", "bank"]),
   amountPaid: z.number().nonnegative().default(0),
   note: z.string().max(1000).optional(),
+  proofPath: z.string().max(500000).optional(),
 });
 
 const createPaymentSchema = z.object({
   customerId: z.number().int().positive(),
   amount: z.number().positive(),
   paymentMethod: z.enum(["cash", "esewa", "khalti", "bank"]).default("cash"),
-  referenceNote: z.string().max(500).optional(),
+  referenceNote: z.string().max(1200).optional(),
+  proofPath: z.string().max(500000).optional(),
 });
 
 function asNumber(value: unknown): number {
@@ -346,7 +348,8 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
           paymentMethod: invoice.paymentMethod,
           paymentStatus: invoice.paymentStatus,
           note: invoice.note,
-          proofStatus: "invoice-saved",
+          proofStatus: (invoice as any).proofPath ? "proof-attached" : "invoice-saved",
+          proofPath: (invoice as any).proofPath || null,
         })),
       );
     }
@@ -361,6 +364,7 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
           amount: customerPaymentsTable.amount,
           paymentMethod: customerPaymentsTable.paymentMethod,
           referenceNote: customerPaymentsTable.referenceNote,
+          proofPath: sql<string | null>`customer_payments.proof_path`,
           createdAt: customerPaymentsTable.createdAt,
         })
         .from(customerPaymentsTable)
@@ -384,7 +388,8 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
           paymentMethod: payment.paymentMethod,
           paymentStatus: "paid",
           note: payment.referenceNote,
-          proofStatus: payment.referenceNote ? "reference-saved" : "payment-saved",
+          proofStatus: payment.proofPath ? "proof-attached" : payment.referenceNote ? "reference-saved" : "payment-saved",
+          proofPath: payment.proofPath || null,
         })),
       );
     }
@@ -441,7 +446,8 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
           paymentStatus: booking.paymentStatus,
           status: booking.status,
           note: [booking.serviceType, booking.pickupLocation, booking.destination, booking.notes].filter(Boolean).join(" | "),
-          proofStatus: "booking-saved",
+          proofStatus: (booking as any).proofPath ? "proof-attached" : "booking-saved",
+          proofPath: (booking as any).proofPath || null,
         })),
       );
     }
@@ -486,6 +492,7 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
               status: entry.transactionType,
               note: [entry.productName, entry.reason, metadata.returnStatus, metadata.damagedReason].filter(Boolean).join(" | "),
               proofStatus: metadata.billNumber ? "bill-number-saved" : "dealer-record-saved",
+              proofPath: metadata.proofPath || null,
             };
           }),
       );
@@ -768,8 +775,9 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           paymentStatus: dueAmount > 0 ? "partial" : "paid",
           rewardPointsEarned,
           note: parsed.data.note?.trim() || null,
+          proofPath: parsed.data.proofPath?.trim() || null,
           printedAt: new Date(),
-        })
+        } as any)
         .returning();
 
       if (detailedItems.length > 0) {
@@ -832,7 +840,8 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
             amount: amountPaid.toFixed(2),
             paymentMethod: parsed.data.paymentMethod,
             referenceNote: parsed.data.note?.trim() || "Invoice payment",
-          })
+            proofPath: parsed.data.proofPath?.trim() || null,
+          } as any)
           .returning();
 
         await tx
@@ -918,7 +927,8 @@ router.post("/admin/payments", authMiddleware, async (req, res) => {
           amount: parsed.data.amount.toFixed(2),
           paymentMethod: parsed.data.paymentMethod,
           referenceNote: parsed.data.referenceNote?.trim() || "Manual repayment",
-        })
+          proofPath: parsed.data.proofPath?.trim() || null,
+        } as any)
         .returning();
 
       await tx
@@ -939,6 +949,7 @@ router.post("/admin/payments", authMiddleware, async (req, res) => {
         balanceAfter: newBalance.toFixed(2),
         metadata: {
           paymentMethod: parsed.data.paymentMethod,
+          proofPath: parsed.data.proofPath?.trim() || null,
         },
       });
 

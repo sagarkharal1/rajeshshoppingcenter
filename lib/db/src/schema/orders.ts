@@ -43,6 +43,7 @@ export const bookingsTable = pgTable("bookings", {
   amountPaid: numeric("amount_paid", { precision: 12, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method").notNull().default("cash"),
   paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | partial | paid
+  proofPath: text("proof_path"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -1101,6 +1101,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
     chargedAmount,
     amountPaid,
     paymentMethod,
+    proofPath,
   } = req.body;
 
   try {
@@ -1125,6 +1126,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
         chargedAmount: chargedAmount !== undefined ? chargedAmount : booking.chargedAmount,
         amountPaid: amountPaid !== undefined ? amountPaid : booking.amountPaid,
         paymentMethod: paymentMethod ?? booking.paymentMethod,
+        proofPath: typeof proofPath === "string" ? proofPath.trim() || null : (booking as any).proofPath,
       } as Record<string, any>;
 
       const nextCharged = Number(updates.chargedAmount ?? 0);
@@ -1191,6 +1193,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
             chargedAmount: booking.chargedAmount,
             amountPaid: booking.amountPaid,
             paymentMethod: booking.paymentMethod,
+            proofPath: (booking as any).proofPath,
           },
           newValues: updates,
           metadata: {
@@ -1217,6 +1220,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
           amountPaid: Number(updatedBooking.amountPaid || 0),
           paymentMethod: updatedBooking.paymentMethod,
           paymentStatus: updatedBooking.paymentStatus,
+          proofPath: (updatedBooking as any).proofPath || null,
         },
       });
 
@@ -1236,7 +1240,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
 
 router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
-  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit } = req.body ?? {};
+  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit, proofPath } = req.body ?? {};
 
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: "Invalid booking ID" });
@@ -1270,6 +1274,7 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
       if (amountPaid !== undefined || addToCredit) updates.amountPaid = nextPaid.toFixed(2);
       if (paymentMethod !== undefined || addToCredit) updates.paymentMethod = paymentMethod || booking.paymentMethod;
       if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
+      if (typeof proofPath === "string") updates.proofPath = proofPath.trim() || null;
 
       if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
         const charged = Number(updates.chargedAmount);
@@ -1313,6 +1318,7 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
           amountPaid: Number(updatedBooking.amountPaid || 0),
           paymentMethod: updatedBooking.paymentMethod,
           paymentStatus: updatedBooking.paymentStatus,
+          proofPath: (updatedBooking as any).proofPath || null,
         },
       });
 
@@ -1708,6 +1714,7 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
       billNumber,
       billAmount,
       paidAmount,
+      proofPath,
       returnStatus,
       damagedReason,
     } = req.body;
@@ -1769,6 +1776,7 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
           billAmount: dealerBill,
           paidAmount: dealerPaid,
           dealerDue: Math.max(0, dealerBill - dealerPaid),
+          proofPath: typeof proofPath === "string" ? proofPath.trim() || null : null,
           returnStatus: typeof returnStatus === "string" ? returnStatus.trim() || null : null,
           damagedReason: typeof damagedReason === "string" ? damagedReason.trim() || null : null,
         },
@@ -2167,6 +2175,7 @@ router.post("/admin/dealer-payments", authMiddleware, async (req, res) => {
     const dealerName = String(req.body?.dealerName || "").trim();
     const dealerPhone = String(req.body?.dealerPhone || "").trim();
     const note = String(req.body?.note || "Dealer payment").trim();
+    const proofPath = typeof req.body?.proofPath === "string" ? req.body.proofPath.trim() : "";
 
     if (!Number.isInteger(productId) || productId <= 0) {
       return res.status(400).json({ error: "Product is required for dealer payment record" });
@@ -2205,6 +2214,7 @@ router.post("/admin/dealer-payments", authMiddleware, async (req, res) => {
           paidAmount: amount,
           dealerDue: 0,
           note,
+          proofPath: proofPath || null,
         },
       })
       .returning();

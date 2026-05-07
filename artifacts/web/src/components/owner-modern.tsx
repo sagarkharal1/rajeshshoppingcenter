@@ -502,12 +502,19 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
   shopInfo: ShopInfo;
   onEditBooking?: (id: number) => void;
 }) {
-  const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
+  const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string; proofPath: string }>>({});
   const [showCompletedBookings, setShowCompletedBookings] = useState(false);
 
-  const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash" };
-  const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string }>) =>
+  const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash", proofPath: "" };
+  const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string; proofPath: string }>) =>
     setPaymentForms((prev) => ({ ...prev, [id]: { ...getForm(id), ...patch } }));
+  const readProof = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Failed to read proof image"));
+      reader.readAsDataURL(file);
+    });
 
   if (bookings.length === 0) {
     return <p className="py-6 text-center text-sm text-slate-400">{lang === "ne" ? "कुनै बुकिङ छैन।" : "No transport bookings yet."}</p>;
@@ -599,6 +606,25 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                     {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
+                <label className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 sm:col-span-3">
+                  {lang === "ne" ? "भुक्तानी प्रमाण / भौचर फोटो" : "Payment proof / voucher photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="mt-2 block w-full text-xs"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const dataUrl = await readProof(file);
+                      setForm(booking.id, { proofPath: dataUrl });
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {form.proofPath || booking.proofPath ? (
+                  <img src={form.proofPath || booking.proofPath} alt="Transport proof" className="max-h-40 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain p-2 sm:col-span-3" />
+                ) : null}
               </div>
             ) : null}
 
@@ -611,7 +637,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                     const chargedAmt = Number(form.charged) || charged;
                     const paidAmt = Number(form.paid) || 0;
                     runOwnerAction(
-                      () => updateBookingStatus(booking.id, "confirmed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
+                      () => updateBookingStatus(booking.id, "confirmed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method, proofPath: form.proofPath }),
                       lang === "ne" ? "बुकिङ पुष्टि भयो" : "Booking confirmed",
                       lang === "ne" ? "बुकिङ पुष्टि गर्न सकिएन।" : "Could not confirm the booking.",
                     );
@@ -629,7 +655,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                     const chargedAmt = Number(form.charged) || charged;
                     const paidAmt = Number(form.paid) || paid;
                     runOwnerAction(
-                      () => updateBookingStatus(booking.id, "completed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
+                      () => updateBookingStatus(booking.id, "completed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method, proofPath: form.proofPath }),
                       lang === "ne" ? "डेलिभर सम्पन्न भयो" : "Marked delivered",
                       lang === "ne" ? "सम्पन्न गर्न सकिएन।" : "Could not complete.",
                     );
@@ -938,6 +964,12 @@ export function OwnerWorkspaceModern(props: any) {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
+  useEffect(() => {
+    if (!invoiceForm?.proofPath && !paymentForm?.proofPath && customerBillScan.image) {
+      setCustomerBillScan(createBillScanState());
+    }
+  }, [invoiceForm?.proofPath, paymentForm?.proofPath]);
+
   const filteredCustomers = customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
     if (!query) return false;
@@ -1616,6 +1648,7 @@ export function OwnerWorkspaceModern(props: any) {
                           error: "",
                           suggestion: {},
                         });
+                        setInvoiceForm((current: any) => ({ ...current, proofPath: dataUrl }));
                         e.target.value = "";
                       }}
                     />
@@ -2166,6 +2199,7 @@ export function OwnerWorkspaceModern(props: any) {
                           error: "",
                           suggestion: {},
                         });
+                        setPaymentForm((current: any) => ({ ...current, proofPath: dataUrl }));
                         e.target.value = "";
                       }}
                     />

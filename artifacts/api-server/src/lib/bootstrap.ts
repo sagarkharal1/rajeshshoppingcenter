@@ -32,8 +32,12 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash'`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid'`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS proof_path TEXT`,
     // 2026-04: Add payment screenshot column to orders for digital payment proof
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_screenshot_path TEXT`,
+    // 2026-05: Persist proof images on shop invoices and customer payments
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS proof_path TEXT`,
+    `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS proof_path TEXT`,
   ];
   const client = await pool.connect();
   try {

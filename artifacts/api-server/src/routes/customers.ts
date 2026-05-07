@@ -101,6 +101,7 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
         paymentMethod: invoice.paymentMethod,
         createdAt: invoice.createdAt,
         note: invoice.note,
+        proofPath: (invoice as any).proofPath || null,
       })),
       bookings: bookings.map((booking) => ({
         id: booking.id,
@@ -113,6 +114,7 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
         destination: booking.destination,
         bookingDate: booking.bookingDate,
         customerName: customer.name,
+        proofPath: (booking as any).proofPath || null,
       })),
       payments: payments.map((payment) => ({
         id: payment.id,
@@ -121,6 +123,7 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
         date: payment.createdAt,
         createdAt: payment.createdAt,
         referenceNote: payment.referenceNote,
+        proofPath: (payment as any).proofPath || null,
       })),
       ledgerEntries: ledgerEntries.map((entry) => ({
         id: entry.id,

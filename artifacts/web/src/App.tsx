@@ -210,10 +210,10 @@ function OwnerApp() {
   const [settings, setSettings] = useState<any>(null);
   const [publicSettings, setPublicSettings] = useState<any>(null);
   const [customerForm, setCustomerForm] = useState({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-  const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
+  const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
   const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
-  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "" });
   const [lines, setLines] = useState<Array<{ productId: number; quantity: number }>>([]);
   const [lastInvoice, setLastInvoice] = useState<any>(null);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
@@ -898,7 +898,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     }
     try {
       await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
-      setPaymentForm({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
+      setPaymentForm({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
       await load();
       showOwnerFeedback("success", lang === "ne" ? "भुक्तानी सुरक्षित भयो।" : "Payment saved.");
     } catch (err) {
@@ -968,9 +968,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       return;
     }
     try {
-      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, items: lines }) });
+      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, proofPath: invoiceForm.proofPath, items: lines }) });
       setLastInvoice(result);
-      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash" });
+      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash", proofPath: "" });
       setLines([]);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "बिक्री सुरक्षित भयो।" : "Sale saved.");

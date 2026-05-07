@@ -62,6 +62,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     quantity: "",
     billAmount: "",
     paidAmount: "",
+    proofPath: "",
     reason: "Product purchase from dealer",
     returnStatus: "",
     damagedReason: "",
@@ -72,7 +73,16 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     dealerPhone: "",
     amount: "",
     note: "Dealer payment",
+    proofPath: "",
   });
+
+  const readProofImage = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Failed to read proof image"));
+      reader.readAsDataURL(file);
+    });
 
   const load = async () => {
     const data = await api("/admin/dealers");
@@ -110,6 +120,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
           billNumber: purchaseForm.billNumber,
           billAmount: Number(purchaseForm.billAmount || 0),
           paidAmount: Number(purchaseForm.paidAmount || 0),
+          proofPath: purchaseForm.proofPath || undefined,
           returnStatus: purchaseForm.returnStatus,
           damagedReason: purchaseForm.damagedReason,
         }),
@@ -120,6 +131,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
         quantity: "",
         billAmount: "",
         paidAmount: "",
+        proofPath: "",
         reason: "Product purchase from dealer",
         returnStatus: "",
         damagedReason: "",
@@ -148,9 +160,10 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
           dealerPhone: paymentForm.dealerPhone,
           amount: Number(paymentForm.amount),
           note: paymentForm.note,
+          proofPath: paymentForm.proofPath || undefined,
         }),
       });
-      setPaymentForm((current) => ({ ...current, amount: "", note: "Dealer payment" }));
+      setPaymentForm((current) => ({ ...current, amount: "", note: "Dealer payment", proofPath: "" }));
       await load();
       setMessage("Dealer payment saved.");
     } catch (error) {
@@ -226,6 +239,23 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.quantity} onChange={(event) => setPurchaseForm((current) => ({ ...current, quantity: event.target.value }))} placeholder="Quantity (+ purchase, - return/damage)" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.billAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, billAmount: event.target.value }))} placeholder="Bill amount" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.paidAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder="Paid now" />
+            <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 md:col-span-2">
+              Supplier bill / voucher photo
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="mt-2 block w-full text-sm"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  const dataUrl = await readProofImage(file);
+                  setPurchaseForm((current) => ({ ...current, proofPath: dataUrl }));
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {purchaseForm.proofPath ? <img src={purchaseForm.proofPath} alt="Supplier bill proof" className="max-h-56 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain p-2 md:col-span-2" /> : null}
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.returnStatus} onChange={(event) => setPurchaseForm((current) => ({ ...current, returnStatus: event.target.value }))} placeholder="Return status, if any" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.damagedReason} onChange={(event) => setPurchaseForm((current) => ({ ...current, damagedReason: event.target.value }))} placeholder="Damaged reason, if any" />
             <textarea className="min-h-20 rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.reason} onChange={(event) => setPurchaseForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Note" />
@@ -248,6 +278,23 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerName} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder="Dealer name" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerPhone} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder="Dealer phone" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Payment amount" />
+            <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
+              Dealer payment voucher photo
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="mt-2 block w-full text-sm"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  const dataUrl = await readProofImage(file);
+                  setPaymentForm((current) => ({ ...current, proofPath: dataUrl }));
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {paymentForm.proofPath ? <img src={paymentForm.proofPath} alt="Dealer payment proof" className="max-h-48 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain p-2" /> : null}
             <textarea className="min-h-20 rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.note} onChange={(event) => setPaymentForm((current) => ({ ...current, note: event.target.value }))} placeholder="Payment note" />
             <button disabled={busy} className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
               Save Payment
