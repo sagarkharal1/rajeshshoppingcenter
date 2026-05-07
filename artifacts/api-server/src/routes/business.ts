@@ -129,6 +129,47 @@ function buildInvoiceNumber(): string {
   return `INV-${stamp}`;
 }
 
+function getProofDateRange(period: string, dateValue: string) {
+  const base = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    base.setTime(Date.now());
+  }
+  base.setHours(0, 0, 0, 0);
+
+  const start = new Date(base);
+  const end = new Date(base);
+  if (period === "year") {
+    start.setMonth(0, 1);
+    end.setFullYear(start.getFullYear() + 1, 0, 1);
+  } else if (period === "month") {
+    start.setDate(1);
+    end.setMonth(start.getMonth() + 1, 1);
+  } else {
+    end.setDate(start.getDate() + 1);
+  }
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+function containsProofSearch(record: Record<string, unknown>, search: string) {
+  if (!search) return true;
+  const haystack = [
+    record.type,
+    record.reference,
+    record.customerName,
+    record.customerPhone,
+    record.partyName,
+    record.partyPhone,
+    record.paymentMethod,
+    record.paymentStatus,
+    record.status,
+    record.note,
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  return haystack.includes(search);
+}
+
 function buildCustomerCode(id: number): string {
   return `CUST-${String(id).padStart(5, "0")}`;
 }
@@ -257,6 +298,219 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
     });
   } catch {
     res.status(500).json({ error: "Failed to load dashboard summary" });
+  }
+});
+
+router.get("/admin/proof-register", authMiddleware, async (req, res) => {
+  try {
+    const period = String(req.query.period || "month");
+    const date = String(req.query.date || new Date().toISOString().slice(0, 10));
+    const type = String(req.query.type || "all").toLowerCase();
+    const search = String(req.query.search || "").trim().toLowerCase();
+    const { start, end } = getProofDateRange(period, date);
+
+    const records: Array<Record<string, unknown>> = [];
+
+    if (type === "all" || type === "invoice") {
+      const invoices = await db
+        .select({
+          id: invoicesTable.id,
+          reference: invoicesTable.invoiceNumber,
+          customerName: customersTable.name,
+          customerPhone: customersTable.phone,
+          totalAmount: invoicesTable.totalAmount,
+          amountPaid: invoicesTable.amountPaid,
+          dueAmount: invoicesTable.dueAmount,
+          paymentMethod: invoicesTable.paymentMethod,
+          paymentStatus: invoicesTable.paymentStatus,
+          note: invoicesTable.note,
+          createdAt: invoicesTable.createdAt,
+        })
+        .from(invoicesTable)
+        .innerJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+        .where(sql`${invoicesTable.createdAt} >= ${start} AND ${invoicesTable.createdAt} < ${end}`)
+        .orderBy(desc(invoicesTable.createdAt))
+        .limit(500);
+
+      records.push(
+        ...invoices.map((invoice) => ({
+          type: "invoice",
+          id: invoice.id,
+          reference: invoice.reference,
+          date: invoice.createdAt,
+          partyName: invoice.customerName,
+          partyPhone: invoice.customerPhone,
+          totalAmount: asNumber(invoice.totalAmount),
+          amountPaid: asNumber(invoice.amountPaid),
+          dueAmount: asNumber(invoice.dueAmount),
+          paymentMethod: invoice.paymentMethod,
+          paymentStatus: invoice.paymentStatus,
+          note: invoice.note,
+          proofStatus: "invoice-saved",
+        })),
+      );
+    }
+
+    if (type === "all" || type === "payment") {
+      const payments = await db
+        .select({
+          id: customerPaymentsTable.id,
+          customerName: customersTable.name,
+          customerPhone: customersTable.phone,
+          invoiceNumber: invoicesTable.invoiceNumber,
+          amount: customerPaymentsTable.amount,
+          paymentMethod: customerPaymentsTable.paymentMethod,
+          referenceNote: customerPaymentsTable.referenceNote,
+          createdAt: customerPaymentsTable.createdAt,
+        })
+        .from(customerPaymentsTable)
+        .innerJoin(customersTable, eq(customerPaymentsTable.customerId, customersTable.id))
+        .leftJoin(invoicesTable, eq(customerPaymentsTable.invoiceId, invoicesTable.id))
+        .where(sql`${customerPaymentsTable.createdAt} >= ${start} AND ${customerPaymentsTable.createdAt} < ${end}`)
+        .orderBy(desc(customerPaymentsTable.createdAt))
+        .limit(500);
+
+      records.push(
+        ...payments.map((payment) => ({
+          type: "payment",
+          id: payment.id,
+          reference: payment.invoiceNumber ? `${payment.invoiceNumber} / PAY-${payment.id}` : `PAY-${payment.id}`,
+          date: payment.createdAt,
+          partyName: payment.customerName,
+          partyPhone: payment.customerPhone,
+          totalAmount: asNumber(payment.amount),
+          amountPaid: asNumber(payment.amount),
+          dueAmount: 0,
+          paymentMethod: payment.paymentMethod,
+          paymentStatus: "paid",
+          note: payment.referenceNote,
+          proofStatus: payment.referenceNote ? "reference-saved" : "payment-saved",
+        })),
+      );
+    }
+
+    if (type === "all" || type === "order") {
+      const orders = await db
+        .select()
+        .from(ordersTable)
+        .where(sql`${ordersTable.createdAt} >= ${start} AND ${ordersTable.createdAt} < ${end}`)
+        .orderBy(desc(ordersTable.createdAt))
+        .limit(500);
+
+      records.push(
+        ...orders.map((order) => ({
+          type: "order",
+          id: order.id,
+          reference: `ORDER-${order.id}`,
+          date: order.createdAt,
+          partyName: order.customerName,
+          partyPhone: order.customerPhone,
+          totalAmount: asNumber(order.totalAmount),
+          amountPaid: order.paymentStatus === "paid" ? asNumber(order.totalAmount) : 0,
+          dueAmount: order.paymentStatus === "paid" ? 0 : asNumber(order.totalAmount),
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          status: order.status,
+          note: order.notes,
+          proofStatus: order.paymentScreenshotPath ? "payment-proof-attached" : "order-saved",
+          proofPath: order.paymentScreenshotPath,
+        })),
+      );
+    }
+
+    if (type === "all" || type === "booking") {
+      const bookings = await db
+        .select()
+        .from(bookingsTable)
+        .where(sql`${bookingsTable.createdAt} >= ${start} AND ${bookingsTable.createdAt} < ${end}`)
+        .orderBy(desc(bookingsTable.createdAt))
+        .limit(500);
+
+      records.push(
+        ...bookings.map((booking) => ({
+          type: "booking",
+          id: booking.id,
+          reference: `BOOKING-${booking.id}`,
+          date: booking.createdAt,
+          partyName: booking.customerName,
+          partyPhone: booking.customerPhone,
+          totalAmount: asNumber(booking.chargedAmount),
+          amountPaid: asNumber(booking.amountPaid),
+          dueAmount: Math.max(asNumber(booking.chargedAmount) - asNumber(booking.amountPaid), 0),
+          paymentMethod: booking.paymentMethod,
+          paymentStatus: booking.paymentStatus,
+          status: booking.status,
+          note: [booking.serviceType, booking.pickupLocation, booking.destination, booking.notes].filter(Boolean).join(" | "),
+          proofStatus: "booking-saved",
+        })),
+      );
+    }
+
+    if (type === "all" || type === "dealer") {
+      const dealerEntries = await db
+        .select({
+          id: stockLedgerTable.id,
+          productName: productsTable.name,
+          transactionType: stockLedgerTable.transactionType,
+          quantity: stockLedgerTable.quantity,
+          reason: stockLedgerTable.reason,
+          createdAt: stockLedgerTable.createdAt,
+          metadata: stockLedgerTable.metadata,
+        })
+        .from(stockLedgerTable)
+        .leftJoin(productsTable, eq(stockLedgerTable.productId, productsTable.id))
+        .where(sql`${stockLedgerTable.createdAt} >= ${start} AND ${stockLedgerTable.createdAt} < ${end}`)
+        .orderBy(desc(stockLedgerTable.createdAt))
+        .limit(500);
+
+      records.push(
+        ...dealerEntries
+          .filter((entry) => String((entry.metadata || {}).dealerName || "").trim())
+          .map((entry) => {
+            const metadata = (entry.metadata || {}) as Record<string, any>;
+            const isPayment = String(entry.transactionType || "").toLowerCase() === "dealer_payment";
+            const billAmount = asNumber(metadata.billAmount);
+            const paidAmount = asNumber(metadata.paidAmount);
+            return {
+              type: "dealer",
+              id: entry.id,
+              reference: metadata.billNumber || `DEALER-${entry.id}`,
+              date: entry.createdAt,
+              partyName: metadata.dealerName,
+              partyPhone: metadata.dealerPhone,
+              totalAmount: isPayment ? paidAmount : billAmount,
+              amountPaid: paidAmount,
+              dueAmount: isPayment ? 0 : Math.max(billAmount - paidAmount, 0),
+              paymentMethod: isPayment ? "cash" : "dealer-credit",
+              paymentStatus: isPayment || billAmount <= paidAmount ? "paid" : "partial",
+              status: entry.transactionType,
+              note: [entry.productName, entry.reason, metadata.returnStatus, metadata.damagedReason].filter(Boolean).join(" | "),
+              proofStatus: metadata.billNumber ? "bill-number-saved" : "dealer-record-saved",
+            };
+          }),
+      );
+    }
+
+    const filtered = records
+      .filter((record) => containsProofSearch(record, search))
+      .sort((a, b) => new Date(String(b.date)).getTime() - new Date(String(a.date)).getTime());
+
+    res.json({
+      period,
+      date,
+      range: { start: start.toISOString(), end: end.toISOString() },
+      records: filtered,
+      summary: {
+        count: filtered.length,
+        totalBilled: filtered.reduce((sum, record) => sum + asNumber(record.totalAmount), 0),
+        totalPaid: filtered.reduce((sum, record) => sum + asNumber(record.amountPaid), 0),
+        totalDue: filtered.reduce((sum, record) => sum + asNumber(record.dueAmount), 0),
+        withProof: filtered.filter((record) => String(record.proofStatus || "").includes("proof") || String(record.proofStatus || "").includes("saved")).length,
+      },
+    });
+  } catch (err) {
+    console.error("Failed to load proof register:", err);
+    res.status(500).json({ error: "Failed to load proof register" });
   }
 });
 

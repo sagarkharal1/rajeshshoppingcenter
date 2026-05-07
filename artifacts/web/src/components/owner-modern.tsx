@@ -13,6 +13,7 @@ import { PaymentDashboard } from "@/components/payment-dashboard";
 import { CreditManager } from "@/components/credit-manager";
 import { BusinessSummary } from "@/components/business-summary";
 import { DealerRecords } from "@/components/dealer-records";
+import { ProofRegister } from "@/components/proof-register";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
@@ -895,6 +896,9 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
 
       {/* Business Summary */}
       <BusinessSummary lang={lang as "en" | "ne"} api={api} />
+
+      {/* Business Proof Register */}
+      <ProofRegister lang={lang as "en" | "ne"} api={api} />
 
       {/* Payment Methods Breakdown */}
       <PaymentDashboard lang={lang as "en" | "ne"} api={api} />
