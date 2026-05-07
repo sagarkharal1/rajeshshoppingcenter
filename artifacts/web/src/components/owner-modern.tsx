@@ -638,20 +638,6 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
                   {lang === "ne" ? "डेलिभर भयो" : "Mark delivered"}
                 </button>
               ) : null}
-              {isActive && isFinanciallySet ? (
-                <button
-                  type="button"
-                  onClick={() => runOwnerAction(
-                    () => updateBookingStatus(booking.id, "completed", { chargedAmount: charged, amountPaid: 0, paymentMethod: form.method || "cash", addToCredit: true }),
-                    lang === "ne" ? "उधारो खाताबहीमा थपियो 📒" : "Added to customer credit 📒",
-                    lang === "ne" ? "उधारो थप्न सकिएन।" : "Could not add to credit."
-                  )}
-                  className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
-                  title={lang === "ne" ? "ग्राहकले पैसा पठाएन — उनको उधारो खातामा राख्नुहोस्" : "Customer didn't pay — add to their credit"}
-                >
-                  📒 {lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit"}
-                </button>
-              ) : null}
               {onEditBooking ? (
                 <button
                   type="button"
@@ -932,9 +918,7 @@ export function OwnerWorkspaceModern(props: any) {
     externalFeedback,
   } = props;
 
-  const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || customers[0];
-  const quickCustomers = customers.slice(0, 5);
-  const quickProducts = products.slice(0, 8);
+  const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || null;
   const todayInvoices = (summary?.recentInvoices || []).filter((invoice: any) => isSameNepalDay(invoice.createdAt, new Date()));
   const todaySales = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.amountPaid), 0);
   const todayDue = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.dueAmount), 0);
@@ -952,14 +936,16 @@ export function OwnerWorkspaceModern(props: any) {
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
   const filteredCustomers = customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
-    if (!query) return true;
+    if (!query) return false;
     return [customer.name, customer.phone, customer.customerCode].some((value) => String(value || "").toLowerCase().includes(query));
   });
   const filteredProducts = products.filter((product: any) => {
     const query = productSearch.trim().toLowerCase();
-    if (!query) return true;
+    if (!query) return false;
     return [product.name, product.sku, product.categoryName].some((value) => String(value || "").toLowerCase().includes(query));
   });
+  const quickCustomers = filteredCustomers.slice(0, 5);
+  const quickProducts = filteredProducts.slice(0, 8);
   const newOrders = (orders || []).filter((order: any) => order.status === "order-received");
   const newBookings = (bookings || []).filter((booking: any) => {
     const status = String(booking.status || "").toLowerCase();
@@ -1509,6 +1495,7 @@ export function OwnerWorkspaceModern(props: any) {
                   </div>
                 </div>
                 <select className={shellInput()} value={invoiceForm.customerId} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, customerId: Number(e.target.value) }))}>
+                  <option value={0}>{lang === "ne" ? "पहिले ग्राहक खोज्नुहोस्" : "Search and select customer"}</option>
                   {filteredCustomers.map((customer: any) => <option key={customer.id} value={customer.id}>{customer.name} ({money(num(customer.creditBalance))} {text.due})</option>)}
                 </select>
                 {currentCustomer ? (
@@ -1561,7 +1548,7 @@ export function OwnerWorkspaceModern(props: any) {
                     <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700" onClick={() => setLines((items: any[]) => items.filter((_, i) => i !== index))}>{text.remove}</button>
                   </div>
                 ))}
-                <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => products[0] && setLines((items: any[]) => [...items, { productId: products[0].id, quantity: 1 }])}>{lang === "ne" ? "अर्को सामान थप्नुहोस्" : "Add another item"}</button>
+                <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => setProductSearch("")}>{lang === "ne" ? "अर्को सामान खोज्नुहोस्" : "Search another product"}</button>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <select className={shellInput()} value={invoiceForm.paymentMethod} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
                     {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{method}</option>)}
@@ -2093,6 +2080,12 @@ export function OwnerWorkspaceModern(props: any) {
             <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.customerLedger}</h3>
+              <input
+                className={`${shellInput()} mt-4`}
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder={lang === "ne" ? "नाम, फोन वा ग्राहक कोड खोज्नुहोस्" : "Search name, phone, or customer code"}
+              />
               <div className="mt-4 grid gap-3">
                 {filteredCustomers.map((customer: any) => (
                   <article key={customer.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2129,6 +2122,12 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                   </article>
                 ))}
+                {customerSearch.trim() && filteredCustomers.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">{lang === "ne" ? "ग्राहक भेटिएन।" : "No matching customer found."}</p>
+                ) : null}
+                {!customerSearch.trim() ? (
+                  <p className="py-6 text-center text-sm text-slate-500">{lang === "ne" ? "ग्राहक हेर्न पहिले खोज्नुहोस्।" : "Search a customer to view details."}</p>
+                ) : null}
               </div>
             </div>
 
@@ -2137,6 +2136,7 @@ export function OwnerWorkspaceModern(props: any) {
                 <h3 className="text-2xl font-bold text-slate-950">{text.recordPayment}</h3>
                 <div className="mt-4 grid gap-4">
                   <select className={shellInput()} value={paymentForm.customerId} onChange={(e) => setPaymentForm((v: any) => ({ ...v, customerId: Number(e.target.value) }))}>
+                    <option value={0}>{lang === "ne" ? "ग्राहक छनोट गर्नुहोस्" : "Select customer"}</option>
                     {customers.map((customer: any) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
                   </select>
                   <input type="number" min={0} className={shellInput()} value={paymentForm.amount} onChange={(e) => setPaymentForm((v: any) => ({ ...v, amount: e.target.value }))} placeholder={text.amount} />

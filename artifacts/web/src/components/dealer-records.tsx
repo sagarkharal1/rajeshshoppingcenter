@@ -55,7 +55,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [purchaseForm, setPurchaseForm] = useState({
-    productId: products[0]?.id || 0,
+    productId: 0,
     dealerName: "",
     dealerPhone: "",
     billNumber: "",
@@ -67,7 +67,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     damagedReason: "",
   });
   const [paymentForm, setPaymentForm] = useState({
-    productId: products[0]?.id || 0,
+    productId: 0,
     dealerName: "",
     dealerPhone: "",
     amount: "",
@@ -83,13 +83,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
   useEffect(() => {
     load().catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!purchaseForm.productId && products[0]?.id) {
-      setPurchaseForm((current) => ({ ...current, productId: products[0].id }));
-      setPaymentForm((current) => ({ ...current, productId: products[0].id }));
-    }
-  }, [products, purchaseForm.productId]);
 
   const filteredDealers = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -224,6 +217,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
           </h4>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.productId} onChange={(event) => setPurchaseForm((current) => ({ ...current, productId: Number(event.target.value) }))}>
+              <option value={0}>Select product</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerName} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder="Dealer name" />
@@ -248,6 +242,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
           </h4>
           <div className="mt-4 grid gap-3">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.productId} onChange={(event) => setPaymentForm((current) => ({ ...current, productId: Number(event.target.value) }))}>
+              <option value={0}>Select product</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerName} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder="Dealer name" />

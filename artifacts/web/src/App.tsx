@@ -606,9 +606,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       announcements: Array.isArray(settingsData?.announcements) ? settingsData.announcements : [],
       featuredMedia: Array.isArray(settingsData?.featuredMedia) ? settingsData.featuredMedia : [],
     });
-    setPaymentForm((current) => ({ ...current, customerId: current.customerId || customersData[0]?.id || 0 }));
-    setInvoiceForm((current) => ({ ...current, customerId: current.customerId || customersData[0]?.id || 0 }));
-    setLines((current) => (current.length ? current : productsData[0] ? [{ productId: productsData[0].id, quantity: 1 }] : []));
     setProductForm((current: any) => ({
       ...current,
       categoryId: current.categoryId && current.categoryId !== "1"
@@ -629,7 +626,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       .catch(() => {});
   }, []);
 
-  const currentCustomer = customers.find((item) => item.id === invoiceForm.customerId) || customers[0];
+  const currentCustomer = customers.find((item) => item.id === invoiceForm.customerId) || null;
   const preview = useMemo(() => {
     const items = lines.map((line) => {
       const product = products.find((entry) => entry.id === line.productId);
@@ -895,9 +892,13 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   const recordPayment = async (event: React.FormEvent) => {
     event.preventDefault();
     setOwnerFeedback(null);
+    if (!paymentForm.customerId) {
+      showOwnerFeedback("error", lang === "ne" ? "पहिले ग्राहक छनोट गर्नुहोस्।" : "Select a customer first.");
+      return;
+    }
     try {
       await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
-      setPaymentForm((current) => ({ ...current, amount: "", referenceNote: "" }));
+      setPaymentForm({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
       await load();
       showOwnerFeedback("success", lang === "ne" ? "भुक्तानी सुरक्षित भयो।" : "Payment saved.");
     } catch (err) {
@@ -958,11 +959,19 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   const createInvoice = async (event: React.FormEvent) => {
     event.preventDefault();
     setOwnerFeedback(null);
+    if (!invoiceForm.customerId) {
+      showOwnerFeedback("error", lang === "ne" ? "पहिले ग्राहक खोजेर छनोट गर्नुहोस्।" : "Search and select a customer first.");
+      return;
+    }
+    if (lines.length === 0) {
+      showOwnerFeedback("error", lang === "ne" ? "पहिले सामान खोजेर थप्नुहोस्।" : "Search and add at least one product first.");
+      return;
+    }
     try {
       const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, items: lines }) });
       setLastInvoice(result);
-      setInvoiceForm((current) => ({ ...current, amountPaid: "", note: "", paymentMethod: "cash" }));
-      setLines(products[0] ? [{ productId: products[0].id, quantity: 1 }] : []);
+      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash" });
+      setLines([]);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "बिक्री सुरक्षित भयो।" : "Sale saved.");
     } catch (err) {
