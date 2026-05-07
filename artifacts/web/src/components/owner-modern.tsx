@@ -14,6 +14,7 @@ import { CreditManager } from "@/components/credit-manager";
 import { BusinessSummary } from "@/components/business-summary";
 import { DealerRecords } from "@/components/dealer-records";
 import { ProofRegister } from "@/components/proof-register";
+import { BackupExportPanel } from "@/components/backup-export-panel";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
@@ -722,7 +723,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
 }
 
 // ── ReportsTab: daily / monthly / yearly analytics ───────────────────────────
-function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any) => Promise<any> }) {
+function ReportsTab({ lang, api, token }: { lang: string; api: (url: string, opts?: any) => Promise<any>; token?: string }) {
   const [period, setPeriod] = useState<"day" | "month" | "year">("day");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [data, setData] = useState<any>(null);
@@ -923,6 +924,9 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
       {/* Business Summary */}
       <BusinessSummary lang={lang as "en" | "ne"} api={api} />
 
+      {/* Backup and Export */}
+      <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} />
+
       {/* Business Proof Register */}
       <ProofRegister lang={lang as "en" | "ne"} api={api} />
 
@@ -945,7 +949,7 @@ export function OwnerWorkspaceModern(props: any) {
     editingProductId, setEditingProductId, startEditProduct, deleteProduct, settingsForm,
     setSettingsForm, saveMediaSettings, settingsBusy, passwordForm, setPasswordForm, passwordBusy, changePassword, readFileAsDataUrl,
     handleSettingsMediaUpload, setToken, setOwnerEntryRequested, updateOrderStatus, confirmOrderPayment, updateBookingStatus,
-    externalFeedback,
+    externalFeedback, token,
   } = props;
 
   const currentCustomer = customers.find((item: any) => item.id === invoiceForm.customerId) || null;
@@ -2439,7 +2443,7 @@ export function OwnerWorkspaceModern(props: any) {
         ) : null}
 
         {tab === "reports" ? (
-          <ReportsTab lang={lang} api={props.api} />
+          <ReportsTab lang={lang} api={props.api} token={token} />
         ) : null}
 
         {tab === "branding" ? (

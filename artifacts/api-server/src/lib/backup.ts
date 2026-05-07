@@ -6,11 +6,14 @@ import {
   ordersTable,
   bookingsTable,
   invoicesTable,
+  invoiceItemsTable,
   customerPaymentsTable,
   customerLedgerTable,
+  rewardTransactionsTable,
   auditLogsTable,
   stockLedgerTable,
   settingsTable,
+  telegramQueueTable,
 } from "@workspace/db/schema";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
 import { exec } from "child_process";
@@ -44,11 +47,14 @@ async function getAllData() {
     orders,
     bookings,
     invoices,
+    invoiceItems,
     payments,
     ledger,
+    rewardTransactions,
     auditLogs,
     stockLedger,
     settings,
+    telegramQueue,
   ] = await Promise.all([
     db.select().from(categoriesTable),
     db.select().from(productsTable),
@@ -56,11 +62,14 @@ async function getAllData() {
     db.select().from(ordersTable),
     db.select().from(bookingsTable),
     db.select().from(invoicesTable),
+    db.select().from(invoiceItemsTable),
     db.select().from(customerPaymentsTable),
     db.select().from(customerLedgerTable),
+    db.select().from(rewardTransactionsTable),
     db.select().from(auditLogsTable),
     db.select().from(stockLedgerTable),
     db.select().from(settingsTable),
+    db.select().from(telegramQueueTable),
   ]);
 
   return {
@@ -75,11 +84,14 @@ async function getAllData() {
       orders,
       bookings,
       invoices,
+      invoiceItems,
       payments,
       ledger,
+      rewardTransactions,
       auditLogs,
       stockLedger,
       settings,
+      telegramQueue,
     },
   };
 }
@@ -166,20 +178,19 @@ export async function createSqlBackup(): Promise<BackupMetadata> {
     // Get file size and record count
     const stats = require("fs").statSync(finalPath);
 
-    // Get record counts from database
-    const [categoriesCount] = await db
-      .select({ count: categoriesTable.id })
-      .from(categoriesTable)
-      .limit(1);
-
-    const totalRecords = (categoriesCount as any)?.count || 0;
+    const data = await getAllData();
+    const tableNames = Object.keys(data.tables);
+    const totalRecords = Object.values(data.tables).reduce(
+      (sum: number, table: any) => sum + (Array.isArray(table) ? table.length : 0),
+      0
+    );
 
     return {
       filename,
       format: "sql",
       timestamp: new Date().toISOString(),
       size: stats.size,
-      tables: 11,
+      tables: tableNames.length,
       records: totalRecords,
       databases: [],
     };
@@ -216,7 +227,7 @@ export async function listLocalBackups(): Promise<BackupMetadata[]> {
         format: isJson ? ("json" as const) : ("sql" as const),
         timestamp: new Date(stats.mtime).toISOString(),
         size: stats.size,
-        tables: 11,
+        tables: 14,
         records: 0,
         databases: [],
       };

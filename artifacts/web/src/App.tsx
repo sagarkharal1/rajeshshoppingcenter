@@ -1239,6 +1239,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       updateBookingStatus={updateBookingStatus}
       externalFeedback={ownerFeedback}
       api={api}
+      token={token}
       reloadOwnerData={load}
     />
   );
