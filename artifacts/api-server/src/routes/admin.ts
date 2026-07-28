@@ -16,6 +16,7 @@ import {
   rewardTransactionsTable,
   auditLogsTable,
   stockLedgerTable,
+  telegramQueueTable,
 } from "@workspace/db/schema";
 import { eq, sql, and, desc, ilike, inArray, or } from "drizzle-orm";
 import jwt from "jsonwebtoken";
@@ -1986,6 +1987,84 @@ router.get("/admin/test-data/status", authMiddleware, async (req, res) => {
     console.error("Get test data status error:", err);
     res.status(500).json({
       error: "Failed to get test data status",
+      details: (err as any)?.message || String(err),
+    });
+  }
+});
+
+// One-time "go live" reset: wipes every test/demo record (customers, orders,
+// bookings, invoices, payments, ledgers, rewards, stock history, dealer/stock
+// entries, audit logs, product catalog, categories) while keeping shop
+// settings and the admin login intact. A backup is taken first so it can be
+// restored via /admin/backup if anything was cleared by mistake.
+const FACTORY_RESET_CONFIRMATION = "DELETE ALL DATA";
+
+router.post("/admin/factory-reset", authMiddleware, async (req, res) => {
+  try {
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const confirmation =
+      typeof req.body?.confirmation === "string" ? req.body.confirmation.trim() : "";
+
+    if (confirmation !== FACTORY_RESET_CONFIRMATION) {
+      return res.status(400).json({
+        error: `Type "${FACTORY_RESET_CONFIRMATION}" exactly to confirm.`,
+      });
+    }
+
+    const settings = await getSettings();
+    const storedHash = settings?.adminPasswordHash ?? null;
+    const validPassword = await isOwnerPasswordValid(password, storedHash);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Password is incorrect" });
+    }
+
+    let backupFile: string | null = null;
+    try {
+      const backup = await createJsonBackup();
+      backupFile = backup.filename;
+    } catch (err) {
+      console.error("Factory reset: pre-reset backup failed", err);
+      return res.status(500).json({
+        error: "Could not create a safety backup, so the reset was cancelled. Nothing was deleted.",
+        details: (err as any)?.message || String(err),
+      });
+    }
+
+    const cleared = await db.transaction(async (tx) => {
+      const counts: Record<string, number> = {};
+      const wipe = async (label: string, table: any) => {
+        const result = await tx.delete(table);
+        counts[label] = Number((result as any)?.rowCount ?? 0);
+      };
+
+      // Children before parents to satisfy foreign key constraints.
+      await wipe("customerLedgerEntries", customerLedgerTable);
+      await wipe("rewardTransactions", rewardTransactionsTable);
+      await wipe("invoiceItems", invoiceItemsTable);
+      await wipe("customerPayments", customerPaymentsTable);
+      await wipe("invoices", invoicesTable);
+      await wipe("orders", ordersTable);
+      await wipe("bookings", bookingsTable);
+      await wipe("stockLedgerEntries", stockLedgerTable);
+      await wipe("auditLogs", auditLogsTable);
+      await wipe("telegramQueue", telegramQueueTable);
+      await wipe("customers", customersTable);
+      await wipe("products", productsTable);
+      await wipe("categories", categoriesTable);
+
+      return counts;
+    });
+
+    res.json({
+      success: true,
+      message: "Factory reset complete. Shop settings and your admin login were kept as-is.",
+      backupFile,
+      cleared,
+    });
+  } catch (err) {
+    console.error("Factory reset error:", err);
+    res.status(500).json({
+      error: "Factory reset failed",
       details: (err as any)?.message || String(err),
     });
   }

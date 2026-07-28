@@ -223,6 +223,10 @@ export default function AdminSettingsScreen() {
   const [totpLoading, setTotpLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
 
+  const RESET_CONFIRMATION_PHRASE = "DELETE ALL DATA";
+  const [resetForm, setResetForm] = useState({ confirmText: "", password: "" });
+  const [resetLoading, setResetLoading] = useState(false);
+
   useEffect(() => {
     const checkTotp = async () => {
       try {
@@ -378,6 +382,53 @@ export default function AdminSettingsScreen() {
     } finally {
       setBackupLoading(false);
     }
+  };
+
+  const runFactoryReset = async () => {
+    setResetLoading(true);
+    try {
+      const token = await secureGet(ADMIN_TOKEN_KEY);
+      const res = await fetch(`${getApiBase()}/admin/factory-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          confirmation: resetForm.confirmText.trim(),
+          password: resetForm.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Factory reset failed");
+
+      setResetForm({ confirmText: "", password: "" });
+      refetch();
+      Alert.alert(
+        "Fresh app, ready to go live",
+        `All test customers, orders, bookings, invoices, payments, stock history, and products were removed. Shop settings and your admin login were kept.\n\nA safety backup was saved${data.backupFile ? ` (${data.backupFile})` : ""} in case you need anything back.`
+      );
+    } catch (e: any) {
+      Alert.alert("Reset failed", e.message || "Could not complete the factory reset");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleFactoryReset = () => {
+    if (resetForm.confirmText.trim() !== RESET_CONFIRMATION_PHRASE) {
+      Alert.alert("Confirmation required", `Type "${RESET_CONFIRMATION_PHRASE}" exactly to confirm.`);
+      return;
+    }
+    if (!resetForm.password) {
+      Alert.alert("Password required", "Enter your admin password to confirm.");
+      return;
+    }
+    Alert.alert(
+      "Delete all shop data?",
+      "This permanently removes every customer, order, booking, invoice, payment, dealer/stock record, and product in this app. Shop settings and your login stay. A backup is saved automatically first. This cannot be undone from the app.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete Everything", style: "destructive", onPress: runFactoryReset },
+      ]
+    );
   };
 
   const [form, setForm] = useState({
@@ -874,6 +925,76 @@ export default function AdminSettingsScreen() {
               <>
                 <MaterialIcons name="lock" size={18} color="#fff" />
                 <Text style={[styles.changePwBtnText, { fontFamily: "Inter_600SemiBold" }]}>Change Password</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+
+        {/* DANGER ZONE — GO LIVE */}
+        <Text style={[styles.sectionLabel, { color: "#C0392B", fontFamily: "Inter_600SemiBold" }]}>
+          DANGER ZONE
+        </Text>
+        <View style={[styles.card, { backgroundColor: theme.card, borderWidth: 1, borderColor: "#C0392B40" }]}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+            <MaterialIcons name="warning-amber" size={24} color="#C0392B" />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[{ color: theme.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }]}>
+                Wipe test data & go live
+              </Text>
+              <Text style={[{ color: theme.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 }]}>
+                Permanently deletes every customer, order, booking, invoice, payment, dealer/stock record, and product
+                you added while testing. Shop settings and your admin login are kept. A backup is saved automatically
+                right before deleting. Only do this once you're ready to hand the app real data.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: "Inter_500Medium" }]}>
+              Type "{RESET_CONFIRMATION_PHRASE}" to confirm
+            </Text>
+            <TextInput
+              style={[
+                fieldStyles.fieldInput,
+                { backgroundColor: theme.inputBackground, borderColor: theme.border, color: theme.text, fontFamily: "Inter_400Regular" },
+              ]}
+              value={resetForm.confirmText}
+              onChangeText={(v) => setResetForm((f) => ({ ...f, confirmText: v }))}
+              placeholder={RESET_CONFIRMATION_PHRASE}
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: "Inter_500Medium" }]}>
+              Admin Password
+            </Text>
+            <View style={[styles.passwordRow, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
+              <TextInput
+                style={[styles.passwordInput, { color: theme.text, fontFamily: "Inter_400Regular" }]}
+                value={resetForm.password}
+                onChangeText={(v) => setResetForm((f) => ({ ...f, password: v }))}
+                placeholder="Enter your admin password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.changePwBtn, { opacity: pressed || resetLoading ? 0.8 : 1, backgroundColor: "#C0392B" }]}
+            onPress={handleFactoryReset}
+            disabled={resetLoading}
+          >
+            {resetLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <MaterialIcons name="delete-forever" size={18} color="#fff" />
+                <Text style={[styles.changePwBtnText, { fontFamily: "Inter_600SemiBold" }]}>Delete All Test Data</Text>
               </>
             )}
           </Pressable>
