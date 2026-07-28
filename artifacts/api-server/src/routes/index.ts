@@ -4,7 +4,6 @@ import productsRouter from "./products";
 import ordersRouter from "./orders";
 import settingsRouter from "./settings";
 import adminRouter from "./admin";
-import storageRouter from "./storage";
 import businessRouter from "./business";
 import searchRouter from "./search";
 import customersRouter from "./customers";
@@ -17,7 +16,6 @@ router.use(ordersRouter);
 router.use(settingsRouter);
 router.use(adminRouter);
 router.use(businessRouter);
-router.use(storageRouter);
 router.use("/search", searchRouter);
 router.use("/customers", customersRouter);
 

@@ -214,10 +214,7 @@ router.get("/", async (req: Request, res: Response) => {
     res.json({ results: results.slice(0, 50) });
   } catch (err) {
     console.error("Search error:", err);
-    res.status(500).json({
-      error: "Search failed",
-      details: (err as any)?.message || String(err),
-    });
+    res.status(500).json({ error: "Search failed" });
   }
 });
 

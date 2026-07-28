@@ -14,11 +14,10 @@ import {
   settingsTable,
   stockLedgerTable,
 } from "@workspace/db/schema";
-import jwt from "jsonwebtoken";
 import { customersTable } from "../../../../lib/db/src/schema/business";
+import { authMiddleware } from "../lib/auth";
 
 const router: IRouter = Router();
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "rajesh-shopping-secret-2024";
 
 function summarizeDealerEntries(entries: Array<{ transactionType: string | null; metadata: Record<string, any> | null }>) {
   const dealerMap = new Map<string, { billed: number; paid: number; returns: number; damaged: number }>();
@@ -56,19 +55,6 @@ function summarizeDealerEntries(entries: Array<{ transactionType: string | null;
     returnCount: dealers.reduce((sum, dealer) => sum + dealer.returns, 0),
     damagedCount: dealers.reduce((sum, dealer) => sum + dealer.damaged, 0),
   };
-}
-
-function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  try {
-    jwt.verify(auth.slice(7), JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
 }
 
 const optionalTrimmedString = (max: number) =>
@@ -799,8 +785,8 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         await tx
           .update(productsTable)
           .set({
-            stockQuantity: product.stockQuantity - item.quantity,
-            inStock: product.stockQuantity - item.quantity > 0,
+            stockQuantity: sql`GREATEST(${productsTable.stockQuantity} - ${item.quantity}, 0)`,
+            inStock: sql`(${productsTable.stockQuantity} - ${item.quantity}) > 0`,
           })
           .where(eq(productsTable.id, product.id));
       }

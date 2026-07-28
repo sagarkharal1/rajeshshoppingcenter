@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable, stockLedgerTable } from "@workspace/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
@@ -11,12 +11,14 @@ const router: IRouter = Router();
 
 const PHONE_RE = /^\+?[\d\s\-]{7,20}$/;
 
+// price/productName/unit are echoed by the client for display but never trusted:
+// the server re-reads them from the products table before totalling.
 const orderItemSchema = z.object({
   productId: z.number().int().positive(),
-  productName: z.string().min(1).max(200).transform(s => s.trim()),
-  price: z.number().nonnegative(),
+  productName: z.string().max(200).transform(s => s.trim()).optional(),
+  price: z.number().nonnegative().optional(),
   quantity: z.number().positive().max(999),
-  unit: z.string().max(20).default("pc"),
+  unit: z.string().max(20).optional(),
 });
 
 const createOrderSchema = z.object({
@@ -70,7 +72,37 @@ router.post("/orders", async (req, res) => {
   }
 
   try {
-    const { customerName, customerPhone, customerEmail, customerAddress, items, notes, paymentMethod, paymentStatus, customerPhotoPath, paymentScreenshotPath } = parsed.data;
+    const { customerName, customerPhone, customerEmail, customerAddress, items: requestedItems, notes, paymentMethod, paymentStatus, customerPhotoPath, paymentScreenshotPath } = parsed.data;
+
+    const catalog = await db
+      .select({
+        id: productsTable.id,
+        name: productsTable.name,
+        price: productsTable.price,
+        unit: productsTable.unit,
+      })
+      .from(productsTable)
+      .where(inArray(productsTable.id, requestedItems.map((item) => item.productId)));
+
+    const catalogById = new Map(catalog.map((product) => [product.id, product]));
+    const missing = requestedItems.filter((item) => !catalogById.has(item.productId));
+    if (missing.length > 0) {
+      return res.status(400).json({
+        error: "Some items are no longer available. Please refresh your cart and try again.",
+      });
+    }
+
+    // Authoritative pricing: taken from the database, not from the request body.
+    const items = requestedItems.map((item) => {
+      const product = catalogById.get(item.productId)!;
+      return {
+        productId: product.id,
+        productName: product.name,
+        price: Number(product.price),
+        quantity: item.quantity,
+        unit: product.unit,
+      };
+    });
 
     const totalAmount = items.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -263,10 +295,7 @@ router.post("/orders", async (req, res) => {
     });
   } catch (err) {
     console.error("Order creation error:", err);
-    res.status(500).json({
-      error: "Failed to create order",
-      details: (err as any)?.message || String(err)
-    });
+    res.status(500).json({ error: "Failed to create order" });
   }
 });
 

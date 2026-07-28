@@ -130,10 +130,7 @@ router.get("/products/:id/stock-history", async (req, res) => {
     res.json({ history });
   } catch (err) {
     console.error("Failed to get stock history:", err);
-    res.status(500).json({
-      error: "Failed to get stock history",
-      details: (err as any)?.message || String(err),
-    });
+    res.status(500).json({ error: "Failed to get stock history" });
   }
 });
 

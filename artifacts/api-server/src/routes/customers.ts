@@ -9,10 +9,11 @@ import {
   customerLedgerTable,
 } from "@workspace/db/schema";
 import { eq, desc, or, sql } from "drizzle-orm";
+import { authMiddleware } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/:id/full-profile", async (req: Request, res: Response) => {
+router.get("/:id/full-profile", authMiddleware, async (req: Request, res: Response) => {
   try {
     const customerId = Number(req.params.id);
 
@@ -144,10 +145,7 @@ router.get("/:id/full-profile", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("Failed to fetch customer profile:", err);
-    res.status(500).json({
-      error: "Failed to fetch customer profile",
-      details: (err as any)?.message || String(err),
-    });
+    res.status(500).json({ error: "Failed to fetch customer profile" });
   }
 });
 

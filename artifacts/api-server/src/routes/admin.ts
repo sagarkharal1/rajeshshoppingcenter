@@ -28,7 +28,7 @@ import { sendTelegramMessage } from "../utils/telegram-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
-import { seedTestData, clearTestData, getTestDataStatus } from "../lib/test-data-seeder.js";
+import { JWT_SECRET, authMiddleware } from "../lib/auth.js";
 import {
   createJsonBackup,
   createSqlBackup,
@@ -42,7 +42,6 @@ import { getScheduledBackupStatus, runScheduledBackup } from "../lib/scheduled-b
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.ADMIN_JWT_SECRET || "rajesh-shopping-secret-2024";
 const ALLOWED_OWNER_IDENTIFIERS = new Set([
   "owner",
   "sandesh",
@@ -286,19 +285,6 @@ function summarizeDealerEntries(entries: Array<{ transactionType: string | null;
   };
 }
 
-function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  try {
-    jwt.verify(auth.slice(7), JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
-  }
-}
-
 router.get("/admin/totp-status", async (_req, res) => {
   const settings = await getSettings();
   res.json({ totpEnabled: !!settings?.totpSecret });
@@ -391,8 +377,14 @@ router.post("/admin/login", async (req, res) => {
 
   await upsertSettings({ adminOtp: null, adminOtpExpiry: null });
   clearFailedLogins(req, identifier);
-  const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, message: "Login successful" });
+  const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "7d", algorithm: "HS256" });
+  res.json({
+    token,
+    message: "Login successful",
+    // No custom password set yet — the well-known default is still accepted,
+    // so the UI must push the owner to change it.
+    mustChangePassword: !storedHash,
+  });
 });
 
 router.get("/admin/totp-setup", authMiddleware, async (_req, res) => {
@@ -1734,10 +1726,13 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
     }
 
     const result = await db.transaction(async (tx) => {
+      // Lock the product row so a concurrent adjustment can't read the same
+      // starting balance and silently overwrite this one.
       const [product] = await tx
         .select({ stockQuantity: productsTable.stockQuantity })
         .from(productsTable)
-        .where(eq(productsTable.id, productId));
+        .where(eq(productsTable.id, productId))
+        .for("update");
 
       if (!product) {
         throw new Error("Product not found");
@@ -1798,195 +1793,6 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
     console.error("Stock adjustment error:", err);
     res.status(500).json({
       error: "Failed to adjust stock",
-      details: (err as any)?.message || String(err),
-    });
-  }
-});
-
-router.delete("/admin/test-records/codex", authMiddleware, async (_req, res) => {
-  try {
-    const cleared = await db.transaction(async (tx) => {
-      const testCustomers = await tx
-        .select({ id: customersTable.id })
-        .from(customersTable)
-        .where(
-          or(
-            ilike(customersTable.name, "%TEST CUSTOMER CODEX%"),
-            ilike(customersTable.notes, "%Temporary live smoke test customer%")
-          )
-        );
-      const customerIds = testCustomers.map((row) => row.id);
-
-      const testProducts = await tx
-        .select({ id: productsTable.id })
-        .from(productsTable)
-        .where(
-          or(
-            ilike(productsTable.name, "%TEST PRODUCT CODEX%"),
-            ilike(productsTable.sku, "TEST-CODEX%"),
-            ilike(productsTable.description, "%Temporary live smoke test product%")
-          )
-        );
-      const productIds = testProducts.map((row) => row.id);
-
-      const invoiceConditions = [ilike(invoicesTable.note, "%TEST credit invoice%")];
-      if (customerIds.length > 0) {
-        invoiceConditions.push(inArray(invoicesTable.customerId, customerIds) as any);
-      }
-      const testInvoices = await tx
-        .select({ id: invoicesTable.id })
-        .from(invoicesTable)
-        .where(or(...invoiceConditions));
-      const invoiceIds = testInvoices.map((row) => row.id);
-
-      const paymentConditions = [ilike(customerPaymentsTable.referenceNote, "%TEST customer payment%")];
-      if (customerIds.length > 0) {
-        paymentConditions.push(inArray(customerPaymentsTable.customerId, customerIds) as any);
-      }
-      if (invoiceIds.length > 0) {
-        paymentConditions.push(inArray(customerPaymentsTable.invoiceId, invoiceIds) as any);
-      }
-      const testPayments = await tx
-        .select({ id: customerPaymentsTable.id })
-        .from(customerPaymentsTable)
-        .where(or(...paymentConditions));
-      const paymentIds = testPayments.map((row) => row.id);
-
-      const stockConditions = [
-        ilike(stockLedgerTable.reason, "%TEST dealer%"),
-        sql`${stockLedgerTable.metadata}->>'dealerName' ilike ${"%TEST DEALER CODEX%"}`,
-      ];
-      if (productIds.length > 0) {
-        stockConditions.push(inArray(stockLedgerTable.productId, productIds) as any);
-      }
-      const testStockEntries = await tx
-        .select({ id: stockLedgerTable.id })
-        .from(stockLedgerTable)
-        .where(or(...stockConditions));
-      const stockLedgerIds = testStockEntries.map((row) => row.id);
-
-      const ledgerConditions = [];
-      if (customerIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.customerId, customerIds));
-      if (invoiceIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.invoiceId, invoiceIds));
-      if (paymentIds.length > 0) ledgerConditions.push(inArray(customerLedgerTable.paymentId, paymentIds));
-      const testLedgerEntries =
-        ledgerConditions.length > 0
-          ? await tx
-              .select({ id: customerLedgerTable.id })
-              .from(customerLedgerTable)
-              .where(or(...ledgerConditions))
-          : [];
-      const customerLedgerIds = testLedgerEntries.map((row) => row.id);
-
-      if (customerLedgerIds.length > 0) {
-        await tx.delete(customerLedgerTable).where(inArray(customerLedgerTable.id, customerLedgerIds));
-      }
-      if (invoiceIds.length > 0) {
-        await tx.delete(invoiceItemsTable).where(inArray(invoiceItemsTable.invoiceId, invoiceIds));
-        await tx.delete(rewardTransactionsTable).where(inArray(rewardTransactionsTable.invoiceId, invoiceIds));
-      }
-      if (paymentIds.length > 0) {
-        await tx.delete(customerPaymentsTable).where(inArray(customerPaymentsTable.id, paymentIds));
-      }
-      if (invoiceIds.length > 0) {
-        await tx.delete(invoicesTable).where(inArray(invoicesTable.id, invoiceIds));
-      }
-      if (stockLedgerIds.length > 0) {
-        await tx.delete(stockLedgerTable).where(inArray(stockLedgerTable.id, stockLedgerIds));
-      }
-      if (productIds.length > 0) {
-        await tx
-          .delete(auditLogsTable)
-          .where(and(eq(auditLogsTable.entityType, "product"), inArray(auditLogsTable.entityId, productIds)));
-        await tx.delete(productsTable).where(inArray(productsTable.id, productIds));
-      }
-      if (customerIds.length > 0) {
-        await tx
-          .delete(auditLogsTable)
-          .where(and(eq(auditLogsTable.entityType, "customer"), inArray(auditLogsTable.entityId, customerIds)));
-        await tx.delete(customersTable).where(inArray(customersTable.id, customerIds));
-      }
-
-      return {
-        customers: customerIds.length,
-        products: productIds.length,
-        invoices: invoiceIds.length,
-        payments: paymentIds.length,
-        customerLedgerEntries: customerLedgerIds.length,
-        stockLedgerEntries: stockLedgerIds.length,
-      };
-    });
-
-    res.json({
-      success: true,
-      message: "Codex smoke-test records cleared successfully",
-      cleared,
-    });
-  } catch (err) {
-    console.error("Clear Codex test records error:", err);
-    res.status(500).json({
-      error: "Failed to clear Codex test records",
-      details: (err as any)?.message || String(err),
-    });
-  }
-});
-
-router.post("/admin/test-data/seed", authMiddleware, async (req, res) => {
-  try {
-    const { customerCount, orderCount, bookingCount, daysBack } = req.query;
-
-    const options: any = {};
-    if (customerCount) options.customerCount = Number(customerCount);
-    if (orderCount) options.orderCount = Number(orderCount);
-    if (bookingCount) options.bookingCount = Number(bookingCount);
-    if (daysBack) options.daysBack = Number(daysBack);
-
-    const created = await seedTestData(options);
-
-    res.json({
-      success: true,
-      message: "Test data created successfully",
-      created,
-    });
-  } catch (err) {
-    console.error("Test data seeding error:", err);
-    res.status(500).json({
-      error: "Failed to seed test data",
-      details: (err as any)?.message || String(err),
-    });
-  }
-});
-
-router.delete("/admin/test-data/clear", authMiddleware, async (req, res) => {
-  try {
-    const cleared = await clearTestData();
-
-    res.json({
-      success: true,
-      message: "Test data cleared successfully",
-      cleared,
-    });
-  } catch (err) {
-    console.error("Clear test data error:", err);
-    res.status(500).json({
-      error: "Failed to clear test data",
-      details: (err as any)?.message || String(err),
-    });
-  }
-});
-
-router.get("/admin/test-data/status", authMiddleware, async (req, res) => {
-  try {
-    const status = await getTestDataStatus();
-
-    res.json({
-      success: true,
-      testData: status,
-    });
-  } catch (err) {
-    console.error("Get test data status error:", err);
-    res.status(500).json({
-      error: "Failed to get test data status",
       details: (err as any)?.message || String(err),
     });
   }
