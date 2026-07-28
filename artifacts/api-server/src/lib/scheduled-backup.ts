@@ -15,6 +15,7 @@ type ScheduledBackupState = {
   lastBackupFilename: string | null;
   lastRemoteUploadAt: string | null;
   lastRemoteKey: string | null;
+  lastRemoteError: string | null;
   lastError: string | null;
   nextRunAt: string | null;
 };
@@ -31,6 +32,7 @@ let state: ScheduledBackupState = {
   lastBackupFilename: null,
   lastRemoteUploadAt: null,
   lastRemoteKey: null,
+  lastRemoteError: null,
   lastError: null,
   nextRunAt: null,
 };
@@ -79,14 +81,25 @@ export async function runScheduledBackup(trigger: "schedule" | "manual" = "manua
     state.lastBackupFilename = metadata.filename;
     state.lastSuccessAt = new Date().toISOString();
 
-    const remote = await uploadBackupToRemote(metadata.filename);
-    if (remote.uploaded) {
-      state.lastRemoteUploadAt = new Date().toISOString();
-      state.lastRemoteKey = remote.key || null;
+    // A failed off-site copy must not look like a failed backup: the local file
+    // is already written. Report it separately so the owner can see that the
+    // copy that survives a redeploy is the one that didn't happen.
+    state.lastRemoteError = null;
+    try {
+      const remote = await uploadBackupToRemote(metadata.filename);
+      if (remote.uploaded) {
+        state.lastRemoteUploadAt = new Date().toISOString();
+        state.lastRemoteKey = remote.key || null;
+      } else if (remote.error) {
+        state.lastRemoteError = remote.error;
+      }
+      logger.info({ trigger, filename: metadata.filename, remoteUploaded: remote.uploaded }, "Scheduled backup completed");
+    } catch (uploadErr) {
+      state.lastRemoteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+      logger.error({ err: uploadErr, trigger }, "Backup created locally but off-site upload failed");
     }
 
     await cleanupOldBackups(state.keepLocalCount);
-    logger.info({ trigger, filename: metadata.filename, remoteUploaded: remote.uploaded }, "Scheduled backup completed");
   } catch (err) {
     state.lastError = err instanceof Error ? err.message : String(err);
     logger.error({ err, trigger }, "Scheduled backup failed");

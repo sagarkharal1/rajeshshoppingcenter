@@ -252,12 +252,26 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
             </div>
           </div>
           {schedule.lastError ? <p className="mt-3 text-xs font-semibold text-rose-700">{schedule.lastError}</p> : null}
-          {!schedule.remote?.configured ? (
-            <p className="mt-3 text-xs text-slate-500">
+          {schedule.remote?.configured && schedule.lastRemoteError ? (
+            <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
               {lang === "ne"
-                ? "DigitalOcean Spaces env vars थपेपछि ब्याकअप server बाहिर पनि जानेछ।"
-                : "After DigitalOcean Spaces env vars are added, backups will also copy outside the server."}
+                ? `बाहिरी स्टोरेजमा पठाउन सकिएन: ${schedule.lastRemoteError}`
+                : `Could not copy the backup outside the server: ${schedule.lastRemoteError}`}
             </p>
+          ) : null}
+          {!schedule.remote?.configured ? (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3">
+              <p className="text-xs font-bold text-rose-800">
+                {lang === "ne"
+                  ? "⚠️ ब्याकअप यही सर्भरभित्रै छ — नयाँ डिप्लोय गर्दा मेटिन्छ।"
+                  : "⚠️ Backups are stored inside this server — a new deploy erases them."}
+              </p>
+              <p className="mt-1 text-xs text-rose-700">
+                {lang === "ne"
+                  ? "सुरक्षित राख्न DigitalOcean मा निजी Space बनाएर BACKUP_SPACES_* env vars थप्नुहोस्।"
+                  : "To keep them safe, create a private Space on DigitalOcean and add the BACKUP_SPACES_* environment variables."}
+              </p>
+            </div>
           ) : null}
         </div>
       ) : null}
