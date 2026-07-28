@@ -353,7 +353,7 @@ export function OwnerLoginModern({
                       className={shellInput()}
                       value={forgotForm.otp}
                       onChange={(e) => setForgotForm((v: any) => ({ ...v, otp: e.target.value }))}
-                      placeholder={lang === "ne" ? "WhatsApp वा फलब्याक कोड" : "Code from WhatsApp or fallback"}
+                      placeholder={lang === "ne" ? "टेलिग्राममा आएको ६ अङ्कको कोड" : "6-digit code sent to Telegram"}
                     />
                   </label>
                   <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -421,7 +421,8 @@ export function OwnerLoginModern({
                 <button className="w-full rounded-2xl bg-indigo-600 px-4 py-4 font-semibold text-white shadow-lg">
                   {lang === "ne" ? "पुष्टि गर्नुहोस्" : "Verify code"}
                 </button>
-                {/* Lost phone recovery — goes to forgot-password which clears TOTP via WhatsApp OTP */}
+                {/* Lost phone recovery — goes to forgot-password, which clears TOTP once the
+                    Telegram-delivered reset code is confirmed. */}
                 <button
                   type="button"
                   className="w-full rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
@@ -495,11 +496,17 @@ export function OwnerLoginModern({
 }
 
 // ── BookingList: booking cards with per-booking payment form ─────────────────
-function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shopInfo, onEditBooking }: {
+function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, confirmOwnerAction, shopInfo, onEditBooking }: {
   bookings: any[];
   lang: string;
   updateBookingStatus: (id: number, status: string, payment?: any) => Promise<void>;
   runOwnerAction: (fn: () => Promise<void>, ok: string, fail: string) => Promise<void>;
+  confirmOwnerAction: (
+    prompt: { title: string; message: string; confirmLabel: string },
+    fn: () => Promise<void>,
+    ok: string,
+    fail: string,
+  ) => void;
   shopInfo: ShopInfo;
   onEditBooking?: (id: number) => void;
 }) {
@@ -678,7 +685,14 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, shop
               {isActive ? (
                 <button
                   type="button"
-                  onClick={() => runOwnerAction(
+                  onClick={() => confirmOwnerAction(
+                    {
+                      title: lang === "ne" ? "बुकिङ रद्द गर्ने?" : "Reject this booking?",
+                      message: lang === "ne"
+                        ? `${booking.customerName} को ${booking.pickupLocation} → ${booking.destination} बुकिङ रद्द गरिनेछ।`
+                        : `${booking.customerName}'s trip ${booking.pickupLocation} → ${booking.destination} will be cancelled.`,
+                      confirmLabel: lang === "ne" ? "रद्द गर्नुहोस्" : "Reject booking",
+                    },
                     () => updateBookingStatus(booking.id, "cancelled"),
                     lang === "ne" ? "रद्द भयो" : "Rejected",
                     lang === "ne" ? "रद्द गर्न सकिएन।" : "Could not reject.",
@@ -962,6 +976,12 @@ export function OwnerWorkspaceModern(props: any) {
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
   const [customerBillScan, setCustomerBillScan] = useState<BillScanState>(createBillScanState);
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null);
   const [expandedRecentId, setExpandedRecentId] = useState<string | null>(null);
   const [showCompletedOrders, setShowCompletedOrders] = useState(false);
@@ -1014,6 +1034,23 @@ export function OwnerWorkspaceModern(props: any) {
       const details = error instanceof Error && error.message ? ` ${error.message}` : "";
       showFeedback("error", `${failureMessage}${details}`);
     }
+  };
+
+  // Destructive actions (delete, cancel, reject) route through here so a single
+  // mis-tap on a phone can never wipe a record outright.
+  const confirmOwnerAction = (
+    prompt: { title: string; message: string; confirmLabel: string },
+    action: () => Promise<any> | any,
+    successMessage: string,
+    failureMessage: string,
+  ) => {
+    setConfirmDialog({
+      ...prompt,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await runOwnerAction(action, successMessage, failureMessage);
+      },
+    });
   };
 
   const runBillScan = async (kind: "purchase" | "customer") => {
@@ -2033,7 +2070,18 @@ export function OwnerWorkspaceModern(props: any) {
                         </>
                       ) : null}
                       {order.status !== "cancelled" && order.status !== "delivered" ? (
-                        <button type="button" onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "cancelled"), lang === "ne" ? "अर्डर रद्द भयो।" : "Order rejected", lang === "ne" ? "अर्डर रद्द गर्न सकिएन।" : "Could not cancel the order.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
+                        <button type="button" onClick={() => confirmOwnerAction(
+                          {
+                            title: lang === "ne" ? "अर्डर रद्द गर्ने?" : "Cancel this order?",
+                            message: lang === "ne"
+                              ? `${order.customerName} को अर्डर #${order.id} रद्द गरिनेछ।`
+                              : `Order #${order.id} from ${order.customerName} will be cancelled.`,
+                            confirmLabel: lang === "ne" ? "रद्द गर्नुहोस्" : "Cancel order",
+                          },
+                          () => updateOrderStatus(order.id, "cancelled"),
+                          lang === "ne" ? "अर्डर रद्द भयो।" : "Order rejected",
+                          lang === "ne" ? "अर्डर रद्द गर्न सकिएन।" : "Could not cancel the order.",
+                        )} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
                           {lang === "ne" ? "रद्द" : "Cancel"}
                         </button>
                       ) : null}
@@ -2097,6 +2145,7 @@ export function OwnerWorkspaceModern(props: any) {
                   lang={lang}
                   updateBookingStatus={updateBookingStatus}
                   runOwnerAction={runOwnerAction}
+                  confirmOwnerAction={confirmOwnerAction}
                   shopInfo={shopInfo}
                   onEditBooking={setEditingBookingId}
                 />
@@ -2159,7 +2208,18 @@ export function OwnerWorkspaceModern(props: any) {
                         </button>
                       ) : null}
                       <button type="button" onClick={() => startEditCustomer(customer)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
-                      <button type="button" onClick={() => runOwnerAction(() => deleteCustomer(customer.id), lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.", lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
+                      <button type="button" onClick={() => confirmOwnerAction(
+                        {
+                          title: lang === "ne" ? "ग्राहक हटाउने?" : "Delete this customer?",
+                          message: lang === "ne"
+                            ? `${customer.name} लाई हटाइनेछ। यो फिर्ता गर्न मिल्दैन।`
+                            : `${customer.name} will be removed. This cannot be undone.`,
+                          confirmLabel: lang === "ne" ? "हटाउनुहोस्" : "Delete",
+                        },
+                        () => deleteCustomer(customer.id),
+                        lang === "ne" ? "ग्राहक हटाइयो।" : "Customer deleted successfully.",
+                        lang === "ne" ? "ग्राहक हटाउन सकिएन।" : "Could not delete the customer.",
+                      )} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                     </div>
                   </article>
                 ))}
@@ -2277,7 +2337,18 @@ export function OwnerWorkspaceModern(props: any) {
                             {expandedProductId === product.id ? (lang === "ne" ? "लुकाउनुहोस्" : "Hide") : (lang === "ne" ? "हेर्नुहोस्" : "View")}
                           </button>
                           <button type="button" onClick={() => startEditProduct(product)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
-                          <button type="button" onClick={() => runOwnerAction(() => deleteProduct(product.id), lang === "ne" ? "सामान हटाइयो।" : "Product deleted successfully.", lang === "ne" ? "सामान हटाउन सकिएन।" : "Could not delete the product.")} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
+                          <button type="button" onClick={() => confirmOwnerAction(
+                            {
+                              title: lang === "ne" ? "सामान हटाउने?" : "Delete this product?",
+                              message: lang === "ne"
+                                ? `${product.name} लाई सूचीबाट हटाइनेछ। यो फिर्ता गर्न मिल्दैन।`
+                                : `${product.name} will be removed from your catalog. This cannot be undone.`,
+                              confirmLabel: lang === "ne" ? "हटाउनुहोस्" : "Delete",
+                            },
+                            () => deleteProduct(product.id),
+                            lang === "ne" ? "सामान हटाइयो।" : "Product deleted successfully.",
+                            lang === "ne" ? "सामान हटाउन सकिएन।" : "Could not delete the product.",
+                          )} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                         </div>
                       </div>
                       {expandedProductId === product.id ? (
@@ -2642,6 +2713,39 @@ export function OwnerWorkspaceModern(props: any) {
           </section>
         ) : null}
       </main>
+
+      {confirmDialog ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setConfirmDialog(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-slate-900">{confirmDialog.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">{confirmDialog.message}</p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+              >
+                {lang === "ne" ? "पर्दैन" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDialog.onConfirm()}
+                className="flex-1 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white"
+              >
+                {confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <CustomerDetailModal
         isOpen={selectedCustomerId !== null}
