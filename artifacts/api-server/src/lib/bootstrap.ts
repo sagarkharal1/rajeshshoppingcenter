@@ -38,6 +38,12 @@ async function runMigrations(): Promise<void> {
     // 2026-05: Persist proof images on shop invoices and customer payments
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS proof_path TEXT`,
     `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS proof_path TEXT`,
+    // 2026-07: Allow a mistyped invoice or payment to be voided instead of
+    // leaving a customer's balance permanently wrong.
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`,
+    `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`,
+    `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS void_reason TEXT`,
   ];
   const client = await pool.connect();
   try {

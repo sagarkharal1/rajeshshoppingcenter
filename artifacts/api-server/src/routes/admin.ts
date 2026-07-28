@@ -1400,7 +1400,7 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         .from(invoicesTable)
         .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
         .where(
-          sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate}`
+          sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate} AND ${invoicesTable.voidedAt} is null`
         );
     }
 
@@ -1460,7 +1460,7 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         .from(customerPaymentsTable)
         .leftJoin(customersTable, eq(customerPaymentsTable.customerId, customersTable.id))
         .where(
-          sqlRaw`${customerPaymentsTable.createdAt} >= ${startDate} AND ${customerPaymentsTable.createdAt} < ${endDate}`
+          sqlRaw`${customerPaymentsTable.createdAt} >= ${startDate} AND ${customerPaymentsTable.createdAt} < ${endDate} AND ${customerPaymentsTable.voidedAt} is null`
         );
     }
 

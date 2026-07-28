@@ -103,6 +103,8 @@ router.get("/:id/full-profile", authMiddleware, async (req: Request, res: Respon
         createdAt: invoice.createdAt,
         note: invoice.note,
         proofPath: (invoice as any).proofPath || null,
+        voidedAt: (invoice as any).voidedAt || null,
+        voidReason: (invoice as any).voidReason || null,
       })),
       bookings: bookings.map((booking) => ({
         id: booking.id,
@@ -125,6 +127,8 @@ router.get("/:id/full-profile", authMiddleware, async (req: Request, res: Respon
         createdAt: payment.createdAt,
         referenceNote: payment.referenceNote,
         proofPath: (payment as any).proofPath || null,
+        voidedAt: (payment as any).voidedAt || null,
+        voidReason: (payment as any).voidReason || null,
       })),
       ledgerEntries: ledgerEntries.map((entry) => ({
         id: entry.id,

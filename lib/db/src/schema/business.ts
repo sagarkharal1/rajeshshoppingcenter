@@ -51,6 +51,10 @@ export const invoicesTable = pgTable("invoices", {
   note: text("note"),
   proofPath: text("proof_path"),
   printedAt: timestamp("printed_at"),
+  // Voided invoices are kept for the audit trail but excluded from balances,
+  // stock, and every revenue report.
+  voidedAt: timestamp("voided_at"),
+  voidReason: text("void_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -79,6 +83,8 @@ export const customerPaymentsTable = pgTable("customer_payments", {
   paymentMethod: text("payment_method").notNull().default("cash"),
   referenceNote: text("reference_note"),
   proofPath: text("proof_path"),
+  voidedAt: timestamp("voided_at"),
+  voidReason: text("void_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

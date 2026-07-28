@@ -41,6 +41,8 @@ interface Payment {
   date: string;
   referenceNote?: string;
   proofPath?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
 }
 
 interface Invoice {
@@ -56,6 +58,8 @@ interface Invoice {
   createdAt: string;
   note?: string | null;
   proofPath?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
 }
 
 interface CustomerData {
@@ -163,6 +167,7 @@ export function CustomerDetailModal({
   const [paymentForm, setPaymentForm] = useState({ amount: "", paymentMethod: "cash", referenceNote: "" });
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
+  const [voidBusyId, setVoidBusyId] = useState<number | null>(null);
 
   const dict: any = { ...labels.en, ...labels[lang] };
 
@@ -214,6 +219,40 @@ export function CustomerDetailModal({
       setPaymentMessage(err instanceof Error ? err.message : "Payment failed");
     } finally {
       setPaymentBusy(false);
+    }
+  };
+
+  // Voiding writes a reversing entry rather than deleting: the mistaken record
+  // stays visible, and stock, credit balance, and reward points are corrected.
+  const voidRecord = async (kind: "invoices" | "payments", id: number, label: string) => {
+    if (!api) return;
+    const reason = window.prompt(
+      lang === "ne"
+        ? `${label} किन रद्द गर्ने? (कारण लेख्नुहोस्)`
+        : `Why are you voiding ${label}? (reason is recorded)`,
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setPaymentMessage(lang === "ne" ? "कारण लेख्नु आवश्यक छ।" : "A reason is required.");
+      return;
+    }
+    setVoidBusyId(id);
+    setPaymentMessage("");
+    try {
+      const result = await api(`/admin/${kind}/${id}/void`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setPaymentMessage(
+        result?.message || (lang === "ne" ? "रद्द भयो। हिसाब मिलाइयो।" : "Voided. Balance corrected."),
+      );
+      await fetchCustomerData();
+      await onRefresh?.();
+      window.setTimeout(() => setPaymentMessage(""), 5000);
+    } catch (err) {
+      setPaymentMessage(err instanceof Error ? err.message : "Could not void this record");
+    } finally {
+      setVoidBusyId(null);
     }
   };
 
@@ -536,22 +575,46 @@ export function CustomerDetailModal({
                   <div className="space-y-3">
                     {customer.invoices.length > 0 ? (
                       customer.invoices.map((invoice) => (
-                        <div key={invoice.id} className="rounded-2xl border border-gray-200 p-4">
+                        <div
+                          key={invoice.id}
+                          className={`rounded-2xl border p-4 ${invoice.voidedAt ? "border-slate-200 bg-slate-50" : "border-gray-200"}`}
+                        >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-gray-900">{invoice.invoiceNumber}</p>
+                              <p className={`font-semibold ${invoice.voidedAt ? "text-slate-500 line-through" : "text-gray-900"}`}>
+                                {invoice.invoiceNumber}
+                              </p>
                               <p className="text-sm text-gray-600">{new Date(invoice.createdAt).toLocaleString()}</p>
                               <p className="text-xs text-gray-500">{invoice.paymentMethod} - {invoice.paymentStatus}</p>
                             </div>
                             <div className="text-right">
-                              <p className="font-bold text-gray-900">Rs. {invoice.totalAmount.toLocaleString()}</p>
-                              {invoice.dueAmount > 0 ? (
+                              <p className={`font-bold ${invoice.voidedAt ? "text-slate-400 line-through" : "text-gray-900"}`}>
+                                Rs. {invoice.totalAmount.toLocaleString()}
+                              </p>
+                              {invoice.voidedAt ? null : invoice.dueAmount > 0 ? (
                                 <p className="text-sm font-bold text-rose-700">Due: Rs. {invoice.dueAmount.toLocaleString()}</p>
                               ) : (
                                 <p className="text-sm font-bold text-emerald-700">Paid</p>
                               )}
                             </div>
                           </div>
+                          {invoice.voidedAt ? (
+                            <p className="mt-2 rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                              {lang === "ne" ? "रद्द गरिएको" : "VOIDED"}
+                              {invoice.voidReason ? ` — ${invoice.voidReason}` : ""}
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => voidRecord("invoices", invoice.id, invoice.invoiceNumber)}
+                              disabled={voidBusyId === invoice.id}
+                              className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                            >
+                              {voidBusyId === invoice.id
+                                ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
+                                : (lang === "ne" ? "गलत भयो? बिल रद्द गर्नुहोस्" : "Made a mistake? Void this bill")}
+                            </button>
+                          )}
                           {invoice.proofPath ? (
                             <img src={invoice.proofPath} alt="Invoice proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
                           ) : null}
@@ -699,21 +762,41 @@ export function CustomerDetailModal({
                   <div className="space-y-3">
                     {customer.payments?.length > 0 ? (
                       customer.payments.map((payment) => (
-                        <div key={payment.id} className="border border-gray-200 rounded-lg p-4">
+                        <div
+                          key={payment.id}
+                          className={`rounded-lg border p-4 ${payment.voidedAt ? "border-slate-200 bg-slate-50" : "border-gray-200"}`}
+                        >
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-gray-900">
+                              <p className={`font-semibold ${payment.voidedAt ? "text-slate-500 line-through" : "text-gray-900"}`}>
                                 {payment.method}
                               </p>
                               <p className="text-sm text-gray-600">
                                 {new Date(payment.date).toLocaleString()}
                               </p>
                             </div>
-                            <p className="font-bold text-green-600">
+                            <p className={`font-bold ${payment.voidedAt ? "text-slate-400 line-through" : "text-green-600"}`}>
                               +Rs. {payment.amount.toLocaleString()}
                             </p>
                           </div>
                           {payment.referenceNote ? <p className="mt-2 text-sm text-gray-600">{payment.referenceNote}</p> : null}
+                          {payment.voidedAt ? (
+                            <p className="mt-2 rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                              {lang === "ne" ? "रद्द गरिएको" : "VOIDED"}
+                              {payment.voidReason ? ` — ${payment.voidReason}` : ""}
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => voidRecord("payments", payment.id, `Rs. ${payment.amount.toLocaleString()}`)}
+                              disabled={voidBusyId === payment.id}
+                              className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                            >
+                              {voidBusyId === payment.id
+                                ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
+                                : (lang === "ne" ? "गलत रकम? रद्द गर्नुहोस्" : "Wrong amount? Void this payment")}
+                            </button>
+                          )}
                           {payment.proofPath ? (
                             <img src={payment.proofPath} alt="Payment proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
                           ) : null}

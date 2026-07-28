@@ -218,7 +218,7 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
         invoiceCount: sql<number>`count(*)`,
       })
       .from(invoicesTable)
-      .where(sql`${invoicesTable.createdAt} >= ${today} AND ${invoicesTable.createdAt} < ${tomorrow}`);
+      .where(sql`${invoicesTable.createdAt} >= ${today} AND ${invoicesTable.createdAt} < ${tomorrow} AND ${invoicesTable.voidedAt} is null`);
 
     const dealerEntries = await db
       .select({
@@ -243,6 +243,7 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
       })
       .from(invoicesTable)
       .innerJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(sql`${invoicesTable.voidedAt} is null`)
       .orderBy(desc(invoicesTable.createdAt))
       .limit(8);
 
@@ -316,7 +317,7 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
         })
         .from(invoicesTable)
         .innerJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
-        .where(sql`${invoicesTable.createdAt} >= ${start} AND ${invoicesTable.createdAt} < ${end}`)
+        .where(sql`${invoicesTable.createdAt} >= ${start} AND ${invoicesTable.createdAt} < ${end} AND ${invoicesTable.voidedAt} is null`)
         .orderBy(desc(invoicesTable.createdAt))
         .limit(500);
 
@@ -356,7 +357,7 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
         .from(customerPaymentsTable)
         .innerJoin(customersTable, eq(customerPaymentsTable.customerId, customersTable.id))
         .leftJoin(invoicesTable, eq(customerPaymentsTable.invoiceId, invoicesTable.id))
-        .where(sql`${customerPaymentsTable.createdAt} >= ${start} AND ${customerPaymentsTable.createdAt} < ${end}`)
+        .where(sql`${customerPaymentsTable.createdAt} >= ${start} AND ${customerPaymentsTable.createdAt} < ${end} AND ${customerPaymentsTable.voidedAt} is null`)
         .orderBy(desc(customerPaymentsTable.createdAt))
         .limit(500);
 
@@ -953,6 +954,219 @@ router.post("/admin/payments", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Customer not found" });
     }
     return res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
+const voidSchema = z.object({
+  reason: z.string().min(1, "A reason is required").max(300).transform((value) => value.trim()),
+});
+
+// Voiding keeps the original row for the audit trail and writes a compensating
+// ledger entry, rather than deleting history. The customer's credit balance is
+// rebuilt from the surviving (non-voided) invoices and payments so it stays
+// correct no matter what happened after the mistake was made.
+async function recalculateCustomerBalance(tx: any, customerId: number) {
+  const [totals] = await tx
+    .select({
+      billed: sql<string>`coalesce(sum(${invoicesTable.subtotalAmount}) filter (where ${invoicesTable.voidedAt} is null), 0)`,
+    })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.customerId, customerId));
+
+  const [paid] = await tx
+    .select({
+      total: sql<string>`coalesce(sum(${customerPaymentsTable.amount}) filter (where ${customerPaymentsTable.voidedAt} is null), 0)`,
+    })
+    .from(customerPaymentsTable)
+    .where(eq(customerPaymentsTable.customerId, customerId));
+
+  const balance = Math.max(asNumber(totals?.billed) - asNumber(paid?.total), 0);
+  await tx
+    .update(customersTable)
+    .set({ creditBalance: balance.toFixed(2), updatedAt: new Date() })
+    .where(eq(customersTable.id, customerId));
+
+  return balance;
+}
+
+router.post("/admin/invoices/:id/void", authMiddleware, async (req, res) => {
+  const parsed = voidSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "A reason is required" });
+  }
+
+  try {
+    const invoiceId = Number(req.params.id);
+    if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+      return res.status(400).json({ error: "Invalid invoice id" });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [invoice] = await tx
+        .select()
+        .from(invoicesTable)
+        .where(eq(invoicesTable.id, invoiceId))
+        .limit(1)
+        .for("update");
+
+      if (!invoice) throw new Error("INVOICE_NOT_FOUND");
+      if (invoice.voidedAt) throw new Error("ALREADY_VOIDED");
+
+      const items = await tx
+        .select()
+        .from(invoiceItemsTable)
+        .where(eq(invoiceItemsTable.invoiceId, invoiceId));
+
+      // Put the sold stock back.
+      for (const item of items) {
+        await tx
+          .update(productsTable)
+          .set({
+            stockQuantity: sql`${productsTable.stockQuantity} + ${item.quantity}`,
+            inStock: sql`(${productsTable.stockQuantity} + ${item.quantity}) > 0`,
+          })
+          .where(eq(productsTable.id, item.productId));
+
+        await tx.insert(stockLedgerTable).values({
+          productId: item.productId,
+          transactionType: "void",
+          quantity: item.quantity,
+          reason: `Invoice ${invoice.invoiceNumber} voided: ${parsed.data.reason}`,
+          linkedEntityType: "invoice",
+          linkedEntityId: invoice.id,
+          balanceBefore: 0,
+          balanceAfter: 0,
+          metadata: { productName: item.productName, voided: true },
+        });
+      }
+
+      // Void the payment that was taken as part of this invoice, if any.
+      await tx
+        .update(customerPaymentsTable)
+        .set({ voidedAt: new Date(), voidReason: `Invoice ${invoice.invoiceNumber} voided` })
+        .where(and(eq(customerPaymentsTable.invoiceId, invoiceId), sql`${customerPaymentsTable.voidedAt} is null`));
+
+      await tx
+        .update(invoicesTable)
+        .set({ voidedAt: new Date(), voidReason: parsed.data.reason })
+        .where(eq(invoicesTable.id, invoiceId));
+
+      // Take back reward points and spend recorded by the mistaken invoice.
+      const [customer] = await tx
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.id, invoice.customerId))
+        .limit(1);
+
+      if (customer) {
+        const restoredPoints = Math.max(
+          Number(customer.rewardPoints ?? 0) - Number(invoice.rewardPointsEarned ?? 0),
+          0,
+        );
+        const restoredSpend = Math.max(
+          asNumber(customer.totalSpent) - asNumber(invoice.subtotalAmount),
+          0,
+        );
+        await tx
+          .update(customersTable)
+          .set({ rewardPoints: restoredPoints, totalSpent: restoredSpend.toFixed(2), updatedAt: new Date() })
+          .where(eq(customersTable.id, customer.id));
+
+        if (Number(invoice.rewardPointsEarned ?? 0) > 0) {
+          await tx.insert(rewardTransactionsTable).values({
+            customerId: customer.id,
+            invoiceId: invoice.id,
+            points: -Number(invoice.rewardPointsEarned ?? 0),
+            reason: `Invoice ${invoice.invoiceNumber} voided`,
+          });
+        }
+      }
+
+      const balance = await recalculateCustomerBalance(tx, invoice.customerId);
+
+      await tx.insert(customerLedgerTable).values({
+        customerId: invoice.customerId,
+        invoiceId: invoice.id,
+        entryType: "void",
+        description: `Invoice ${invoice.invoiceNumber} voided: ${parsed.data.reason}`,
+        debitAmount: "0.00",
+        creditAmount: asNumber(invoice.subtotalAmount).toFixed(2),
+        balanceAfter: balance.toFixed(2),
+        metadata: { voidedInvoiceNumber: invoice.invoiceNumber, reason: parsed.data.reason },
+      });
+
+      return { invoiceNumber: invoice.invoiceNumber, balance, restoredItems: items.length };
+    });
+
+    res.json({
+      success: true,
+      message: `Invoice ${result.invoiceNumber} voided. Stock and balance have been corrected.`,
+      ...result,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN";
+    if (message === "INVOICE_NOT_FOUND") return res.status(404).json({ error: "Invoice not found" });
+    if (message === "ALREADY_VOIDED") return res.status(400).json({ error: "This invoice is already voided" });
+    console.error("Void invoice error:", error);
+    return res.status(500).json({ error: "Failed to void invoice" });
+  }
+});
+
+router.post("/admin/payments/:id/void", authMiddleware, async (req, res) => {
+  const parsed = voidSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "A reason is required" });
+  }
+
+  try {
+    const paymentId = Number(req.params.id);
+    if (!Number.isInteger(paymentId) || paymentId <= 0) {
+      return res.status(400).json({ error: "Invalid payment id" });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [payment] = await tx
+        .select()
+        .from(customerPaymentsTable)
+        .where(eq(customerPaymentsTable.id, paymentId))
+        .limit(1)
+        .for("update");
+
+      if (!payment) throw new Error("PAYMENT_NOT_FOUND");
+      if (payment.voidedAt) throw new Error("ALREADY_VOIDED");
+
+      await tx
+        .update(customerPaymentsTable)
+        .set({ voidedAt: new Date(), voidReason: parsed.data.reason })
+        .where(eq(customerPaymentsTable.id, paymentId));
+
+      const balance = await recalculateCustomerBalance(tx, payment.customerId);
+
+      await tx.insert(customerLedgerTable).values({
+        customerId: payment.customerId,
+        paymentId: payment.id,
+        entryType: "void",
+        description: `Payment of ${asNumber(payment.amount).toFixed(2)} voided: ${parsed.data.reason}`,
+        debitAmount: asNumber(payment.amount).toFixed(2),
+        creditAmount: "0.00",
+        balanceAfter: balance.toFixed(2),
+        metadata: { voidedPaymentId: payment.id, reason: parsed.data.reason },
+      });
+
+      return { amount: asNumber(payment.amount), balance };
+    });
+
+    res.json({
+      success: true,
+      message: "Payment voided. The customer's balance has been corrected.",
+      ...result,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "UNKNOWN";
+    if (message === "PAYMENT_NOT_FOUND") return res.status(404).json({ error: "Payment not found" });
+    if (message === "ALREADY_VOIDED") return res.status(400).json({ error: "This payment is already voided" });
+    console.error("Void payment error:", error);
+    return res.status(500).json({ error: "Failed to void payment" });
   }
 });
 
