@@ -98,9 +98,17 @@ function printInvoice(invoice: any, customer: any, lang: string) {
   @media print { button { display: none; } }
 </style>
 </head><body>
-<div class="header">
-  <h2>Rajesh Shopping Center</h2>
-  <p class="info">${lang === "ne" ? "काउन्टर बिल / इनभयस" : "Counter Bill / Invoice"}</p>
+<div class="header" style="display:flex;align-items:center;gap:14px">
+  <!-- Absolute URL: the slip opens in a blank window, where a relative path
+       would resolve against about:blank and the logo would never appear. -->
+  <img src="${window.location.origin}/rajesh-logo.png" alt=""
+       style="width:64px;height:64px;object-fit:contain;flex:none"
+       onerror="this.style.display='none'">
+  <div style="min-width:0">
+    <h2>Rajesh Shopping Center</h2>
+    <p class="info">${lang === "ne" ? "काउन्टर बिल / इनभयस" : "Counter Bill / Invoice"}</p>
+    <p class="info" style="margin:2px 0 0">${lang === "ne" ? "मुसिकोट–५, आपचौर, गुल्मी" : "Musikot-5, Aapchaur, Gulmi"} · +977 9814401716</p>
+  </div>
 </div>
 
 <p class="info"><strong>Invoice:</strong> ${invoice.invoiceNumber}</p>

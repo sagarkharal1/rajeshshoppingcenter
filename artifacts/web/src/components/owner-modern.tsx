@@ -115,6 +115,22 @@ function getOwnerBookingStatusMeta(status: string, lang: "en" | "ne") {
 // ── Print helpers: open a printable slip in a new window ──────────────────
 type ShopInfo = { name: string; phone: string; address: string; pan: string };
 
+// The slip opens in a blank window, so the logo needs an absolute URL —
+// a relative path would resolve against about:blank and never load.
+function printedLetterhead(shop: ShopInfo, subtitle: string) {
+  const logoUrl = `${window.location.origin}/rajesh-logo.png`;
+  return `
+<div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #1e3a5f;padding-bottom:12px">
+  <img src="${logoUrl}" alt="" style="width:64px;height:64px;object-fit:contain;flex:none"
+       onerror="this.style.display='none'">
+  <div style="min-width:0">
+    <h2 style="margin:0;font-size:20px;color:#1e3a5f;line-height:1.2">${shop.name}</h2>
+    <p style="margin:2px 0 0;color:#64748b;font-size:13px">${subtitle}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
+    <p style="margin:2px 0 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
+  </div>
+</div>`;
+}
+
 function printOrderSlip(order: any, lang: string, shop: ShopInfo) {
   const payMethod = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : order.paymentMethod === "bank" ? "Bank/QR" : order.paymentMethod === "cash" ? "Cash" : order.paymentMethod || "—";
   const isPaid = order.paymentStatus === "paid";
@@ -129,9 +145,7 @@ function printOrderSlip(order: any, lang: string, shop: ShopInfo) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order #${order.id}</title>
 <style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.credit{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
 </head><body>
-<h2>${shop.name}</h2>
-<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip"}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
-<p style="margin:2px 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
+${printedLetterhead(shop, lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip")}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <p><strong>Order #${order.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(order.createdAt).toLocaleString()}</span></p>
 <p style="margin:4px 0"><strong>${order.customerName}</strong></p>
@@ -168,9 +182,7 @@ function printBookingSlip(booking: any, lang: string, shop: ShopInfo) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking #${booking.id}</title>
 <style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
 </head><body>
-<h2>${shop.name}</h2>
-<p style="margin:0;color:#64748b;font-size:13px">${lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip"}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
-<p style="margin:2px 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
+${printedLetterhead(shop, lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip")}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <p><strong>Booking #${booking.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(booking.bookingDate || booking.createdAt).toLocaleString()}</span></p>
 <p style="margin:4px 0"><strong>${booking.customerName}</strong></p>
