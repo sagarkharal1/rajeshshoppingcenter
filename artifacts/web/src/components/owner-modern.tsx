@@ -2754,14 +2754,23 @@ export function OwnerWorkspaceModern(props: any) {
               </p>
 
               <div className="mt-4 grid gap-3 sm:max-w-md">
+                {/* A text box followed by a password box looks like a sign-in
+                    form to browsers, which then autofilled both — filling in the
+                    password for an action that must be typed deliberately.
+                    These decoys absorb the autofill, as on the login screen. */}
+                <input type="text" name="fake-reset-user" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+                <input type="password" name="fake-reset-pass" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
                 <label className="grid gap-2 text-sm font-medium text-rose-900">
                   <span>{lang === "ne" ? `पक्का गर्न "${RESET_PHRASE}" लेख्नुहोस्` : `Type "${RESET_PHRASE}" to confirm`}</span>
                   <input
                     className={shellInput()}
+                    name="reset-confirmation-phrase"
                     value={resetForm.confirmText}
                     onChange={(e) => setResetForm((v) => ({ ...v, confirmText: e.target.value }))}
                     placeholder={RESET_PHRASE}
                     autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-rose-900">
@@ -2769,9 +2778,12 @@ export function OwnerWorkspaceModern(props: any) {
                   <input
                     type="password"
                     className={shellInput()}
+                    name="reset-admin-password"
                     value={resetForm.password}
                     onChange={(e) => setResetForm((v) => ({ ...v, password: e.target.value }))}
-                    autoComplete="off"
+                    // "new-password" is the reliable way to stop managers
+                    // offering a saved credential here.
+                    autoComplete="new-password"
                   />
                 </label>
                 <button
