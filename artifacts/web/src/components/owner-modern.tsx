@@ -1,6 +1,6 @@
 ﻿import { useState } from "react";
 import { useEffect, useRef } from "react";
-import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
+import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldAlert, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
 import { FlashNotice } from "@/components/flash-notice";
 import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
@@ -27,6 +27,8 @@ const money = (value: number) =>
 const when = (value: string) =>
   new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const num = (value: unknown) => Number(value ?? 0);
+// Must match the phrase the server checks in POST /admin/factory-reset.
+const RESET_PHRASE = "DELETE ALL DATA";
 
 type BillScanState = {
   image: string;
@@ -973,6 +975,8 @@ export function OwnerWorkspaceModern(props: any) {
   const todayDue = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.dueAmount), 0);
   const [customerSearch, setCustomerSearch] = useState("");
   const [walkInBusy, setWalkInBusy] = useState(false);
+  const [resetForm, setResetForm] = useState({ confirmText: "", password: "" });
+  const [resetBusy, setResetBusy] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
@@ -1036,6 +1040,64 @@ export function OwnerWorkspaceModern(props: any) {
       const details = error instanceof Error && error.message ? ` ${error.message}` : "";
       showFeedback("error", `${failureMessage}${details}`);
     }
+  };
+
+  const runFactoryReset = async () => {
+    setResetBusy(true);
+    try {
+      const result = await props.api("/admin/factory-reset", {
+        method: "POST",
+        body: JSON.stringify({
+          confirmation: resetForm.confirmText.trim(),
+          password: resetForm.password,
+        }),
+      });
+      setResetForm({ confirmText: "", password: "" });
+      await props.reloadOwnerData?.();
+      showFeedback(
+        "success",
+        result?.backupFile
+          ? (lang === "ne"
+              ? `सबै डाटा मेटियो। ब्याकअप सुरक्षित छ (${result.backupFile}).`
+              : `All data erased. A backup was saved (${result.backupFile}).`)
+          : (lang === "ne" ? "सबै डाटा मेटियो।" : "All data erased."),
+      );
+    } catch (error) {
+      showFeedback(
+        "error",
+        error instanceof Error && error.message
+          ? error.message
+          : lang === "ne" ? "मेटाउन सकिएन।" : "Could not erase the data.",
+      );
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const requestFactoryReset = () => {
+    if (resetForm.confirmText.trim() !== RESET_PHRASE) {
+      showFeedback(
+        "error",
+        lang === "ne" ? `पक्का गर्न "${RESET_PHRASE}" लेख्नुहोस्।` : `Type "${RESET_PHRASE}" exactly to confirm.`,
+      );
+      return;
+    }
+    if (!resetForm.password) {
+      showFeedback("error", lang === "ne" ? "पासवर्ड लेख्नुहोस्।" : "Enter your admin password.");
+      return;
+    }
+    setConfirmDialog({
+      title: lang === "ne" ? "साँच्चै सबै मेटाउने?" : "Erase everything?",
+      message:
+        lang === "ne"
+          ? "सबै ग्राहक, बिल, उधारो, बुकिङ र सामान मेटिनेछ। यो फिर्ता ल्याउन मिल्दैन।"
+          : "Every customer, bill, udharo balance, booking and product will be removed. This cannot be undone.",
+      confirmLabel: lang === "ne" ? "मेटाउनुहोस्" : "Erase everything",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await runFactoryReset();
+      },
+    });
   };
 
   // Counter sales to someone who isn't a saved customer reuse one shared
@@ -2637,6 +2699,55 @@ export function OwnerWorkspaceModern(props: any) {
                 </button>
               </div>
             </form>
+
+            {/* Danger zone — wipes demo/test data so the shop can start clean.
+                Deliberately placed last, behind a typed phrase and the admin
+                password, because it cannot be undone from inside the app. */}
+            <section className="rounded-[1.5rem] border-2 border-rose-200 bg-rose-50/40 p-5 shadow-sm">
+              <h4 className="flex items-center gap-2 text-xl font-bold text-rose-900">
+                <ShieldAlert className="h-5 w-5" />
+                {lang === "ne" ? "खतरा क्षेत्र — सबै डाटा मेटाउने" : "Danger zone — erase all data"}
+              </h4>
+              <p className="mt-2 text-sm leading-relaxed text-rose-800">
+                {lang === "ne"
+                  ? "यसले सबै ग्राहक, बिल, उधारो, भुक्तानी, बुकिङ, डिलर र सामानको रेकर्ड मेटाउँछ। पसलको सेटिङ र तपाईंको लगइन रहन्छ। मेटाउनुअघि ब्याकअप आफैं बन्छ, तर एपभित्रबाट फिर्ता ल्याउन मिल्दैन।"
+                  : "This erases every customer, bill, udharo balance, payment, booking, dealer record and product. Your shop settings and login stay. A backup is saved automatically first, but this cannot be undone from inside the app."}
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:max-w-md">
+                <label className="grid gap-2 text-sm font-medium text-rose-900">
+                  <span>{lang === "ne" ? `पक्का गर्न "${RESET_PHRASE}" लेख्नुहोस्` : `Type "${RESET_PHRASE}" to confirm`}</span>
+                  <input
+                    className={shellInput()}
+                    value={resetForm.confirmText}
+                    onChange={(e) => setResetForm((v) => ({ ...v, confirmText: e.target.value }))}
+                    placeholder={RESET_PHRASE}
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-rose-900">
+                  <span>{lang === "ne" ? "आफ्नो पासवर्ड" : "Your admin password"}</span>
+                  <input
+                    type="password"
+                    className={shellInput()}
+                    value={resetForm.password}
+                    onChange={(e) => setResetForm((v) => ({ ...v, password: e.target.value }))}
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={requestFactoryReset}
+                  disabled={resetBusy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-4 py-4 font-semibold text-white disabled:opacity-60"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  {resetBusy
+                    ? (lang === "ne" ? "मेटाउँदै..." : "Erasing...")
+                    : (lang === "ne" ? "सबै डाटा मेटाउनुहोस्" : "Delete all data")}
+                </button>
+              </div>
+            </section>
 
             <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
