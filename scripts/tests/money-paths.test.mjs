@@ -303,6 +303,33 @@ let walkInCashOk = false;
 try { walkInCashOk = tryWalkIn(500, 500) === 0; } catch { walkInCashOk = false; }
 check("a fully-paid walk-in cash sale is allowed", walkInCashOk);
 
+console.log("\n--- Test 9: invoice numbers stay unique within the same second ---");
+// Mirrors buildInvoiceNumber() in business.ts: date prefix + the row id, so
+// bills saved in the same second cannot share a number.
+const invoiceDatePrefix = () => {
+  const n = new Date();
+  return [n.getFullYear(), String(n.getMonth() + 1).padStart(2, "0"), String(n.getDate()).padStart(2, "0")].join("");
+};
+const numbers = [];
+for (let i = 0; i < 5; i++) {
+  const row = await one(
+    `INSERT INTO invoices (customer_id, invoice_number, subtotal_amount)
+     VALUES (1, $1, 100) RETURNING id`, [`INV-${invoiceDatePrefix()}-PENDING`]);
+  const finalNumber = `INV-${invoiceDatePrefix()}-${String(row.id).padStart(4, "0")}`;
+  await q(`UPDATE invoices SET invoice_number=$1 WHERE id=$2`, [finalNumber, row.id]);
+  numbers.push(finalNumber);
+}
+check("five bills created back-to-back all get different numbers",
+  new Set(numbers).size === 5, numbers.join(", "));
+const stored = await q(
+  `SELECT count(*)::int AS total, count(distinct invoice_number)::int AS distinct_numbers
+   FROM invoices WHERE invoice_number LIKE 'INV-%-0%'`);
+check("stored numbers are distinct in the database",
+  stored[0].total === stored[0].distinct_numbers,
+  `${stored[0].total} rows, ${stored[0].distinct_numbers} distinct`);
+check("no bill is left with the PENDING placeholder",
+  (await q(`SELECT id FROM invoices WHERE invoice_number LIKE '%PENDING%'`)).length === 0);
+
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${"=".repeat(64)}`);

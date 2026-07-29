@@ -104,17 +104,21 @@ function asNumber(value: unknown): number {
   return Number(value ?? 0);
 }
 
-function buildInvoiceNumber(): string {
+// Date prefix only. The invoice's own id is appended once the row exists,
+// because a timestamp alone (even to the second) collides whenever two bills
+// are saved in the same second — leaving different customers holding bills
+// with the same number.
+function buildInvoiceDatePrefix(): string {
   const now = new Date();
-  const stamp = [
+  return [
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-    String(now.getSeconds()).padStart(2, "0"),
   ].join("");
-  return `INV-${stamp}`;
+}
+
+function buildInvoiceNumber(id: number): string {
+  return `INV-${buildInvoiceDatePrefix()}-${String(id).padStart(4, "0")}`;
 }
 
 function getProofDateRange(period: string, dateValue: string) {
@@ -805,11 +809,12 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           ? Math.floor(subtotalAmount / rewardUnitAmount) * rewardRate
           : 0;
 
-      const [invoice] = await tx
+      const [inserted] = await tx
         .insert(invoicesTable)
         .values({
           customerId: customer.id,
-          invoiceNumber: buildInvoiceNumber(),
+          // Replaced immediately below with a number that includes the row id.
+          invoiceNumber: `INV-${buildInvoiceDatePrefix()}-PENDING`,
           subtotalAmount: subtotalAmount.toFixed(2),
           previousDueAmount: previousDueAmount.toFixed(2),
           totalAmount: totalAmount.toFixed(2),
@@ -822,6 +827,13 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           proofPath: parsed.data.proofPath?.trim() || null,
           printedAt: new Date(),
         } as any)
+        .returning();
+
+      // The id is unique, so the resulting number always is too.
+      const [invoice] = await tx
+        .update(invoicesTable)
+        .set({ invoiceNumber: buildInvoiceNumber(inserted.id) })
+        .where(eq(invoicesTable.id, inserted.id))
         .returning();
 
       if (detailedItems.length > 0) {

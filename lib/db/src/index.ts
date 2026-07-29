@@ -21,8 +21,13 @@ const connectionString = rawUrl
   .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
   .replace(/\?$/, "");               // remove trailing ? if nothing left
 
+// DATABASE_POOL_MAX caps concurrent connections — useful when the database
+// allows only a small number (managed plans, or a local test server).
+const poolMax = Number(process.env.DATABASE_POOL_MAX);
+
 export const pool = new Pool({
   connectionString,
+  ...(Number.isFinite(poolMax) && poolMax > 0 ? { max: poolMax } : {}),
   ssl: rawUrl.toLowerCase().includes("sslmode=")
     ? { rejectUnauthorized: false }
     : undefined,
