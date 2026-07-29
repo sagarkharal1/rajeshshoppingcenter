@@ -84,6 +84,7 @@ router.get("/:id/full-profile", authMiddleware, async (req: Request, res: Respon
         id: order.id,
         status: order.status,
         totalAmount: Number(order.totalAmount || 0),
+        amountPaid: Number((order as any).amountPaid || 0),
         paymentStatus: order.paymentStatus,
         paymentMethod: order.paymentMethod,
         createdAt: order.createdAt,

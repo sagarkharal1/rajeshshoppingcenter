@@ -661,7 +661,14 @@ export function CustomerDetailModal({
                               }`}>
                                 {order.paymentStatus === "paid"
                                   ? "✅ Paid"
-                                  : "📒 Pending"}
+                                  : Number((order as any).amountPaid || 0) > 0
+                                    // Show what is still owed rather than a bare
+                                    // "Pending", which hides a part-payment.
+                                    ? `📒 ${lang === "ne" ? "बाँकी" : "Due"} Rs. ${Math.max(
+                                        Number(order.totalAmount || 0) - Number((order as any).amountPaid || 0),
+                                        0,
+                                      ).toLocaleString()}`
+                                    : "📒 Pending"}
                               </p>
                             </div>
                           </button>

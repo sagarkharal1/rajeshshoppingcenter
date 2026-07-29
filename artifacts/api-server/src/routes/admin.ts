@@ -792,7 +792,13 @@ router.delete("/admin/products/:id", authMiddleware, async (req, res) => {
 router.get("/admin/orders", authMiddleware, async (_req, res) => {
   try {
     const orders = await db.select().from(ordersTable).orderBy(ordersTable.createdAt);
-    res.json(orders.map(o => ({ ...o, totalAmount: Number(o.totalAmount) })));
+    res.json(
+      orders.map((o) => ({
+        ...o,
+        totalAmount: Number(o.totalAmount),
+        amountPaid: Number((o as any).amountPaid || 0),
+      })),
+    );
   } catch {
     res.status(500).json({ error: "Failed to get orders" });
   }
@@ -818,6 +824,7 @@ router.get("/admin/orders/:id", authMiddleware, async (req, res) => {
     res.json({
       ...order,
       totalAmount: Number(order.totalAmount || 0),
+      amountPaid: Number((order as any).amountPaid || 0),
     });
   } catch (err) {
     console.error("Failed to fetch order:", err);
@@ -932,7 +939,8 @@ router.put("/admin/orders/:id", authMiddleware, async (req, res) => {
 });
 
 const ALLOWED_ORDER_STATUSES = ["order-received", "confirmed", "preparing", "dispatched", "delivered", "cancelled"] as const;
-const ALLOWED_PAYMENT_STATUSES = ["paid", "unpaid"] as const;
+// "partial" is a valid stored state since orders track amount received.
+const ALLOWED_PAYMENT_STATUSES = ["paid", "partial", "unpaid"] as const;
 
 router.put("/admin/orders/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);

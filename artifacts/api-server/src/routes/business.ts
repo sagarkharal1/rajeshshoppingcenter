@@ -184,8 +184,11 @@ router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
     const [onlineOrderStats] = await db
       .select({
         totalOrders: sql<number>`count(*)`,
-        pendingPayment: sql<number>`sum(case when ${ordersTable.paymentStatus} = 'unpaid' and ${ordersTable.status} not in ('cancelled','delivered') then 1 else 0 end)`,
-        confirmedRevenue: sql<string>`coalesce(sum(case when ${ordersTable.paymentStatus} = 'paid' then ${ordersTable.totalAmount}::numeric else 0 end), 0)`,
+        // Partly-paid orders still need chasing, so they count as pending.
+        pendingPayment: sql<number>`sum(case when ${ordersTable.paymentStatus} in ('unpaid','partial') and ${ordersTable.status} not in ('cancelled','delivered') then 1 else 0 end)`,
+        // Count money actually received: the full total once paid, otherwise
+        // whatever has been collected so far.
+        confirmedRevenue: sql<string>`coalesce(sum(case when ${ordersTable.paymentStatus} = 'paid' then ${ordersTable.totalAmount}::numeric else coalesce(${ordersTable.amountPaid}::numeric, 0) end), 0)`,
       })
       .from(ordersTable);
 
@@ -398,8 +401,17 @@ router.get("/admin/proof-register", authMiddleware, async (req, res) => {
           partyName: order.customerName,
           partyPhone: order.customerPhone,
           totalAmount: asNumber(order.totalAmount),
-          amountPaid: order.paymentStatus === "paid" ? asNumber(order.totalAmount) : 0,
-          dueAmount: order.paymentStatus === "paid" ? 0 : asNumber(order.totalAmount),
+          // Read the recorded amount rather than inferring it from the status:
+          // a partly-paid order would otherwise report nothing received and
+          // the whole total still owed.
+          amountPaid:
+            order.paymentStatus === "paid"
+              ? asNumber(order.totalAmount)
+              : asNumber((order as any).amountPaid),
+          dueAmount:
+            order.paymentStatus === "paid"
+              ? 0
+              : Math.max(asNumber(order.totalAmount) - asNumber((order as any).amountPaid), 0),
           paymentMethod: order.paymentMethod,
           paymentStatus: order.paymentStatus,
           status: order.status,
