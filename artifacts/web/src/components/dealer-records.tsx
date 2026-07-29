@@ -56,6 +56,28 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
+
+  const ne = lang === "ne";
+  const label = {
+    addTitle: ne ? "डिलर खरिद / फिर्ता / ड्यामेज थप्नुहोस्" : "Add dealer purchase / return / damage",
+    selectProduct: ne ? "सामान छान्नुहोस्" : "Select product",
+    dealerName: ne ? "डिलरको नाम" : "Dealer name",
+    dealerPhone: ne ? "डिलरको फोन" : "Dealer phone",
+    billNumber: ne ? "बिल नम्बर" : "Bill number",
+    quantity: ne ? "परिमाण (+ आएको, − फिर्ता/ड्यामेज)" : "Quantity (+ purchase, − return/damage)",
+    billAmount: ne ? "बिल रकम" : "Bill amount",
+    paidNow: ne ? "अहिले तिरेको" : "Paid now",
+    billPhoto: ne ? "सप्लायर बिल / भौचरको फोटो" : "Supplier bill / voucher photo",
+    returnStatus: ne ? "फिर्ता अवस्था (भए मात्र)" : "Return status, if any",
+    damagedReason: ne ? "ड्यामेजको कारण (भए मात्र)" : "Damaged reason, if any",
+    note: ne ? "टिप्पणी" : "Note",
+    saveRecord: ne ? "डिलर रेकर्ड सेभ गर्नुहोस्" : "Save dealer record",
+    payTitle: ne ? "डिलरलाई भुक्तानी" : "Pay dealer",
+    paymentAmount: ne ? "भुक्तानी रकम" : "Payment amount",
+    voucherPhoto: ne ? "भुक्तानी भौचरको फोटो" : "Dealer payment voucher photo",
+    savePayment: ne ? "भुक्तानी सेभ गर्नुहोस्" : "Save payment",
+    searchDealer: ne ? "डिलर खोज्नुहोस्" : "Search dealer",
+  };
   const [purchaseForm, setPurchaseForm] = useState({
     productId: 0,
     dealerName: "",
@@ -112,7 +134,16 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
 
   const savePurchase = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!purchaseForm.productId || !purchaseForm.dealerName || !Number(purchaseForm.quantity)) return;
+    // Previously this returned silently, so a half-filled form looked like a
+    // button that simply did nothing.
+    if (!purchaseForm.productId || !purchaseForm.dealerName || !Number(purchaseForm.quantity)) {
+      setMessage(
+        ne
+          ? "सामान, डिलरको नाम र परिमाण तीनवटै चाहिन्छ।"
+          : "Product, dealer name, and quantity are all required.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -145,9 +176,9 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
       }));
       await load();
       await onRefresh?.();
-      setMessage("Dealer purchase saved.");
+      setMessage(ne ? "डिलर खरिद सेभ भयो।" : "Dealer purchase saved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save dealer purchase.");
+      setMessage(error instanceof Error ? error.message : ne ? "डिलर खरिद सेभ गर्न सकिएन।" : "Could not save dealer purchase.");
     } finally {
       setBusy(false);
     }
@@ -155,7 +186,14 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
 
   const savePayment = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!paymentForm.productId || !paymentForm.dealerName || !Number(paymentForm.amount)) return;
+    if (!paymentForm.productId || !paymentForm.dealerName || !Number(paymentForm.amount)) {
+      setMessage(
+        ne
+          ? "सामान, डिलरको नाम र रकम तीनवटै चाहिन्छ।"
+          : "Product, dealer name, and amount are all required.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -172,9 +210,9 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
       });
       setPaymentForm((current) => ({ ...current, amount: "", note: "Dealer payment", proofPath: "" }));
       await load();
-      setMessage("Dealer payment saved.");
+      setMessage(ne ? "डिलर भुक्तानी सेभ भयो।" : "Dealer payment saved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save dealer payment.");
+      setMessage(error instanceof Error ? error.message : ne ? "भुक्तानी सेभ गर्न सकिएन।" : "Could not save dealer payment.");
     } finally {
       setBusy(false);
     }
@@ -233,21 +271,21 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
         <form onSubmit={savePurchase} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
           <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
             <PackagePlus className="h-5 w-5 text-blue-700" />
-            Add Dealer Purchase / Return / Damage
+            {label.addTitle}
           </h4>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.productId} onChange={(event) => setPurchaseForm((current) => ({ ...current, productId: Number(event.target.value) }))}>
-              <option value={0}>Select product</option>
+              <option value={0}>{label.selectProduct}</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerName} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder="Dealer name" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerPhone} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder="Dealer phone" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.billNumber} onChange={(event) => setPurchaseForm((current) => ({ ...current, billNumber: event.target.value }))} placeholder="Bill number" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.quantity} onChange={(event) => setPurchaseForm((current) => ({ ...current, quantity: event.target.value }))} placeholder="Quantity (+ purchase, - return/damage)" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.billAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, billAmount: event.target.value }))} placeholder="Bill amount" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.paidAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder="Paid now" />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerName} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder={label.dealerName} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerPhone} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder={label.dealerPhone} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.billNumber} onChange={(event) => setPurchaseForm((current) => ({ ...current, billNumber: event.target.value }))} placeholder={label.billNumber} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.quantity} onChange={(event) => setPurchaseForm((current) => ({ ...current, quantity: event.target.value }))} placeholder={label.quantity} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.billAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, billAmount: event.target.value }))} placeholder={label.billAmount} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.paidAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder={label.paidNow} />
             <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 md:col-span-2">
-              Supplier bill / voucher photo
+              {label.billPhoto}
               <input
                 type="file"
                 accept="image/*"
@@ -263,11 +301,11 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
               />
             </label>
             {purchaseForm.proofPath ? <img src={purchaseForm.proofPath} alt="Supplier bill proof" className="max-h-56 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain p-2 md:col-span-2" /> : null}
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.returnStatus} onChange={(event) => setPurchaseForm((current) => ({ ...current, returnStatus: event.target.value }))} placeholder="Return status, if any" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.damagedReason} onChange={(event) => setPurchaseForm((current) => ({ ...current, damagedReason: event.target.value }))} placeholder="Damaged reason, if any" />
-            <textarea className="min-h-20 rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.reason} onChange={(event) => setPurchaseForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Note" />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.returnStatus} onChange={(event) => setPurchaseForm((current) => ({ ...current, returnStatus: event.target.value }))} placeholder={label.returnStatus} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.damagedReason} onChange={(event) => setPurchaseForm((current) => ({ ...current, damagedReason: event.target.value }))} placeholder={label.damagedReason} />
+            <textarea className="min-h-20 rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.reason} onChange={(event) => setPurchaseForm((current) => ({ ...current, reason: event.target.value }))} placeholder={label.note} />
             <button disabled={busy} className="rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50 md:col-span-2">
-              Save Dealer Record
+              {label.saveRecord}
             </button>
           </div>
         </form>
@@ -275,18 +313,18 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
         <form onSubmit={savePayment} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
           <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
             <CreditCard className="h-5 w-5 text-emerald-700" />
-            Pay Dealer
+            {label.payTitle}
           </h4>
           <div className="mt-4 grid gap-3">
             <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.productId} onChange={(event) => setPaymentForm((current) => ({ ...current, productId: Number(event.target.value) }))}>
-              <option value={0}>Select product</option>
+              <option value={0}>{label.selectProduct}</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerName} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder="Dealer name" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerPhone} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder="Dealer phone" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Payment amount" />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerName} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder={label.dealerName} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.dealerPhone} onChange={(event) => setPaymentForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder={label.dealerPhone} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={paymentForm.amount} onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))} placeholder={label.paymentAmount} />
             <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
-              Dealer payment voucher photo
+              {label.voucherPhoto}
               <input
                 type="file"
                 accept="image/*"
@@ -304,7 +342,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
             {paymentForm.proofPath ? <img src={paymentForm.proofPath} alt="Dealer payment proof" className="max-h-48 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain p-2" /> : null}
             <textarea className="min-h-20 rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={paymentForm.note} onChange={(event) => setPaymentForm((current) => ({ ...current, note: event.target.value }))} placeholder="Payment note" />
             <button disabled={busy} className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
-              Save Payment
+              {label.savePayment}
             </button>
           </div>
         </form>
@@ -317,7 +355,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4 text-sm"
-            placeholder="Search dealer, phone, or product"
+            placeholder={ne ? "डिलर, फोन वा सामान खोज्नुहोस्" : "Search dealer, phone, or product"}
           />
         </div>
         <div className="mt-4 space-y-3">

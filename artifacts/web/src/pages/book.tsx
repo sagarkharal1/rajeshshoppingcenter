@@ -5,7 +5,7 @@ import { ArrowLeft, Calendar, CheckCircle2, Home, MapPin, Tractor, Truck, XCircl
 import { motion } from "framer-motion";
 
 export default function BookService() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [, setLocation] = useLocation();
   const serviceImages = {
     jeep: "/bolero-service.jpg",
@@ -14,6 +14,7 @@ export default function BookService() {
   } as const;
 
   const [isSuccess, setIsSuccess] = useState(false);
+  const [bookingRef, setBookingRef] = useState<number | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [formData, setFormData] = useState({
@@ -42,10 +43,28 @@ export default function BookService() {
         body: JSON.stringify({ ...formData, bookingDate: dateObj.toISOString() }),
       });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || t.book.failedMsg);
+      if (!response.ok) {
+        // The server explains exactly which field is wrong in `details`;
+        // showing only `error` leaves the customer with "Validation failed".
+        const details = Array.isArray(body.details) ? body.details.filter(Boolean).join(", ") : "";
+        throw new Error(details || body.error || t.book.failedMsg);
+      }
+      setBookingRef(body?.id ?? body?.booking?.id ?? null);
       setIsSuccess(true);
     } catch (error) {
-      setFeedback({ type: "error", message: error instanceof Error ? error.message : t.book.failedMsg });
+      const message = error instanceof Error ? error.message : t.book.failedMsg;
+      // A dropped connection surfaces as "Failed to fetch", which means
+      // nothing to a customer — and they need to know the trip was NOT booked.
+      const offline =
+        error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(message);
+      setFeedback({
+        type: "error",
+        message: offline
+          ? (lang === "ne"
+              ? "इन्टरनेट जडान भएन — बुकिङ भएको छैन। फेरि प्रयास गर्नुहोस्।"
+              : "No internet connection — your booking was NOT made. Please try again.")
+          : message,
+      });
     } finally {
       setIsPending(false);
     }
@@ -62,7 +81,20 @@ export default function BookService() {
           <CheckCircle2 className="w-12 h-12" />
         </motion.div>
         <h1 className="text-4xl font-serif font-bold text-foreground mb-4">{t.book.successTitle}</h1>
-        <p className="text-xl text-muted-foreground mb-8">{t.book.successDesc}</p>
+        <p className="text-xl text-muted-foreground mb-4">{t.book.successDesc}</p>
+        {bookingRef ? (
+          <div className="mx-auto mb-8 max-w-sm rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800">
+              {lang === "ne" ? "बुकिङ नम्बर" : "Booking number"}
+            </p>
+            <p className="mt-1 text-3xl font-bold text-emerald-900">#{bookingRef}</p>
+            <p className="mt-2 text-xs text-emerald-800">
+              {lang === "ne"
+                ? "सोध्नुपरे यो नम्बर भन्नुहोस्।"
+                : "Quote this number if you need to ask about your trip."}
+            </p>
+          </div>
+        ) : null}
         <button
           onClick={() => {
             setIsSuccess(false);
@@ -189,7 +221,11 @@ export default function BookService() {
                 </div>
                 <Truck className="mb-3 w-10 h-10" />
                 <span className="font-bold text-lg mb-1 text-foreground">Tata Telcoline</span>
-                <span className="text-sm opacity-80">Pickup service for cargo, delivery, and transport booking.</span>
+                <span className="text-sm opacity-80">
+                  {lang === "ne"
+                    ? "सामान ढुवानी, डेलिभरी र पिकअप सेवाका लागि।"
+                    : "Pickup service for cargo, delivery, and transport booking."}
+                </span>
                 {formData.serviceType === 'telcoline' && (
                   <div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-primary flex items-center justify-center text-white">
                     <div className="w-2 h-2 rounded-full bg-white"></div>

@@ -20,6 +20,7 @@ const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
 import { NepalDateTime } from "@/components/nepal-date-time";
 import { formatNepalDate, formatNepalDateTime, isSameNepalDay } from "@/lib/nepal-time";
+import { paymentMethodLabel } from "@/lib/payment-labels";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-NP", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(value);
@@ -611,7 +612,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
                     onChange={(e) => setForm(booking.id, { method: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
-                    {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{m}</option>)}
+                    {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{paymentMethodLabel(m, lang)}</option>)}
                   </select>
                 </div>
                 <label className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 sm:col-span-3">
@@ -956,7 +957,7 @@ function ReportsTab({ lang, api, token }: { lang: string; api: (url: string, opt
 export function OwnerWorkspaceModern(props: any) {
   const {
     tab, setTab, text, lang, toggleLanguage, shopName, shopAddress, shopPhone,
-    summary, orders, bookings, customers, products, preview, invoiceForm, setInvoiceForm, lines, setLines,
+    summary, orders, bookings, customers, products, categories, preview, invoiceForm, setInvoiceForm, lines, setLines,
     createInvoice, lastInvoice, paymentMethodLabel, paymentForm, setPaymentForm, recordPayment,
     customerForm, setCustomerForm, createCustomer, editingCustomerId, setEditingCustomerId,
     deleteCustomer, startEditCustomer, productForm, setProductForm, createProduct,
@@ -1181,7 +1182,14 @@ export function OwnerWorkspaceModern(props: any) {
             </button>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              // Re-fetch the data rather than reloading the whole page: a full
+              // reload re-downloads the app on a connection that can least
+              // afford it, and drops the owner back to the first tab.
+              onClick={() => void runOwnerAction(
+                async () => { await props.reloadOwnerData?.(); },
+                lang === "ne" ? "ताजा भयो।" : "Updated.",
+                lang === "ne" ? "ताजा गर्न सकिएन।" : "Could not refresh.",
+              )}
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
               title={lang === "ne" ? "ताजा गर्नुहोस्" : "Refresh data"}
             >
@@ -1671,7 +1679,7 @@ export function OwnerWorkspaceModern(props: any) {
                 <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => setProductSearch("")}>{lang === "ne" ? "अर्को सामान खोज्नुहोस्" : "Search another product"}</button>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <select className={shellInput()} value={invoiceForm.paymentMethod} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
-                    {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{method}</option>)}
+                    {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{paymentMethodLabel(method, lang)}</option>)}
                   </select>
                   <input type="number" min={0} className={shellInput()} value={invoiceForm.amountPaid} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, amountPaid: e.target.value }))} placeholder={text.amountReceivedNow} />
                 </div>
@@ -2285,7 +2293,7 @@ export function OwnerWorkspaceModern(props: any) {
                   </select>
                   <input type="number" min={0} className={shellInput()} value={paymentForm.amount} onChange={(e) => setPaymentForm((v: any) => ({ ...v, amount: e.target.value }))} placeholder={text.amount} />
                   <select className={shellInput()} value={paymentForm.paymentMethod} onChange={(e) => setPaymentForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
-                    {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{method}</option>)}
+                    {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{paymentMethodLabel(method, lang)}</option>)}
                   </select>
                   <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
                     {lang === "ne" ? "भुक्तानी रसिद/बिलको फोटो" : "Payment receipt/bill photo"}
@@ -2422,17 +2430,32 @@ export function OwnerWorkspaceModern(props: any) {
             <form onSubmit={createProduct} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{editingProductId ? text.updateProduct : text.addProduct}</h3>
               <div className="mt-4 grid gap-4">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "कुन श्रेणीमा राख्ने?" : "Which category?"}</span>
+                  <select
+                    className={shellInput()}
+                    value={(productForm as any).categoryId || ""}
+                    onChange={(e) => setProductForm((v: any) => ({ ...v, categoryId: e.target.value }))}
+                  >
+                    <option value="">{lang === "ne" ? "श्रेणी छान्नुहोस्" : "Select a category"}</option>
+                    {(categories || []).map((category: any) => (
+                      <option key={category.id} value={String(category.id)}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {[
-                  { key: "name", label: "Product name" },
-                  { key: "sku", label: "SKU / code" },
-                  { key: "description", label: "Description" },
-                  { key: "price", label: "Selling price" },
-                  { key: "buyingPrice", label: "Buying price" },
-                  { key: "transportationCost", label: "Transport cost" },
-                  { key: "extraCost", label: "Extra cost" },
-                  { key: "stockQuantity", label: "Stock quantity" },
-                  { key: "reorderLevel", label: "Reorder level" },
-                  { key: "unit", label: "Unit" },
+                  { key: "name", label: lang === "ne" ? "सामानको नाम" : "Product name" },
+                  { key: "sku", label: lang === "ne" ? "कोड / SKU" : "SKU / code" },
+                  { key: "description", label: lang === "ne" ? "विवरण" : "Description" },
+                  { key: "price", label: lang === "ne" ? "बिक्री मूल्य" : "Selling price" },
+                  { key: "buyingPrice", label: lang === "ne" ? "खरिद मूल्य" : "Buying price" },
+                  { key: "transportationCost", label: lang === "ne" ? "ढुवानी खर्च" : "Transport cost" },
+                  { key: "extraCost", label: lang === "ne" ? "अन्य खर्च" : "Extra cost" },
+                  { key: "stockQuantity", label: lang === "ne" ? "स्टक परिमाण" : "Stock quantity" },
+                  { key: "reorderLevel", label: lang === "ne" ? "कम भएको चेतावनी तह" : "Reorder level" },
+                  { key: "unit", label: lang === "ne" ? "एकाइ (केजी/गोटा/बोरा)" : "Unit" },
                 ].map((field) =>
                   field.key === "description" ? (
                     <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
@@ -2818,16 +2841,18 @@ export function OwnerWorkspaceModern(props: any) {
       />
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-background/96 px-3 pb-3 pt-2 backdrop-blur-xl md:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 gap-2">
+        {/* One scrollable row rather than a fixed 5-column grid: the grid wrapped
+            the last tabs onto a cramped second line as sections were added. */}
+        <div className="mx-auto flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {nav.map((item) => (
             <button
               key={item.name}
               type="button"
               onClick={() => setTab(item.name)}
-              className={`flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold ${tab === item.name ? "bg-primary text-primary-foreground" : "text-slate-500"}`}
+              className={`flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-semibold ${tab === item.name ? "bg-primary text-primary-foreground" : "text-slate-500"}`}
             >
               <item.icon className="h-5 w-5" />
-              <span className="truncate">{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
             </button>
           ))}
         </div>

@@ -114,7 +114,15 @@ export default function TrackOrderModern() {
 
   const handleTrack = async (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (!orderId || !phone) return;
+    // Returning silently made the button look broken when a field was blank.
+    if (!orderId || !phone) {
+      setError(
+        currentLang === "ne"
+          ? "अर्डर नम्बर र फोन नम्बर दुवै लेख्नुहोस्।"
+          : "Please enter both your order number and phone number.",
+      );
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -126,7 +134,16 @@ export default function TrackOrderModern() {
       setResult(body);
     } catch (err) {
       setResult(null);
-      setError(err instanceof Error ? err.message : labels.notFound);
+      const message = err instanceof Error ? err.message : labels.notFound;
+      const offline =
+        err instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(message);
+      setError(
+        offline
+          ? (currentLang === "ne"
+              ? "इन्टरनेट जडान भएन — फेरि प्रयास गर्नुहोस्।"
+              : "No internet connection — please try again.")
+          : message,
+      );
     } finally {
       setLoading(false);
     }

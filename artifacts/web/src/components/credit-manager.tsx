@@ -1,5 +1,7 @@
 "use client";
 
+import { paymentMethodLabel } from "@/lib/payment-labels";
+
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle2, Eye, ReceiptText, TrendingDown } from "lucide-react";
@@ -266,7 +268,7 @@ export function CreditManager({
                         >
                           {["cash", "esewa", "khalti", "bank"].map((method) => (
                             <option key={method} value={method}>
-                              {method}
+                              {paymentMethodLabel(method, lang)}
                             </option>
                           ))}
                         </select>

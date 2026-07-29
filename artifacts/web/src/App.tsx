@@ -924,6 +924,18 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
   const createProduct = async (event: React.FormEvent) => {
     event.preventDefault();
     setOwnerFeedback(null);
+    if (!productForm.name?.trim()) {
+      showOwnerFeedback("error", lang === "ne" ? "सामानको नाम लेख्नुहोस्।" : "Enter the product name.");
+      return;
+    }
+    if (!Number(productForm.categoryId)) {
+      showOwnerFeedback("error", lang === "ne" ? "कुन श्रेणीमा राख्ने भनेर छान्नुहोस्।" : "Choose which category this product belongs to.");
+      return;
+    }
+    if (num(productForm.price) <= 0) {
+      showOwnerFeedback("error", lang === "ne" ? "बिक्री मूल्य लेख्नुहोस्।" : "Enter the selling price.");
+      return;
+    }
     const payload = {
       ...productForm,
       categoryId: Number(productForm.categoryId),
@@ -1213,6 +1225,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       bookings={bookings}
       customers={customers}
       products={products}
+      categories={categories}
       preview={preview}
       invoiceForm={invoiceForm}
       setInvoiceForm={setInvoiceForm}
