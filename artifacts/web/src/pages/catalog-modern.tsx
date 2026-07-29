@@ -11,7 +11,7 @@ export default function CatalogModern() {
   const initialCategory = urlParams.get("category");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<number | null>(initialCategory ? Number(initialCategory) : null);
-  const { data: products, isLoading: loadingProducts } = useGetProducts();
+  const { data: products, isLoading: loadingProducts, isError: productsFailed, refetch: refetchProducts } = useGetProducts();
   const { data: categories, isLoading: loadingCategories } = useGetCategories();
   const visibleCategories = useMemo(
     () => (categories ?? []).filter((category) => category.name.trim().toLowerCase() !== "general"),
@@ -90,6 +90,25 @@ export default function CatalogModern() {
             {Array.from({ length: 6 }).map((_, index) => (
               <div key={index} className="h-[300px] animate-pulse rounded-[1.5rem] bg-muted"></div>
             ))}
+          </div>
+        ) : productsFailed ? (
+          <div className="rounded-[2rem] border border-dashed border-border bg-card px-6 py-14 text-center">
+            <Store className="mx-auto h-12 w-12 text-muted-foreground" />
+            <h2 className="mt-4 text-2xl font-bold text-foreground">
+              {lang === "ne" ? "सामान देखाउन सकिएन" : "Could not load products"}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {lang === "ne"
+                ? "इन्टरनेट जाँच गरेर फेरि प्रयास गर्नुहोस्।"
+                : "Please check your internet connection and try again."}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetchProducts()}
+              className="mt-4 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground"
+            >
+              {lang === "ne" ? "फेरि प्रयास गर्नुहोस्" : "Try again"}
+            </button>
           </div>
         ) : filteredProducts.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

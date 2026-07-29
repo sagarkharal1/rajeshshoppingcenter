@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar, Filter, Download, TrendingUp, TrendingDown } from "lucide-react";
+import { LoadError } from "@/components/load-error";
 
 interface Transaction {
   id: string | number;
@@ -104,6 +105,7 @@ export function TransactionHistory({ lang = "en", api }: TransactionHistoryProps
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<any>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // Date filters
   const [viewType, setViewType] = useState<keyof typeof VIEW_TYPES>("monthly");
@@ -122,6 +124,7 @@ export function TransactionHistory({ lang = "en", api }: TransactionHistoryProps
 
   const fetchTransactions = async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const params = new URLSearchParams({
         startDate: fromDate,
@@ -133,13 +136,17 @@ export function TransactionHistory({ lang = "en", api }: TransactionHistoryProps
       const path = `/admin/analytics?${params}`;
       const data = api
         ? await api(path)
-        : await fetch(`/api${path}`).then((response) => response.ok ? response.json() : null);
+        : await fetch(`/api${path}`).then((response) => {
+            if (!response.ok) throw new Error("Failed to load transactions");
+            return response.json();
+          });
       if (data) {
         setTransactions(data.transactions || []);
         setSummary(data.summary || {});
       }
     } catch (err) {
       console.error("Failed to fetch transactions:", err);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -417,6 +424,8 @@ export function TransactionHistory({ lang = "en", api }: TransactionHistoryProps
               </motion.div>
             ))}
           </div>
+        ) : loadFailed ? (
+          <LoadError lang={lang} onRetry={() => void fetchTransactions()} busy={loading} />
         ) : (
           <div className="flex items-center justify-center py-8">
             <p className="text-slate-500">{dict.noTransactions}</p>

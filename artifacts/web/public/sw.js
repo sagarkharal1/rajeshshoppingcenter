@@ -1,4 +1,4 @@
-const CACHE_NAME = "rajesh-shopping-center-v2";
+const CACHE_NAME = "rajesh-shopping-center-v3";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -28,7 +28,23 @@ self.addEventListener("fetch", (event) => {
      request.destination === "image" ||
      request.destination === "font";
 
-   if (isApi || isDocument) {
+   // API calls must never fall back to the cached homepage: returning HTML for
+   // a JSON request turns a network failure into a confusing parse error, and
+   // the app renders it as "no data" instead of "you are offline".
+   if (isApi) {
+     event.respondWith(
+       fetch(request).catch(
+         () =>
+           new Response(JSON.stringify({ error: "offline" }), {
+             status: 503,
+             headers: { "Content-Type": "application/json" },
+           }),
+       ),
+     );
+     return;
+   }
+
+   if (isDocument) {
      event.respondWith(
        fetch(request).catch(() => caches.match(request)).then((response) => response || caches.match("/")),
      );

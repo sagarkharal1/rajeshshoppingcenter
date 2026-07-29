@@ -317,6 +317,7 @@ export function EditOrderModal({
                   entityType="order"
                   entityId={orderId}
                   lang={lang as "en" | "ne"}
+                  api={api}
                 />
               </div>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CreditCard, PackagePlus, RefreshCw, RotateCcw, Search, ShieldAlert, Truck } from "lucide-react";
+import { LoadError } from "@/components/load-error";
 
 type Product = {
   id: number;
@@ -54,6 +55,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
   const [purchaseForm, setPurchaseForm] = useState({
     productId: 0,
     dealerName: "",
@@ -88,10 +90,15 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     const data = await api("/admin/dealers");
     setDealers(data.dealers || []);
     setTotals(data.totals || { dealerCount: 0, totalBilled: 0, totalPaid: 0, totalDue: 0 });
+    setLoadFailed(false);
+  };
+
+  const reload = () => {
+    load().catch(() => setLoadFailed(true));
   };
 
   useEffect(() => {
-    load().catch(() => {});
+    reload();
   }, []);
 
   const filteredDealers = useMemo(() => {
@@ -369,7 +376,13 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
               </article>
             );
           })}
-          {filteredDealers.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">No dealer records yet.</p> : null}
+          {loadFailed ? (
+            <LoadError lang={lang as "en" | "ne"} onRetry={reload} />
+          ) : filteredDealers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-500">
+              {lang === "ne" ? "अहिलेसम्म कुनै डिलर रेकर्ड छैन।" : "No dealer records yet."}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

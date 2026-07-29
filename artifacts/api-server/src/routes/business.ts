@@ -586,6 +586,45 @@ router.get("/admin/customers", authMiddleware, async (_req, res) => {
   }
 });
 
+// A counter sale to someone who isn't a regular customer still needs a
+// customer row for the invoice to hang off. Rather than making the shopkeeper
+// register every stranger, all such sales share one reserved record.
+const WALK_IN_CODE = "WALK-IN";
+
+router.post("/admin/customers/walk-in", authMiddleware, async (_req, res) => {
+  try {
+    const [existing] = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.customerCode, WALK_IN_CODE))
+      .limit(1);
+
+    const customer =
+      existing ??
+      (
+        await db
+          .insert(customersTable)
+          .values({
+            name: "Walk-in Customer",
+            customerCode: WALK_IN_CODE,
+            notes: "Shared record for counter sales to unregistered customers.",
+          } as any)
+          .returning()
+      )[0];
+
+    res.json({
+      ...customer,
+      rewardPoints: Number(customer.rewardPoints),
+      creditBalance: asNumber(customer.creditBalance),
+      totalSpent: asNumber(customer.totalSpent),
+      isWalkIn: true,
+    });
+  } catch (error) {
+    console.error("Walk-in customer error:", error);
+    res.status(500).json({ error: "Could not start a walk-in sale" });
+  }
+});
+
 router.post("/admin/customers", authMiddleware, async (req, res) => {
   const parsed = customerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -740,6 +779,12 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
       const amountPaid = parsed.data.amountPaid;
       const dueAmount = Math.max(totalAmount - amountPaid, 0);
 
+      // Credit against the shared walk-in record would merge unrelated
+      // strangers' debts into one untraceable balance.
+      if (customer.customerCode === WALK_IN_CODE && dueAmount > 0) {
+        throw new Error("WALK_IN_CREDIT_NOT_ALLOWED");
+      }
+
       const [settings] = await tx.select().from(settingsTable).limit(1);
       const rewardRate = Number(settings?.rewardRate ?? 1);
       const rewardUnitAmount = asNumber(settings?.rewardUnitAmount ?? 100);
@@ -882,6 +927,11 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
     }
     if (message.startsWith("INSUFFICIENT_STOCK")) {
       return res.status(400).json({ error: message.split(":")[1] || "Insufficient stock" });
+    }
+    if (message === "WALK_IN_CREDIT_NOT_ALLOWED") {
+      return res.status(400).json({
+        error: "A walk-in sale must be fully paid. To give credit, save this person as a customer first.",
+      });
     }
     return res.status(500).json({ error: "Failed to create invoice" });
   }

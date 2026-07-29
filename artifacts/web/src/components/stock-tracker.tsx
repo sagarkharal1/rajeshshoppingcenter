@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, TrendingDown, TrendingUp, Package } from "lucide-react";
+import { LoadError } from "@/components/load-error";
 
 interface Product {
   id: number;
@@ -61,6 +62,8 @@ export function StockTracker({ products, lang = "en", api }: StockTrackerProps) 
   const dict = labels[lang];
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [stockHistories, setStockHistories] = useState<Record<number, StockHistory[]>>({});
+  const [historyFailedFor, setHistoryFailedFor] = useState<number | null>(null);
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
 
   // Categorize products by stock status
   const getStockStatus = (product: Product) => {
@@ -79,11 +82,15 @@ export function StockTracker({ products, lang = "en", api }: StockTrackerProps) 
     const fetchHistory = async () => {
       if (!expandedProductId) return;
 
+      setHistoryFailedFor(null);
       try {
         const path = `/admin/products/${expandedProductId}/stock-history`;
         const data = api
           ? await api(path)
-          : await fetch(`/api${path}`).then((response) => response.ok ? response.json() : null);
+          : await fetch(`/api${path}`).then((response) => {
+              if (!response.ok) throw new Error("Failed to load stock history");
+              return response.json();
+            });
         if (data) {
           setStockHistories((prev) => ({
             ...prev,
@@ -92,11 +99,12 @@ export function StockTracker({ products, lang = "en", api }: StockTrackerProps) 
         }
       } catch (err) {
         console.error("Failed to fetch stock history:", err);
+        setHistoryFailedFor(expandedProductId);
       }
     };
 
     fetchHistory();
-  }, [expandedProductId, api]);
+  }, [expandedProductId, api, historyReloadKey]);
 
   const StockCard = ({ product }: { product: Product }) => {
     const status = getStockStatus(product);
@@ -207,7 +215,12 @@ export function StockTracker({ products, lang = "en", api }: StockTrackerProps) 
                 </div>
               ) : null}
 
-              {stockHistories[product.id]?.length > 0 ? (
+              {historyFailedFor === product.id ? (
+                <LoadError
+                  lang={lang}
+                  onRetry={() => setHistoryReloadKey((key) => key + 1)}
+                />
+              ) : stockHistories[product.id]?.length > 0 ? (
                 <div>
                   <p className="font-semibold text-gray-900 mb-2">
                     {dict.history}

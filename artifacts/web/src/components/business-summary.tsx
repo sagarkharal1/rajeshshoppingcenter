@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
+import { LoadError } from "@/components/load-error";
 
 interface BusinessSummaryProps {
   lang?: "en" | "ne";
@@ -52,10 +53,13 @@ export function BusinessSummary({ lang = "en", api }: BusinessSummaryProps) {
   const dict = labels[lang];
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchSummary = async () => {
       setLoading(true);
+      setLoadFailed(false);
       try {
         // Fetch current month data
         const currentPath = `/admin/analytics?period=monthly&date=${new Date().toISOString().split("T")[0]}`;
@@ -77,18 +81,27 @@ export function BusinessSummary({ lang = "en", api }: BusinessSummaryProps) {
         });
       } catch (err) {
         console.error("Failed to fetch summary:", err);
+        setLoadFailed(true);
       } finally {
         setLoading(false);
       }
     };
 
     fetchSummary();
-  }, [api]);
+  }, [api, reloadKey]);
 
   if (loading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-center text-slate-500">{dict.loading}</p>
+      </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <LoadError lang={lang} onRetry={() => setReloadKey((key) => key + 1)} />
       </div>
     );
   }

@@ -379,6 +379,7 @@ export function EditBookingModal({
                   entityType="booking"
                   entityId={bookingId}
                   lang={lang as "en" | "ne"}
+                  api={api}
                 />
               </div>
 

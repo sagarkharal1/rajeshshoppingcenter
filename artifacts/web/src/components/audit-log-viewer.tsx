@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, History } from "lucide-react";
+import { LoadError } from "@/components/load-error";
 
 interface AuditLog {
   id: number;
@@ -20,6 +21,7 @@ interface AuditLogViewerProps {
   entityType: "order" | "booking" | "customer" | "product";
   entityId: number;
   lang?: "en" | "ne";
+  api?: (url: string, opts?: any) => Promise<any>;
 }
 
 const labels = {
@@ -47,32 +49,39 @@ const labels = {
   },
 };
 
-export function AuditLogViewer({ entityType, entityId, lang = "en" }: AuditLogViewerProps) {
+export function AuditLogViewer({ entityType, entityId, lang = "en", api }: AuditLogViewerProps) {
   const dict = labels[lang];
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchLogs = async () => {
       setLoading(true);
+      setLoadFailed(false);
       try {
-        const response = await fetch(
-          `/api/admin/audit-logs?entityType=${entityType}&entityId=${entityId}&limit=100`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setLogs(Array.isArray(data) ? data : []);
-        }
+        // This endpoint requires the admin token, so it must go through `api`;
+        // a bare fetch is rejected and the history silently renders empty.
+        const path = `/admin/audit-logs?entityType=${entityType}&entityId=${entityId}&limit=100`;
+        const data = api
+          ? await api(path)
+          : await fetch(`/api${path}`).then((response) => {
+              if (!response.ok) throw new Error("Failed to load history");
+              return response.json();
+            });
+        setLogs(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch audit logs:", err);
+        setLoadFailed(true);
       } finally {
         setLoading(false);
       }
     };
 
     fetchLogs();
-  }, [entityType, entityId]);
+  }, [entityType, entityId, api, reloadKey]);
 
   if (loading) {
     return (
@@ -80,6 +89,10 @@ export function AuditLogViewer({ entityType, entityId, lang = "en" }: AuditLogVi
         <p className="text-center text-sm text-slate-500">{dict.loading}</p>
       </div>
     );
+  }
+
+  if (loadFailed) {
+    return <LoadError lang={lang} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   if (logs.length === 0) {

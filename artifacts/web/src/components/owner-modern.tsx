@@ -971,6 +971,7 @@ export function OwnerWorkspaceModern(props: any) {
   const todaySales = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.amountPaid), 0);
   const todayDue = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.dueAmount), 0);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [walkInBusy, setWalkInBusy] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
@@ -1033,6 +1034,31 @@ export function OwnerWorkspaceModern(props: any) {
     } catch (error) {
       const details = error instanceof Error && error.message ? ` ${error.message}` : "";
       showFeedback("error", `${failureMessage}${details}`);
+    }
+  };
+
+  // Counter sales to someone who isn't a saved customer reuse one shared
+  // walk-in record, so the shopkeeper never has to register a stranger.
+  const startWalkInSale = async () => {
+    setWalkInBusy(true);
+    try {
+      const walkIn = await props.api("/admin/customers/walk-in", { method: "POST" });
+      setInvoiceForm((v: any) => ({ ...v, customerId: walkIn.id, paymentMethod: "cash" }));
+      setCustomerSearch("");
+      await props.reloadOwnerData?.();
+      showFeedback(
+        "success",
+        lang === "ne" ? "नगद बिक्री तयार छ — सामान थप्नुहोस्।" : "Cash sale ready — now add the products.",
+      );
+    } catch (error) {
+      showFeedback(
+        "error",
+        error instanceof Error && error.message
+          ? error.message
+          : lang === "ne" ? "सुरु गर्न सकिएन।" : "Could not start the sale.",
+      );
+    } finally {
+      setWalkInBusy(false);
     }
   };
 
@@ -1552,6 +1578,23 @@ export function OwnerWorkspaceModern(props: any) {
               <div className="mt-4 grid gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "छिटो ग्राहक छनोट" : "Quick customer pick"}</p>
+                  <button
+                    type="button"
+                    onClick={() => void startWalkInSale()}
+                    disabled={walkInBusy}
+                    className="mt-3 w-full rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 disabled:opacity-60"
+                  >
+                    {walkInBusy
+                      ? (lang === "ne" ? "तयार गर्दै..." : "Preparing...")
+                      : (lang === "ne"
+                          ? "🧾 नयाँ/अपरिचित ग्राहक — नगद बिक्री"
+                          : "🧾 New / unknown customer — cash sale")}
+                  </button>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {lang === "ne"
+                      ? "दर्ता नगरी बिक्री गर्न यो थिच्नुहोस्। उधारो दिनुपरे तल ग्राहक खोजेर छान्नुहोस्।"
+                      : "Tap this to sell without registering anyone. For credit (udharo), pick a saved customer below instead."}
+                  </p>
                   <input
                     className={`${shellInput()} mt-3`}
                     value={customerSearch}

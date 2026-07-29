@@ -38,7 +38,23 @@ const money = (value: number) =>
 const when = (value: string) =>
   new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const num = (value: unknown) => Number(value ?? 0);
-const queryClient = new QueryClient();
+// Rural connections drop often, so retry genuine network failures with a
+// capped backoff — but never retry a 4xx, where retrying only delays the
+// error the shopkeeper needs to see. Mutations never retry: a repeated
+// order or payment is far worse than a failed one.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        const status = (error as { status?: number })?.status;
+        if (typeof status === "number" && status >= 400 && status < 500) return false;
+        return failureCount < 2;
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    },
+    mutations: { retry: false },
+  },
+});
 const OWNER_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
 function shellCard(classes = "") {
