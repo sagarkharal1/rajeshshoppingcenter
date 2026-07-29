@@ -20,6 +20,9 @@ export const ordersTable = pgTable("orders", {
     unit: string;
   }>>(),
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+  // How much has actually been received — supports partial payments
+  // (paymentStatus becomes "partial" when 0 < amountPaid < totalAmount).
+  amountPaid: numeric("amount_paid", { precision: 12, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("order-received"),
   paymentStatus: text("payment_status").notNull().default("unpaid"),
   paymentMethod: text("payment_method").notNull().default("bank"),

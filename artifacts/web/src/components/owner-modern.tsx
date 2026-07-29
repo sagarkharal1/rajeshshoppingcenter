@@ -117,12 +117,15 @@ type ShopInfo = { name: string; phone: string; address: string; pan: string };
 
 // The slip opens in a blank window, so the logo needs an absolute URL —
 // a relative path would resolve against about:blank and never load.
+// The 160px print copy keeps the slip fast on slow connections (the full
+// logo is 1.7 MB); if it's missing we fall back to the full logo once.
 function printedLetterhead(shop: ShopInfo, subtitle: string) {
-  const logoUrl = `${window.location.origin}/rajesh-logo.png`;
+  const logoUrl = `${window.location.origin}/rajesh-logo-print.png`;
+  const fallbackUrl = `${window.location.origin}/rajesh-logo.png`;
   return `
 <div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #1e3a5f;padding-bottom:12px">
   <img src="${logoUrl}" alt="" style="width:64px;height:64px;object-fit:contain;flex:none"
-       onerror="this.style.display='none'">
+       onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${fallbackUrl}'}else{this.style.display='none'}">
   <div style="min-width:0">
     <h2 style="margin:0;font-size:20px;color:#1e3a5f;line-height:1.2">${shop.name}</h2>
     <p style="margin:2px 0 0;color:#64748b;font-size:13px">${subtitle}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
@@ -161,8 +164,16 @@ ${order.customerEmail ? `<p style="margin:2px 0;color:#64748b;font-size:13px">�
 <hr style="margin:12px 0;border:1px solid #e2e8f0">
 <div style="text-align:right">
   <p style="margin:4px 0;font-size:18px;font-weight:700">Total: NPR ${Number(order.totalAmount).toLocaleString()}</p>
+  ${(() => {
+    const total = Number(order.totalAmount || 0);
+    const paidAmount = Number(order.amountPaid || 0);
+    const dueAmount = Math.max(total - paidAmount, 0);
+    if (isPaid || paidAmount <= 0) return "";
+    return `<p style="margin:4px 0;color:#166534;font-size:14px;font-weight:600">${lang === "ne" ? "बुझेको" : "Paid"}: NPR ${paidAmount.toLocaleString()}</p>
+  <p style="margin:4px 0;color:#92400e;font-size:14px;font-weight:600">${lang === "ne" ? "बाँकी" : "Due"}: NPR ${dueAmount.toLocaleString()}</p>`;
+  })()}
   <p style="margin:4px 0;color:#64748b;font-size:13px">Payment method: ${payMethod}</p>
-  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "✅ भुक्तानी भयो (नगद)" : "✅ Paid — Cash / Digital") : (lang === "ne" ? "📒 उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
+  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "✅ भुक्तानी भयो (नगद)" : "✅ Paid — Cash / Digital") : Number(order.amountPaid || 0) > 0 ? (lang === "ne" ? "📒 आंशिक भुक्तानी" : "📒 Partially Paid") : (lang === "ne" ? "📒 उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
 </div>
 ${order.notes ? `<hr style="margin:12px 0;border:1px solid #e2e8f0"><p style="font-size:13px;color:#64748b"><strong>Notes:</strong> ${order.notes}</p>` : ""}
 <hr style="margin:12px 0;border:1px solid #e2e8f0">

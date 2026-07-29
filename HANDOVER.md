@@ -82,7 +82,8 @@
 
 ## ५. ⚠️ कहिल्यै नथिच्ने / Never touch this
 
-**Shop Settings → Danger Zone → "Delete All Test Data"**
+**Media & updates ट्याब (गियर आइकन) → सबैभन्दा तल रातो बाकस → "सबै डाटा मेटाउनुहोस्"**
+**Media & updates tab (gear icon) → red box at the very bottom → "Delete all data"**
 
 यसले **सबै** ग्राहक, बिल, उधारो, सामान मेटाउँछ। फिर्ता आउँदैन।
 यो नयाँ सुरु गर्दा मात्र मालिकले प्रयोग गर्ने हो।

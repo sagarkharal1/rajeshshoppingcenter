@@ -44,6 +44,11 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`,
     `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`,
     `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS void_reason TEXT`,
+    // 2026-07: Track how much of an order has actually been received so a
+    // half-paid order can be recorded ("partial") instead of only paid/unpaid.
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0`,
+    // Orders already marked paid before this column existed were paid in full.
+    `UPDATE orders SET amount_paid = total_amount WHERE payment_status = 'paid' AND amount_paid = 0`,
   ];
   const client = await pool.connect();
   try {

@@ -4,6 +4,7 @@ import { CheckCircle2, Clock3, CreditCard, FileDown, History, Home, Search, Shie
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
 import { FlashNotice } from "@/components/flash-notice";
+import { useGetSettings } from "@workspace/api-client-react";
 
 type CustomerProfileResponse = {
   customer: {
@@ -67,7 +68,12 @@ function formatWhen(value: string) {
   return new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function printInvoice(invoice: any, customer: any, lang: string) {
+function printInvoice(
+  invoice: any,
+  customer: any,
+  lang: string,
+  shop: { name: string; address: string; phone: string; pan?: string },
+) {
   const popup = window.open("", "_blank", "width=520,height=720");
   if (!popup) return;
 
@@ -101,13 +107,13 @@ function printInvoice(invoice: any, customer: any, lang: string) {
 <div class="header" style="display:flex;align-items:center;gap:14px">
   <!-- Absolute URL: the slip opens in a blank window, where a relative path
        would resolve against about:blank and the logo would never appear. -->
-  <img src="${window.location.origin}/rajesh-logo.png" alt=""
+  <img src="${window.location.origin}/rajesh-logo-print.png" alt=""
        style="width:64px;height:64px;object-fit:contain;flex:none"
-       onerror="this.style.display='none'">
+       onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${window.location.origin}/rajesh-logo.png'}else{this.style.display='none'}">
   <div style="min-width:0">
-    <h2>Rajesh Shopping Center</h2>
-    <p class="info">${lang === "ne" ? "काउन्टर बिल / इनभयस" : "Counter Bill / Invoice"}</p>
-    <p class="info" style="margin:2px 0 0">${lang === "ne" ? "मुसिकोट–५, आपचौर, गुल्मी" : "Musikot-5, Aapchaur, Gulmi"} · +977 9814401716</p>
+    <h2>${shop.name}</h2>
+    <p class="info">${lang === "ne" ? "काउन्टर बिल / इनभयस" : "Counter Bill / Invoice"}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
+    <p class="info" style="margin:2px 0 0">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
   </div>
 </div>
 
@@ -285,6 +291,15 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [profile, setProfile] = useState<CustomerProfileResponse | null>(null);
+  const { data: shopSettings } = useGetSettings();
+  // Letterhead details come from live shop settings, with sensible fallbacks
+  // so a slip still prints correctly if that request hasn't finished.
+  const shopForPrint = {
+    name: (shopSettings as any)?.shopName || "Rajesh Shopping Center",
+    address: (shopSettings as any)?.address || "Musikot-5, Aapchaur, Gulmi",
+    phone: (shopSettings as any)?.phone || "+9779814401716",
+    pan: (shopSettings as any)?.panNumber || "302951817",
+  };
 
   const text = useMemo(
     () =>
@@ -550,7 +565,7 @@ export default function AccountPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => printInvoice(invoice, profile.customer, lang === "ne" ? "ne" : "en")}
+                      onClick={() => printInvoice(invoice, profile.customer, lang === "ne" ? "ne" : "en", shopForPrint)}
                       className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white"
                     >
                       <FileDown className="h-4 w-4" />

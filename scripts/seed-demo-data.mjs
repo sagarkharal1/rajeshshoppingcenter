@@ -14,9 +14,10 @@
  *
  * Optional: ADMIN_TOTP=123456   (only if Google Authenticator is enabled)
  *
- * Remove all of it afterwards with the Danger Zone → factory reset in
- * Admin → Shop Settings. Prices are typical Gulmi-area retail figures and are
- * meant as plausible placeholders — adjust before treating any as real.
+ * Remove all of it afterwards with the red Danger zone box at the bottom of
+ * the owner "Media & updates" tab. Prices are typical Gulmi-area retail
+ * figures and are meant as plausible placeholders — adjust before treating
+ * any as real.
  */
 
 const API_BASE = (process.env.API_BASE || "https://rajeshshoppingcenter.com.np").replace(/\/+$/, "");
@@ -330,7 +331,7 @@ Things worth trying:
   • Bookings — confirm one and collect payment
 
 When you are finished, remove all of it with:
-  Admin → Shop Settings → Danger Zone → type DELETE ALL DATA
+  Owner area → Media & updates tab → red Danger zone box → type DELETE ALL DATA
 `);
 }
 

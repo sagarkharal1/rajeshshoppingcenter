@@ -15,7 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import { PublicLayoutModern } from "@/components/public-layout-modern";
 import { Toaster } from "@/components/ui/toaster";
 import { CartProvider } from "@/lib/cart";
@@ -184,9 +184,20 @@ const sampleCatalogProducts = [
   makeSampleProduct("Ladies Sandal", "Shoes and Slippers", "RSC-SHO-004", 980, 760, 26, 10, 16, 6, "pair", "#A21CAF", "Daily sandal", "Comfortable ladies sandal for market, travel, and daily use."),
 ] as const;
 
+// Without this, wouter keeps the previous scroll position across navigation,
+// so tapping Home/Catalog/Track opened each page at the footer.
+function ScrollToTop() {
+  const [pathname] = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+  }, [pathname]);
+  return null;
+}
+
 function PublicApp({ onOwnerAccessRequest }: { onOwnerAccessRequest: () => void }) {
   return (
     <>
+      <ScrollToTop />
       <PublicLayoutModern onOwnerAccessRequest={onOwnerAccessRequest}>
         <Switch>
           <Route path="/" component={Home} />

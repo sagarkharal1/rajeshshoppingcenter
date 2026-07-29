@@ -832,7 +832,7 @@ router.put("/admin/orders/:id", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: "Invalid order ID" });
   }
 
-  const { customerPhone, customerEmail, deliveryAddress, notes, paymentMethod, paymentStatus } = req.body;
+  const { customerPhone, customerEmail, deliveryAddress, notes, paymentMethod, paymentStatus, amountPaid } = req.body;
 
   try {
     const updated = await db.transaction(async (tx) => {
@@ -846,13 +846,39 @@ router.put("/admin/orders/:id", authMiddleware, async (req, res) => {
         throw new Error("Order not found");
       }
 
+      // The received amount is the source of truth for payment status: an
+      // explicit amountPaid derives paid/partial/unpaid, while a bare
+      // status change keeps the amount consistent with it.
+      const totalAmount = Number(order.totalAmount || 0);
+      let nextAmountPaid = Number(order.amountPaid ?? 0);
+      let nextPaymentStatus = paymentStatus ?? order.paymentStatus;
+
+      if (amountPaid !== undefined && amountPaid !== null && amountPaid !== "") {
+        const parsedPaid = Number(amountPaid);
+        if (!Number.isFinite(parsedPaid) || parsedPaid < 0) {
+          throw new Error("INVALID_AMOUNT_PAID");
+        }
+        nextAmountPaid = Math.min(parsedPaid, totalAmount);
+        nextPaymentStatus =
+          nextAmountPaid >= totalAmount && totalAmount > 0
+            ? "paid"
+            : nextAmountPaid > 0
+              ? "partial"
+              : "unpaid";
+      } else if (paymentStatus === "paid") {
+        nextAmountPaid = totalAmount;
+      } else if (paymentStatus === "unpaid") {
+        nextAmountPaid = 0;
+      }
+
       const updates = {
         customerPhone: customerPhone ?? order.customerPhone,
         customerEmail: customerEmail ?? order.customerEmail,
         customerAddress: deliveryAddress ?? order.customerAddress,
         notes: notes ?? order.notes,
         paymentMethod: paymentMethod ?? order.paymentMethod,
-        paymentStatus: paymentStatus ?? order.paymentStatus,
+        paymentStatus: nextPaymentStatus,
+        amountPaid: nextAmountPaid.toFixed(2),
       };
 
       const [updatedOrder] = await tx
@@ -890,9 +916,13 @@ router.put("/admin/orders/:id", authMiddleware, async (req, res) => {
     res.json({
       ...updated,
       totalAmount: Number(updated.totalAmount || 0),
+      amountPaid: Number((updated as any).amountPaid || 0),
     });
   } catch (err) {
     const errMessage = (err as any)?.message || String(err);
+    if (errMessage === "INVALID_AMOUNT_PAID") {
+      return res.status(400).json({ error: "Amount paid must be zero or a positive number" });
+    }
     console.error("Failed to update order:", err);
     res.status(errMessage === "Order not found" ? 404 : 500).json({
       error: "Failed to update order",
@@ -923,7 +953,14 @@ router.put("/admin/orders/:id/status", authMiddleware, async (req, res) => {
   try {
     const [order] = await db
       .update(ordersTable)
-      .set({ status, ...(paymentStatus ? { paymentStatus } : {}) })
+      .set({
+        status,
+        ...(paymentStatus ? { paymentStatus } : {}),
+        // Keep the received amount in step with a quick paid/unpaid toggle so
+        // the two can never contradict each other.
+        ...(paymentStatus === "paid" ? { amountPaid: sql`${ordersTable.totalAmount}` } : {}),
+        ...(paymentStatus === "unpaid" ? { amountPaid: "0.00" } : {}),
+      })
       .where(eq(ordersTable.id, id))
       .returning();
 

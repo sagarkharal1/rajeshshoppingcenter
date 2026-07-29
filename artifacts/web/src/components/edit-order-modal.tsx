@@ -74,6 +74,7 @@ export function EditOrderModal({
     notes: "",
     paymentMethod: "cash",
     paymentStatus: "unpaid",
+    amountPaid: "",
   });
 
   useEffect(() => {
@@ -97,6 +98,7 @@ export function EditOrderModal({
           notes: data.notes || "",
           paymentMethod: data.paymentMethod || "cash",
           paymentStatus: data.paymentStatus || "unpaid",
+          amountPaid: String(Number(data.amountPaid ?? 0) || ""),
         });
       } catch (err) {
         console.error("Failed to fetch order:", err);
@@ -292,22 +294,79 @@ export function EditOrderModal({
                     </label>
                     <select
                       value={formData.paymentStatus}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const status = e.target.value;
                         setFormData((prev) => ({
                           ...prev,
-                          paymentStatus: e.target.value,
-                        }))
-                      }
+                          paymentStatus: status,
+                          // Keep the amount box in step with a quick toggle.
+                          amountPaid:
+                            status === "paid"
+                              ? String(Number(order?.totalAmount ?? 0))
+                              : status === "unpaid"
+                                ? ""
+                                : prev.amountPaid,
+                        }));
+                      }}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="unpaid">
                         {lang === "ne" ? "भुक्तानी बाँकी" : "Unpaid"}
+                      </option>
+                      <option value="partial">
+                        {lang === "ne" ? "आधा/केही तिरेको" : "Partially paid"}
                       </option>
                       <option value="paid">
                         {lang === "ne" ? "भुक्तानी भयो" : "Paid"}
                       </option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    {lang === "ne" ? "हालसम्म बुझेको रकम (रु)" : "Amount received so far (NPR)"}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={Number(order?.totalAmount ?? 0) || undefined}
+                    value={formData.amountPaid}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const total = Number(order?.totalAmount ?? 0);
+                      const amount = Number(raw);
+                      setFormData((prev) => ({
+                        ...prev,
+                        amountPaid: raw,
+                        // Typing an amount is what decides the status —
+                        // the server derives the same way.
+                        paymentStatus:
+                          raw === "" || amount <= 0
+                            ? "unpaid"
+                            : amount >= total && total > 0
+                              ? "paid"
+                              : "partial",
+                      }));
+                    }}
+                    placeholder={lang === "ne" ? "जस्तै 500" : "e.g. 500"}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {(() => {
+                    const total = Number(order?.totalAmount ?? 0);
+                    const amount = Number(formData.amountPaid || 0);
+                    const due = Math.max(total - amount, 0);
+                    if (!total) return null;
+                    return (
+                      <p className={`mt-2 text-sm font-semibold ${due > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                        {due > 0
+                          ? (lang === "ne"
+                              ? `बाँकी: रु ${due.toLocaleString()} (जम्मा रु ${total.toLocaleString()})`
+                              : `Remaining due: NPR ${due.toLocaleString()} (of NPR ${total.toLocaleString()})`)
+                          : (lang === "ne" ? "पूरा भुक्तानी भयो ✓" : "Fully paid ✓")}
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
 
