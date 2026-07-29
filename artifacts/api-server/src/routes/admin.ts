@@ -1009,20 +1009,25 @@ router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
 
       const totalAmount = Number(order.totalAmount);
       const currentBalance = Number(customer.creditBalance ?? 0);
+      // Settlement always works on what is still owed, not the full total —
+      // a partial amount recorded earlier must not be collected twice.
+      const alreadyPaid = Number((order as any).amountPaid ?? 0);
+      const remainingDue = Math.max(totalAmount - alreadyPaid, 0);
+      if (remainingDue <= 0) throw new Error("ALREADY_PAID");
 
       if (action === "confirmed") {
         // Mark order paid and delivered (fully settled — move off active list)
         await tx
           .update(ordersTable)
-          .set({ paymentStatus: "paid", status: "delivered" })
+          .set({ paymentStatus: "paid", status: "delivered", amountPaid: totalAmount.toFixed(2) })
           .where(eq(ordersTable.id, id));
 
-        // Record the incoming payment
+        // Record only the money received now
         const [payment] = await tx
           .insert(customerPaymentsTable)
           .values({
             customerId: customer.id,
-            amount: totalAmount.toFixed(2),
+            amount: remainingDue.toFixed(2),
             paymentMethod,
             referenceNote: `Online order #${order.id} — ${paymentMethod} payment confirmed`,
           })
@@ -1035,13 +1040,28 @@ router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
           entryType: "payment",
           description: `Online order #${order.id} — ${paymentMethod} payment confirmed`,
           debitAmount: "0.00",
-          creditAmount: totalAmount.toFixed(2),
+          creditAmount: remainingDue.toFixed(2),
           balanceAfter: currentBalance.toFixed(2),
           metadata: { source: "order-payment-confirm", orderId: order.id, paymentMethod },
         });
       } else {
-        // Move to credit: customer owes this amount — also mark order as delivered so it leaves active list
-        const newBalance = currentBalance + totalAmount;
+        // A second tap must not double the customer's debt.
+        const [existingCredit] = await tx
+          .select({ id: customerLedgerTable.id })
+          .from(customerLedgerTable)
+          .where(
+            and(
+              eq(customerLedgerTable.customerId, customer.id),
+              eq(customerLedgerTable.entryType, "order-credit"),
+              sql`${customerLedgerTable.metadata}->>'orderId' = ${String(order.id)}`,
+            ),
+          )
+          .limit(1);
+        if (existingCredit) throw new Error("ALREADY_CREDITED");
+
+        // Move the outstanding part to the customer's credit tab and mark the
+        // order delivered so it leaves the active list.
+        const newBalance = currentBalance + remainingDue;
 
         await tx
           .update(ordersTable)
@@ -1061,7 +1081,7 @@ router.post("/admin/orders/:id/settle", authMiddleware, async (req, res) => {
           customerId: customer.id,
           entryType: "order-credit",
           description: `Online order #${order.id} — added to credit tab`,
-          debitAmount: totalAmount.toFixed(2),
+          debitAmount: remainingDue.toFixed(2),
           creditAmount: "0.00",
           balanceAfter: newBalance.toFixed(2),
           metadata: { source: "order-credit", orderId: order.id, originalPaymentMethod: order.paymentMethod },

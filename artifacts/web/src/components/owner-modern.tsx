@@ -20,7 +20,10 @@ const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
 import { NepalDateTime } from "@/components/nepal-date-time";
 import { formatNepalDate, formatNepalDateTime, isSameNepalDay } from "@/lib/nepal-time";
-import { paymentMethodLabel } from "@/lib/payment-labels";
+// Aliased: OwnerWorkspaceModern also receives a *prop* called
+// paymentMethodLabel (a display string), which would shadow this function
+// inside the component and crash the Billing/Customers tabs.
+import { paymentMethodLabel as methodDisplayName } from "@/lib/payment-labels";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-NP", { style: "currency", currency: "NPR", maximumFractionDigits: 0 }).format(value);
@@ -637,7 +640,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
                     onChange={(e) => setForm(booking.id, { method: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
-                    {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{paymentMethodLabel(m, lang)}</option>)}
+                    {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{methodDisplayName(m, lang)}</option>)}
                   </select>
                 </div>
                 <label className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 sm:col-span-3">
@@ -1764,7 +1767,7 @@ export function OwnerWorkspaceModern(props: any) {
                 <button type="button" className="rounded-2xl bg-slate-100 px-4 py-3 text-left font-medium text-slate-900" onClick={() => setProductSearch("")}>{lang === "ne" ? "अर्को सामान खोज्नुहोस्" : "Search another product"}</button>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <select className={shellInput()} value={invoiceForm.paymentMethod} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
-                    {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{paymentMethodLabel(method, lang)}</option>)}
+                    {["cash", "credit", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{methodDisplayName(method, lang)}</option>)}
                   </select>
                   <input type="number" min={0} className={shellInput()} value={invoiceForm.amountPaid} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, amountPaid: e.target.value }))} placeholder={text.amountReceivedNow} />
                 </div>
@@ -2159,10 +2162,12 @@ export function OwnerWorkspaceModern(props: any) {
                       {order.status === "order-received" ? (
                         <button
                           type="button"
-                          disabled={order.paymentStatus !== "paid"}
+                          // A part-payment is still a real commitment — the
+                          // order can proceed while the rest is collected.
+                          disabled={!["paid", "partial"].includes(order.paymentStatus)}
                           onClick={() => runOwnerAction(() => updateOrderStatus(order.id, "preparing"), lang === "ne" ? "अर्डर पुष्टि भयो।" : "Order confirmed", lang === "ne" ? "अर्डर पुष्टि गर्न सकिएन।" : "Could not confirm the order.")}
                           className="rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={order.paymentStatus !== "paid" ? (lang === "ne" ? "भुक्तानी पुष्टि गरेर पहिले अर्डर पुष्टि गर्नुहोस्" : "Confirm payment first") : ""}
+                          title={!["paid", "partial"].includes(order.paymentStatus) ? (lang === "ne" ? "भुक्तानी पुष्टि गरेर पहिले अर्डर पुष्टि गर्नुहोस्" : "Confirm payment first") : ""}
                         >
                           {lang === "ne" ? "अर्डर पुष्टि गर्नुहोस्" : "Confirm order"}
                         </button>
@@ -2189,7 +2194,13 @@ export function OwnerWorkspaceModern(props: any) {
                             className="rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800"
                             title={lang === "ne" ? "ग्राहकले वास्तवमा पैसा पठायो — खाताबहीमा राख्नुहोस्" : "Customer actually sent money — record in ledger"}
                           >
-                            ✅ {lang === "ne" ? "भुक्तानी पायो (खाताबही)" : `Received via ${order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : "Bank"}`}
+                            ✅ {(() => {
+                              const remaining = Math.max(Number(order.totalAmount || 0) - Number(order.amountPaid || 0), 0);
+                              const channel = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : "Bank";
+                              return Number(order.amountPaid || 0) > 0
+                                ? (lang === "ne" ? `बाँकी रु ${remaining.toLocaleString()} भुक्तानी पायो` : `Received remaining NPR ${remaining.toLocaleString()}`)
+                                : (lang === "ne" ? "भुक्तानी पायो (खाताबही)" : `Received via ${channel}`);
+                            })()}
                           </button>
                           <button
                             type="button"
@@ -2201,7 +2212,12 @@ export function OwnerWorkspaceModern(props: any) {
                             className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900"
                             title={lang === "ne" ? "ग्राहकले पैसा पठाएन — उनको उधारो खातामा राख्नुहोस्" : "Customer didn't pay — add to their credit tab"}
                           >
-                            📒 {lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit tab"}
+                            📒 {(() => {
+                              const remaining = Math.max(Number(order.totalAmount || 0) - Number(order.amountPaid || 0), 0);
+                              return Number(order.amountPaid || 0) > 0
+                                ? (lang === "ne" ? `बाँकी रु ${remaining.toLocaleString()} उधारोमा राख्नुहोस्` : `Add remaining NPR ${remaining.toLocaleString()} to credit tab`)
+                                : (lang === "ne" ? "उधारो खातामा राख्नुहोस्" : "Add to credit tab");
+                            })()}
                           </button>
                         </>
                       ) : null}
@@ -2378,7 +2394,7 @@ export function OwnerWorkspaceModern(props: any) {
                   </select>
                   <input type="number" min={0} className={shellInput()} value={paymentForm.amount} onChange={(e) => setPaymentForm((v: any) => ({ ...v, amount: e.target.value }))} placeholder={text.amount} />
                   <select className={shellInput()} value={paymentForm.paymentMethod} onChange={(e) => setPaymentForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
-                    {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{paymentMethodLabel(method, lang)}</option>)}
+                    {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{methodDisplayName(method, lang)}</option>)}
                   </select>
                   <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
                     {lang === "ne" ? "भुक्तानी रसिद/बिलको फोटो" : "Payment receipt/bill photo"}
