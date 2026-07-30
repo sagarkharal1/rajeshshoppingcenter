@@ -2855,12 +2855,23 @@ export function OwnerWorkspaceModern(props: any) {
                       className="h-48 w-48 rounded-2xl border border-slate-200 bg-white p-2"
                     />
                   ) : null}
-                  <p className="text-xs text-slate-500">
-                    {lang === "ne" ? "स्क्यान गर्न नसके यो कोड हातले लेख्नुहोस्:" : "Cannot scan? Type this key by hand:"}
-                  </p>
-                  <code className="break-all rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold tracking-wider text-slate-900">
-                    {totpSetup.secret}
-                  </code>
+                  {/* Saving this key turns "lost phone" from a full password
+                      reset into simply re-adding the account on a new phone. */}
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3">
+                    <p className="text-xs font-bold text-amber-900">
+                      {lang === "ne"
+                        ? "⚠️ यो कोड कागजमा लेखेर सुरक्षित ठाउँमा राख्नुहोस्"
+                        : "⚠️ Write this key on paper and keep it somewhere safe"}
+                    </p>
+                    <code className="mt-2 block break-all rounded-lg bg-white px-3 py-2 text-sm font-bold tracking-wider text-slate-900">
+                      {totpSetup.secret}
+                    </code>
+                    <p className="mt-2 text-xs text-amber-800">
+                      {lang === "ne"
+                        ? "फोन हराए वा बिग्रे यही कोडले नयाँ फोनमा फेरि हाल्न सकिन्छ। स्क्यान गर्न नसके पनि यही कोड हातले लेख्न मिल्छ।"
+                        : "If the phone is lost or broken, this key sets it up again on a new phone. It is also what you type by hand if the QR will not scan."}
+                    </p>
+                  </div>
 
                   <p className="mt-2 text-sm font-semibold text-slate-800">
                     {lang === "ne" ? "२. एपमा देखिएको ६ अङ्कको कोड लेख्नुहोस्" : "2. Enter the 6-digit code shown in the app"}
