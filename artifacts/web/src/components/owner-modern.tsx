@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { useEffect, useRef } from "react";
 import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldAlert, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
+import QRCode from "qrcode";
 import { FlashNotice } from "@/components/flash-notice";
 import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
@@ -1003,6 +1004,10 @@ export function OwnerWorkspaceModern(props: any) {
   const [walkInBusy, setWalkInBusy] = useState(false);
   const [resetForm, setResetForm] = useState({ confirmText: "", password: "" });
   const [resetBusy, setResetBusy] = useState(false);
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpSetup, setTotpSetup] = useState<{ secret: string; uri: string; qrDataUrl: string } | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [totpBusy, setTotpBusy] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
@@ -1065,6 +1070,70 @@ export function OwnerWorkspaceModern(props: any) {
     } catch (error) {
       const details = error instanceof Error && error.message ? ` ${error.message}` : "";
       showFeedback("error", `${failureMessage}${details}`);
+    }
+  };
+
+  // Reflect whether two-step security is already on, so the panel shows the
+  // right controls without the owner having to guess.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/totp-status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d) setTotpEnabled(Boolean(d.totpEnabled)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const startTotpSetup = async () => {
+    setTotpBusy(true);
+    try {
+      const data = await props.api("/admin/totp-setup");
+      // Drawn locally: the otpauth URI carries the shared secret, so sending
+      // it to a QR web service would hand that secret to a third party.
+      const qrDataUrl = await QRCode.toDataURL(data.uri, { width: 320, margin: 1 });
+      setTotpSetup({ secret: data.secret, uri: data.uri, qrDataUrl });
+      setTotpCode("");
+    } catch (error) {
+      showFeedback("error", error instanceof Error && error.message
+        ? error.message
+        : lang === "ne" ? "सुरु गर्न सकिएन।" : "Could not start setup.");
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const enableTotp = async () => {
+    setTotpBusy(true);
+    try {
+      await props.api("/admin/totp-enable", { method: "POST", body: JSON.stringify({ code: totpCode }) });
+      setTotpEnabled(true);
+      setTotpSetup(null);
+      setTotpCode("");
+      showFeedback("success", lang === "ne"
+        ? "दुई-चरण सुरक्षा चालु भयो। अब लगइन गर्दा फोनको कोड चाहिन्छ।"
+        : "Two-step security is on. A code from your phone is now needed at login.");
+    } catch (error) {
+      showFeedback("error", error instanceof Error && error.message
+        ? error.message
+        : lang === "ne" ? "कोड मिलेन।" : "That code was not accepted.");
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const disableTotp = async () => {
+    setTotpBusy(true);
+    try {
+      await props.api("/admin/totp-disable", { method: "POST", body: JSON.stringify({ code: totpCode }) });
+      setTotpEnabled(false);
+      setTotpCode("");
+      showFeedback("success", lang === "ne" ? "दुई-चरण सुरक्षा बन्द भयो।" : "Two-step security is off.");
+    } catch (error) {
+      showFeedback("error", error instanceof Error && error.message
+        ? error.message
+        : lang === "ne" ? "बन्द गर्न सकिएन।" : "Could not turn it off.");
+    } finally {
+      setTotpBusy(false);
     }
   };
 
@@ -2738,6 +2807,123 @@ export function OwnerWorkspaceModern(props: any) {
                 </button>
               </div>
             </form>
+
+            {/* Google Authenticator. The QR is drawn in the browser rather
+                than fetched from a QR web service, because the URL contains
+                the shared secret and must never leave this machine. */}
+            <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
+                <ShieldCheck className={`h-5 w-5 ${totpEnabled ? "text-emerald-600" : "text-slate-400"}`} />
+                {lang === "ne" ? "दुई-चरण सुरक्षा (Google Authenticator)" : "Two-step security (Google Authenticator)"}
+              </h4>
+              <p className={`mt-1 text-sm font-semibold ${totpEnabled ? "text-emerald-700" : "text-slate-500"}`}>
+                {totpEnabled
+                  ? (lang === "ne" ? "✓ चालु छ — लगइन गर्दा कोड चाहिन्छ" : "✓ Turned on — a code is required at login")
+                  : (lang === "ne" ? "अहिले बन्द छ" : "Currently off")}
+              </p>
+
+              {!totpEnabled && !totpSetup ? (
+                <>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    {lang === "ne"
+                      ? "पासवर्ड कसैले थाहा पाए पनि, फोनको कोडबिना कसैले पस्न सक्दैन। फोनमा Google Authenticator एप हालेर तल थिच्नुहोस्।"
+                      : "Even if someone learns the password, they cannot get in without the code on your phone. Install the Google Authenticator app, then tap below."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startTotpSetup}
+                    disabled={totpBusy}
+                    className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {totpBusy
+                      ? (lang === "ne" ? "तयार गर्दै..." : "Preparing...")
+                      : (lang === "ne" ? "सुरु गर्नुहोस्" : "Set up Google Authenticator")}
+                  </button>
+                </>
+              ) : null}
+
+              {!totpEnabled && totpSetup ? (
+                <div className="mt-4 grid gap-3 sm:max-w-md">
+                  <p className="text-sm font-semibold text-slate-800">
+                    {lang === "ne" ? "१. एपमा यो QR स्क्यान गर्नुहोस्" : "1. Scan this QR in the app"}
+                  </p>
+                  {totpSetup.qrDataUrl ? (
+                    <img
+                      src={totpSetup.qrDataUrl}
+                      alt=""
+                      className="h-48 w-48 rounded-2xl border border-slate-200 bg-white p-2"
+                    />
+                  ) : null}
+                  <p className="text-xs text-slate-500">
+                    {lang === "ne" ? "स्क्यान गर्न नसके यो कोड हातले लेख्नुहोस्:" : "Cannot scan? Type this key by hand:"}
+                  </p>
+                  <code className="break-all rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold tracking-wider text-slate-900">
+                    {totpSetup.secret}
+                  </code>
+
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
+                    {lang === "ne" ? "२. एपमा देखिएको ६ अङ्कको कोड लेख्नुहोस्" : "2. Enter the 6-digit code shown in the app"}
+                  </p>
+                  <input
+                    className={shellInput()}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setTotpSetup(null); setTotpCode(""); }}
+                      disabled={totpBusy}
+                      className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                    >
+                      {lang === "ne" ? "पर्दैन" : "Cancel"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={enableTotp}
+                      disabled={totpBusy || totpCode.length < 6}
+                      className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {totpBusy
+                        ? (lang === "ne" ? "जाँच्दै..." : "Checking...")
+                        : (lang === "ne" ? "चालु गर्नुहोस्" : "Turn on")}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {totpEnabled ? (
+                <div className="mt-4 grid gap-3 sm:max-w-md">
+                  <p className="text-sm text-slate-600">
+                    {lang === "ne"
+                      ? "बन्द गर्न एपको अहिलेको ६ अङ्कको कोड लेख्नुहोस्।"
+                      : "To turn it off, enter the current 6-digit code from the app."}
+                  </p>
+                  <input
+                    className={shellInput()}
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                  />
+                  <button
+                    type="button"
+                    onClick={disableTotp}
+                    disabled={totpBusy || totpCode.length < 6}
+                    className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 disabled:opacity-60"
+                  >
+                    {totpBusy
+                      ? (lang === "ne" ? "बन्द गर्दै..." : "Turning off...")
+                      : (lang === "ne" ? "बन्द गर्नुहोस्" : "Turn off two-step security")}
+                  </button>
+                </div>
+              ) : null}
+            </section>
 
             {/* Danger zone — wipes demo/test data so the shop can start clean.
                 Deliberately placed last, behind a typed phrase and the admin
