@@ -19,9 +19,15 @@ const check = (name, pass, detail = "") => {
 };
 
 // Mirrors verifyTotp() in artifacts/api-server/src/routes/admin.ts
+const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
+
 function verifyTotp(token, secret) {
   try {
-    const result = verifySync({ token, secret });
+    const result = verifySync({
+      token,
+      secret,
+      epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS,
+    });
     return result?.valid === true;
   } catch {
     return false;
@@ -66,6 +72,19 @@ for (const [token, label] of [
 const otherSecret = generateSecret();
 const otherCode = generateSync({ secret: otherSecret });
 check("rejects a valid code from a different secret", verifyTotp(otherCode, secret) === false, otherCode);
+
+// Clock drift and slow typing. Note epoch is in SECONDS here — passing
+// milliseconds silently produces codes for a completely different time.
+const nowSec = Math.floor(Date.now() / 1000);
+const codeAt = (offsetSeconds) => generateSync({ secret, epoch: nowSec + offsetSeconds });
+
+check("accepts the code from the previous 30s step (typed a little too slowly)",
+  verifyTotp(codeAt(-30), secret) === true);
+check("accepts the code from the next 30s step (phone clock slightly ahead)",
+  verifyTotp(codeAt(30), secret) === true);
+check("rejects a code from two steps back (60s)", verifyTotp(codeAt(-60), secret) === false);
+check("rejects a code from two steps ahead (60s)", verifyTotp(codeAt(60), secret) === false);
+check("rejects a code from five minutes away", verifyTotp(codeAt(300), secret) === false);
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${"=".repeat(64)}`);

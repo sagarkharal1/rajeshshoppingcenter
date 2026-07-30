@@ -63,13 +63,23 @@ const categorySchema = z.object({
   sortOrder: z.number().int().min(0).max(999).default(0),
 });
 
+// Accept the codes either side of the current 30-second step. With no
+// tolerance, a code typed a moment too slowly — or a phone clock a few
+// seconds out — is rejected even though it is genuine. One step is the
+// usual allowance; anything further still fails.
+const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
+
 function verifyTotp(token: string, secret: string): boolean {
   try {
     // verifySync returns a RESULT OBJECT ({ valid: false } for a wrong code),
     // never a boolean. Coercing it with Boolean() is always true — which
     // silently accepted every 6-digit code and made 2FA worthless. Read the
     // `valid` flag explicitly.
-    const result = verifySync({ token, secret }) as { valid?: boolean } | undefined;
+    const result = verifySync({
+      token,
+      secret,
+      epochTolerance: TOTP_EPOCH_TOLERANCE_SECONDS,
+    }) as { valid?: boolean } | undefined;
     return result?.valid === true;
   } catch {
     // Malformed input (wrong length, non-digits) throws — treat as a failure.
