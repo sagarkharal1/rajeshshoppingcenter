@@ -36,6 +36,7 @@ import {
   deleteLocalBackup,
   getBackupStatus,
   cleanupOldBackups,
+  restoreJsonBackup,
 } from "../lib/backup.js";
 import { getScheduledBackupStatus, runScheduledBackup } from "../lib/scheduled-backup.js";
 
@@ -1964,6 +1965,55 @@ router.post("/admin/backup/create", authMiddleware, async (req, res) => {
       error: "Failed to create backup",
       details: (err as any)?.message || String(err),
     });
+  }
+});
+
+const RESTORE_CONFIRMATION = "RESTORE MY DATA";
+
+// Restoring replaces everything currently in the shop with the contents of a
+// backup, so it is gated exactly like the factory reset and takes its own
+// safety backup first — otherwise a mistaken restore would be unrecoverable.
+router.post("/admin/backup/:filename/restore", authMiddleware, async (req, res) => {
+  try {
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const confirmation =
+      typeof req.body?.confirmation === "string" ? req.body.confirmation.trim() : "";
+
+    if (confirmation !== RESTORE_CONFIRMATION) {
+      return res.status(400).json({ error: `Type "${RESTORE_CONFIRMATION}" exactly to confirm.` });
+    }
+
+    const settings = await getSettings();
+    const validPassword = await isOwnerPasswordValid(password, settings?.adminPasswordHash ?? null);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Password is incorrect" });
+    }
+
+    let safetyBackup: string | null = null;
+    try {
+      const backup = await createJsonBackup();
+      safetyBackup = backup.filename;
+    } catch (err) {
+      console.error("Restore: safety backup failed", err);
+      return res.status(500).json({
+        error: "Could not save a backup of the current data, so the restore was cancelled. Nothing changed.",
+      });
+    }
+
+    const rawName = req.params.filename;
+    const backupName = Array.isArray(rawName) ? rawName[0] : rawName;
+    const result = await restoreJsonBackup(backupName);
+
+    res.json({
+      success: true,
+      message: `Restored ${result.restored} records from ${backupName}. Your admin login was kept unchanged.`,
+      safetyBackup,
+      ...result,
+    });
+  } catch (err) {
+    const message = (err as any)?.message || String(err);
+    console.error("Restore backup error:", err);
+    res.status(400).json({ error: message });
   }
 });
 

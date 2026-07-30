@@ -766,7 +766,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
 }
 
 // ── ReportsTab: daily / monthly / yearly analytics ───────────────────────────
-function ReportsTab({ lang, api, token }: { lang: string; api: (url: string, opts?: any) => Promise<any>; token?: string }) {
+function ReportsTab({ lang, api, token, onRestored }: { lang: string; api: (url: string, opts?: any) => Promise<any>; token?: string; onRestored?: () => Promise<void> | void }) {
   const [period, setPeriod] = useState<"day" | "month" | "year">("day");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [data, setData] = useState<any>(null);
@@ -968,7 +968,7 @@ function ReportsTab({ lang, api, token }: { lang: string; api: (url: string, opt
       <BusinessSummary lang={lang as "en" | "ne"} api={api} />
 
       {/* Backup and Export */}
-      <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} />
+      <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} onRestored={onRestored} />
 
       {/* Business Proof Register */}
       <ProofRegister lang={lang as "en" | "ne"} api={api} />
@@ -2681,7 +2681,7 @@ export function OwnerWorkspaceModern(props: any) {
         ) : null}
 
         {tab === "reports" ? (
-          <ReportsTab lang={lang} api={props.api} token={token} />
+          <ReportsTab lang={lang} api={props.api} token={token} onRestored={props.reloadOwnerData} />
         ) : null}
 
         {tab === "branding" ? (

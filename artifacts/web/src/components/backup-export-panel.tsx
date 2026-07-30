@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DatabaseBackup, Download, RefreshCw, ShieldCheck } from "lucide-react";
+import { DatabaseBackup, Download, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
+
+// Must match the phrase the server checks in POST /admin/backup/:file/restore.
+const RESTORE_PHRASE = "RESTORE MY DATA";
 
 type BackupRecord = {
   filename: string;
@@ -13,6 +16,8 @@ type BackupRecord = {
 };
 
 type BackupExportPanelProps = {
+  /** Called after a successful restore so the workspace can reload its data. */
+  onRestored?: () => Promise<void> | void;
   lang?: "en" | "ne";
   api: (url: string, opts?: any) => Promise<any>;
   token?: string;
@@ -35,12 +40,15 @@ function formatWhen(value?: string) {
   return new Intl.DateTimeFormat("en-NP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanelProps) {
+export function BackupExportPanel({ lang = "en", api, token, onRestored }: BackupExportPanelProps) {
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [status, setStatus] = useState<any>(null);
   const [schedule, setSchedule] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<"" | "json" | "sql" | string>("");
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [restoreForm, setRestoreForm] = useState({ confirmText: "", password: "" });
+  const [restoreBusy, setRestoreBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -66,6 +74,46 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
   useEffect(() => {
     load();
   }, []);
+
+  const runRestore = async () => {
+    if (!restoreTarget) return;
+    if (restoreForm.confirmText.trim() !== RESTORE_PHRASE) {
+      setError(lang === "ne" ? `पक्का गर्न "${RESTORE_PHRASE}" लेख्नुहोस्।` : `Type "${RESTORE_PHRASE}" exactly to confirm.`);
+      return;
+    }
+    if (!restoreForm.password) {
+      setError(lang === "ne" ? "पासवर्ड लेख्नुहोस्।" : "Enter your admin password.");
+      return;
+    }
+    setRestoreBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api(`/admin/backup/${encodeURIComponent(restoreTarget)}/restore`, {
+        method: "POST",
+        body: JSON.stringify({
+          confirmation: restoreForm.confirmText.trim(),
+          password: restoreForm.password,
+        }),
+      });
+      setRestoreTarget(null);
+      setRestoreForm({ confirmText: "", password: "" });
+      setNotice(
+        result?.message ||
+          (lang === "ne" ? "ब्याकअपबाट जानकारी फिर्ता आयो।" : "Data restored from backup."),
+      );
+      await load();
+      await onRestored?.();
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : lang === "ne" ? "फिर्ता ल्याउन सकिएन।" : "Could not restore the backup.",
+      );
+    } finally {
+      setRestoreBusy(false);
+    }
+  };
 
   const downloadFile = async (filename: string) => {
     if (!token) throw new Error(lang === "ne" ? "फेरि लगइन गरेर डाउनलोड गर्नुहोस्।" : "Please log in again before downloading.");
@@ -287,17 +335,102 @@ export function BackupExportPanel({ lang = "en", api, token }: BackupExportPanel
                   {backup.records ? ` · ${backup.records} records` : ""}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => downloadExisting(backup.filename)}
-                disabled={Boolean(busy)}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
-              >
-                <Download className="h-4 w-4" />
-                {lang === "ne" ? "डाउनलोड" : "Download"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadExisting(backup.filename)}
+                  disabled={Boolean(busy)}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                >
+                  <Download className="h-4 w-4" />
+                  {lang === "ne" ? "डाउनलोड" : "Download"}
+                </button>
+                {backup.format === "json" ? (
+                  <button
+                    type="button"
+                    onClick={() => setRestoreTarget(backup.filename)}
+                    disabled={Boolean(busy)}
+                    className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-60"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {lang === "ne" ? "यसबाट फिर्ता ल्याउनुहोस्" : "Restore from this"}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {/* Restoring replaces everything currently in the shop, so it asks for
+          the password and a typed phrase — the same gate as the reset. */}
+      {restoreTarget ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (restoreBusy ? null : setRestoreTarget(null))}
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">
+              {lang === "ne" ? "ब्याकअपबाट फिर्ता ल्याउने?" : "Restore from this backup?"}
+            </h3>
+            <p className="mt-2 break-all text-xs font-semibold text-slate-500">{restoreTarget}</p>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              {lang === "ne"
+                ? "अहिलेको सबै ग्राहक, बिल, उधारो र सामान हटेर यो ब्याकअपको जानकारी आउँछ। सुरु गर्नुअघि अहिलेको अवस्थाको ब्याकअप आफैं बन्छ। तपाईंको लगइन पासवर्ड जस्ताको तस्तै रहन्छ।"
+                : "Everything in the shop right now is replaced with the contents of this backup. A backup of the current state is saved first, and your login password is left unchanged."}
+            </p>
+
+            <input type="text" name="fake-restore-user" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+            <input type="password" name="fake-restore-pass" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden="true" />
+
+            <label className="mt-4 grid gap-2 text-sm font-medium text-slate-700">
+              <span>{lang === "ne" ? `पक्का गर्न "${RESTORE_PHRASE}" लेख्नुहोस्` : `Type "${RESTORE_PHRASE}" to confirm`}</span>
+              <input
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                name="restore-confirmation-phrase"
+                value={restoreForm.confirmText}
+                onChange={(e) => setRestoreForm((v) => ({ ...v, confirmText: e.target.value }))}
+                placeholder={RESTORE_PHRASE}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="mt-3 grid gap-2 text-sm font-medium text-slate-700">
+              <span>{lang === "ne" ? "आफ्नो पासवर्ड" : "Your admin password"}</span>
+              <input
+                type="password"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                name="restore-admin-password"
+                value={restoreForm.password}
+                onChange={(e) => setRestoreForm((v) => ({ ...v, password: e.target.value }))}
+                autoComplete="new-password"
+              />
+            </label>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setRestoreTarget(null); setRestoreForm({ confirmText: "", password: "" }); }}
+                disabled={restoreBusy}
+                className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
+              >
+                {lang === "ne" ? "पर्दैन" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={runRestore}
+                disabled={restoreBusy}
+                className="flex-1 rounded-2xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {restoreBusy
+                  ? (lang === "ne" ? "फिर्ता ल्याउँदै..." : "Restoring...")
+                  : (lang === "ne" ? "फिर्ता ल्याउनुहोस्" : "Restore")}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

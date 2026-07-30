@@ -1,0 +1,46 @@
+name: CI
+
+# DigitalOcean deploys every push to master automatically, so this is the only
+# thing standing between a broken change and the shop's live app. Keep it fast
+# enough that nobody is tempted to skip it.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  check:
+    name: Typecheck, build, money tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck every package
+        run: pnpm run typecheck
+
+      - name: Build API server
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Build web app
+        run: pnpm --filter @workspace/web run build
+
+      # Guards the flows where a bug costs real money (invoice and payment
+      # voids, partial order settlement, credit balances, walk-in sales) and
+      # that a backup can actually be restored.
+      - name: Money-path and restore tests
+        run: pnpm --filter @workspace/scripts run test

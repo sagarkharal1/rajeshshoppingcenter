@@ -15,10 +15,12 @@ import {
   settingsTable,
   telegramQueueTable,
 } from "@workspace/db/schema";
+import { getTableColumns, sql } from "drizzle-orm";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
+import { readFile } from "fs/promises";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { gzip } from "zlib";
+import { gzip, gunzip } from "zlib";
 import * as path from "path";
 
 const execAsync = promisify(exec);
@@ -254,12 +256,138 @@ export async function deleteLocalBackup(filename: string): Promise<void> {
   unlinkSync(filepath);
 }
 
-export async function restoreJsonBackup(filename: string): Promise<{ restored: number; errors: string[] }> {
-  // This is a placeholder for restore functionality
-  // Full implementation would require careful data insertion with transaction handling
-  throw new Error(
-    "JSON restore not yet implemented. Please implement with care to avoid data loss."
-  );
+// Order matters: parents before children on the way in, reverse on the way
+// out, so foreign keys are never left dangling mid-restore.
+const RESTORE_ORDER: Array<{ key: string; table: any; name: string; hasSerialId: boolean }> = [
+  { key: "categories", table: categoriesTable, name: "categories", hasSerialId: true },
+  { key: "products", table: productsTable, name: "products", hasSerialId: true },
+  { key: "customers", table: customersTable, name: "customers", hasSerialId: true },
+  { key: "orders", table: ordersTable, name: "orders", hasSerialId: true },
+  { key: "bookings", table: bookingsTable, name: "bookings", hasSerialId: true },
+  { key: "invoices", table: invoicesTable, name: "invoices", hasSerialId: true },
+  { key: "invoiceItems", table: invoiceItemsTable, name: "invoice_items", hasSerialId: true },
+  { key: "payments", table: customerPaymentsTable, name: "customer_payments", hasSerialId: true },
+  { key: "ledger", table: customerLedgerTable, name: "customer_ledger", hasSerialId: true },
+  { key: "rewardTransactions", table: rewardTransactionsTable, name: "reward_transactions", hasSerialId: true },
+  { key: "stockLedger", table: stockLedgerTable, name: "stock_ledger", hasSerialId: true },
+  { key: "auditLogs", table: auditLogsTable, name: "audit_logs", hasSerialId: true },
+  { key: "telegramQueue", table: telegramQueueTable, name: "telegram_queue", hasSerialId: true },
+  { key: "settings", table: settingsTable, name: "settings", hasSerialId: true },
+];
+
+// Credentials are deliberately NOT taken from the backup: restoring an old
+// password (or an old 2FA secret) could lock the owner out of their own shop
+// in the middle of a recovery. The current login always survives a restore.
+const CREDENTIAL_FIELDS = new Set([
+  "adminPasswordHash",
+  "adminOtp",
+  "adminOtpExpiry",
+  "totpSecret",
+  "totpEnabled",
+]);
+
+/**
+ * Rebuild a value for insertion. JSON has no date type, so timestamps come
+ * back as ISO strings; only columns the schema declares as timestamps are
+ * converted, because some genuinely-text columns (e.g. bookingDate) also hold
+ * date-shaped strings and must stay text.
+ */
+function reviveRow(table: any, row: Record<string, unknown>): Record<string, unknown> {
+  const columns = getTableColumns(table) as Record<string, any>;
+  const out: Record<string, unknown> = {};
+
+  for (const [field, value] of Object.entries(row)) {
+    const column = columns[field];
+    if (!column) continue; // column no longer exists in the schema — skip it
+    if (value !== null && value !== undefined && String(column.columnType).includes("Timestamp")) {
+      const parsed = new Date(value as string);
+      out[field] = Number.isNaN(parsed.getTime()) ? null : parsed;
+    } else {
+      out[field] = value;
+    }
+  }
+  return out;
+}
+
+export async function restoreJsonBackup(
+  filename: string,
+): Promise<{ restored: number; perTable: Record<string, number>; errors: string[] }> {
+  if (!filename.match(/^backup-[\d\-]+\.json\.gz$/)) {
+    throw new Error("Only JSON backups can be restored");
+  }
+
+  const filepath = path.join(process.cwd(), "backups", filename);
+  if (!existsSync(filepath)) {
+    throw new Error("Backup file not found");
+  }
+
+  const gunzipAsync = promisify(gunzip);
+  const raw = await readFile(filepath);
+  const parsed = JSON.parse((await gunzipAsync(raw)).toString("utf-8"));
+  const tables = parsed?.tables;
+  if (!tables || typeof tables !== "object") {
+    throw new Error("Backup file is not in the expected format");
+  }
+
+  const errors: string[] = [];
+  const perTable: Record<string, number> = {};
+  let restored = 0;
+
+  await db.transaction(async (tx) => {
+    // Keep the current admin credentials to carry across the restore.
+    const [currentSettings] = await tx.select().from(settingsTable).limit(1);
+
+    for (const entry of [...RESTORE_ORDER].reverse()) {
+      await tx.delete(entry.table);
+    }
+
+    for (const entry of RESTORE_ORDER) {
+      const rows = tables[entry.key];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        perTable[entry.key] = 0;
+        continue;
+      }
+
+      const prepared = rows.map((row: Record<string, unknown>) => {
+        const revived = reviveRow(entry.table, row);
+        if (entry.key === "settings" && currentSettings) {
+          for (const field of CREDENTIAL_FIELDS) {
+            if (field in (currentSettings as Record<string, unknown>)) {
+              revived[field] = (currentSettings as Record<string, unknown>)[field];
+            }
+          }
+        }
+        return revived;
+      });
+
+      // Chunked so a large history does not build one enormous statement.
+      const CHUNK = 200;
+      for (let i = 0; i < prepared.length; i += CHUNK) {
+        await tx.insert(entry.table).values(prepared.slice(i, i + CHUNK));
+      }
+      perTable[entry.key] = prepared.length;
+      restored += prepared.length;
+    }
+
+    // Restored rows keep their original ids, so each serial sequence must be
+    // moved past them — otherwise the next insert collides with existing data.
+    for (const entry of RESTORE_ORDER) {
+      if (!entry.hasSerialId) continue;
+      try {
+        await tx.execute(sql`
+          SELECT setval(
+            pg_get_serial_sequence(${entry.name}, 'id'),
+            GREATEST(COALESCE((SELECT MAX(id) FROM ${sql.identifier(entry.name)}), 0), 1),
+            (SELECT COUNT(*) > 0 FROM ${sql.identifier(entry.name)})
+          )
+        `);
+      } catch (error) {
+        errors.push(`Could not reset the id counter for ${entry.name}: ${(error as Error).message}`);
+      }
+    }
+  });
+
+  return { restored, perTable, errors };
 }
 
 export async function getBackupStatus(): Promise<{
