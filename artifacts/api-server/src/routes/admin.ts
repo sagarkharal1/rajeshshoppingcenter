@@ -65,8 +65,14 @@ const categorySchema = z.object({
 
 function verifyTotp(token: string, secret: string): boolean {
   try {
-    return Boolean(verifySync({ token, secret }));
+    // verifySync returns a RESULT OBJECT ({ valid: false } for a wrong code),
+    // never a boolean. Coercing it with Boolean() is always true — which
+    // silently accepted every 6-digit code and made 2FA worthless. Read the
+    // `valid` flag explicitly.
+    const result = verifySync({ token, secret }) as { valid?: boolean } | undefined;
+    return result?.valid === true;
   } catch {
+    // Malformed input (wrong length, non-digits) throws — treat as a failure.
     return false;
   }
 }

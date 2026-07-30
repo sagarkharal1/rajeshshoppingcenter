@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:money": "node tests/money-paths.test.mjs",
     "test:restore": "node tests/backup-restore.test.mjs",
-    "test": "node tests/money-paths.test.mjs && node tests/backup-restore.test.mjs"
+    "test": "node tests/money-paths.test.mjs && node tests/backup-restore.test.mjs && node tests/totp.test.mjs",
+    "test:totp": "node tests/totp.test.mjs"
   },
   "dependencies": {
     "pg": "^8.20.0"
@@ -19,6 +20,7 @@
     "@types/node": "catalog:",
     "@types/pg": "^8.15.5",
     "tsx": "catalog:",
-    "@electric-sql/pglite": "^0.3.11"
+    "@electric-sql/pglite": "^0.3.11",
+    "otplib": "^13.4.0"
   }
 }
