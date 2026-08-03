@@ -11,6 +11,11 @@ static_sites:
     build_command: pnpm install --frozen-lockfile && pnpm --filter @workspace/web run build
     output_dir: artifacts/web/dist/public
     environment_slug: node-js
+    # The app routes in the browser, so paths like /catalog and /book exist
+    # only once index.html has loaded — there is no such file on disk. Without
+    # this fallback the host answers 404 to any direct visit, refresh, or
+    # shared link to anything other than the home page.
+    catchall_document: index.html
     routes:
       - path: /
 
