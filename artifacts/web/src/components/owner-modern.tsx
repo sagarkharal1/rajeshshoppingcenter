@@ -2046,6 +2046,17 @@ export function OwnerWorkspaceModern(props: any) {
                     <Printer className="h-4 w-4" />
                     {text.print}
                   </button>
+                  {/* Off by default: a shop with no printer should not get a
+                      print dialog in the face after every sale. */}
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(props.autoPrint)}
+                      onChange={(e) => props.toggleAutoPrint?.(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    {lang === "ne" ? "बिक्री सकिनेबित्तिकै प्रिन्ट" : "Print automatically after each sale"}
+                  </label>
                 </div>
               </div>
 

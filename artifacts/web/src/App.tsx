@@ -241,6 +241,13 @@ function OwnerApp() {
   const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
   const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "" });
+  // Kept on the device rather than in shop settings: whether a printer is
+  // attached depends on which counter machine is being used, not the shop.
+  const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("auto-print-bill") === "true");
+  const toggleAutoPrint = (on: boolean) => {
+    setAutoPrint(on);
+    localStorage.setItem("auto-print-bill", String(on));
+  };
   const [lines, setLines] = useState<Array<{ productId: number; quantity: number }>>([]);
   const [lastInvoice, setLastInvoice] = useState<any>(null);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
@@ -1013,6 +1020,13 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       setLines([]);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "बिक्री सुरक्षित भयो।" : "Sale saved.");
+
+      // Open the print dialog once the saved bill has actually rendered, so
+      // the customer is never sent away without a receipt. Shops with no
+      // printer can switch this off.
+      if (autoPrint) {
+        window.setTimeout(() => window.print(), 400);
+      }
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : (lang === "ne" ? "बिक्री बचत गर्न सकिएन।" : "Could not save the invoice."));
     }
@@ -1237,6 +1251,8 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       customers={customers}
       products={products}
       categories={categories}
+      autoPrint={autoPrint}
+      toggleAutoPrint={toggleAutoPrint}
       preview={preview}
       invoiceForm={invoiceForm}
       setInvoiceForm={setInvoiceForm}
