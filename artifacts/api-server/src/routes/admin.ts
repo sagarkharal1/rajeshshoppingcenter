@@ -1678,6 +1678,69 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       rawRecordCredit: shop.totalCredit + transport.totalCredit,
     };
 
+    // ── Gross profit ──────────────────────────────────────────────────────
+    // Every invoice line stores the unit cost that applied when it was sold
+    // (buying + transport + extra), so this is the real margin rather than a
+    // guess from today's prices. Voided invoices are already excluded above.
+    const soldLines = await db
+      .select({
+        productId: invoiceItemsTable.productId,
+        productName: invoiceItemsTable.productName,
+        quantity: invoiceItemsTable.quantity,
+        unit: invoiceItemsTable.unit,
+        lineTotal: invoiceItemsTable.lineTotal,
+        unitCost: invoiceItemsTable.unitCost,
+      })
+      .from(invoiceItemsTable)
+      .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
+      .where(
+        sqlRaw`${invoicesTable.createdAt} >= ${startDate} AND ${invoicesTable.createdAt} < ${endDate} AND ${invoicesTable.voidedAt} is null`
+      );
+
+    const productProfit = new Map<
+      number,
+      { productId: number; productName: string; unit: string; quantitySold: number; revenue: number; cost: number; profit: number }
+    >();
+    let goodsRevenue = 0;
+    let goodsCost = 0;
+
+    for (const line of soldLines) {
+      const revenue = Number(line.lineTotal || 0);
+      const cost = Number(line.unitCost || 0) * Number(line.quantity || 0);
+      goodsRevenue += revenue;
+      goodsCost += cost;
+
+      const entry = productProfit.get(line.productId) ?? {
+        productId: line.productId,
+        productName: line.productName,
+        unit: line.unit || "piece",
+        quantitySold: 0,
+        revenue: 0,
+        cost: 0,
+        profit: 0,
+      };
+      entry.quantitySold += Number(line.quantity || 0);
+      entry.revenue += revenue;
+      entry.cost += cost;
+      entry.profit = entry.revenue - entry.cost;
+      productProfit.set(line.productId, entry);
+    }
+
+    const byProfit = [...productProfit.values()].sort((a, b) => b.profit - a.profit);
+    const grossProfit = goodsRevenue - goodsCost;
+    const profit = {
+      goodsRevenue,
+      goodsCost,
+      grossProfit,
+      // Share of the selling price kept as profit.
+      marginPercent: goodsRevenue > 0 ? (grossProfit / goodsRevenue) * 100 : 0,
+      itemsSold: soldLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
+      productCount: productProfit.size,
+      topEarners: byProfit.slice(0, 5),
+      // Items sold at or below cost — usually a mispriced product.
+      lossMakers: byProfit.filter((p) => p.profit <= 0).slice(0, 5),
+    };
+
     res.json({
       period,
       type,
@@ -1687,6 +1750,7 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       combined,
       shop,
       transport,
+      profit,
       dealer: {
         ...periodDealerTotals,
         currentDue: currentDealerTotals.totalDue,
@@ -1718,6 +1782,10 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         dealerReturnCount: periodDealerTotals.returnCount,
         dealerDamagedCount: periodDealerTotals.damagedCount,
         netCreditPosition: currentCustomerCreditDue - currentDealerTotals.totalDue,
+        goodsRevenue,
+        goodsCost,
+        grossProfit,
+        marginPercent: profit.marginPercent,
       },
     });
   } catch (err) {

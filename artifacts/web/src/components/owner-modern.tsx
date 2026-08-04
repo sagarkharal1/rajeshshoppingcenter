@@ -873,6 +873,76 @@ function ReportsTab({ lang, api, token, onRestored }: { lang: string; api: (url:
             ))}
           </div>
 
+          {/* Real profit: every bill stored the cost that applied when it was
+              sold, so this is money actually kept, not a guess. */}
+          {data.profit ? (
+            <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm">
+              <h4 className="text-lg font-bold text-slate-950">
+                {lang === "ne" ? "साँचो नाफा (सामान बिक्रीबाट)" : "Real profit (from goods sold)"}
+              </h4>
+              <p className="mt-1 text-sm text-slate-600">
+                {lang === "ne"
+                  ? "बिक्री मूल्यबाट किनेको मूल्य, ढुवानी र अन्य खर्च घटाएर।"
+                  : "Selling price minus what the goods cost you, including transport and extra costs."}
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                {[
+                  { label: lang === "ne" ? "बिक्री" : "Sales", value: fmt(num(data.profit.goodsRevenue)), cls: "text-slate-950" },
+                  { label: lang === "ne" ? "सामानको लागत" : "Cost of goods", value: fmt(num(data.profit.goodsCost)), cls: "text-rose-700" },
+                  { label: lang === "ne" ? "नाफा" : "Profit", value: fmt(num(data.profit.grossProfit)), cls: num(data.profit.grossProfit) >= 0 ? "text-emerald-700" : "text-rose-700" },
+                  { label: lang === "ne" ? "नाफा दर" : "Margin", value: `${num(data.profit.marginPercent).toFixed(1)}%`, cls: "text-emerald-700" },
+                ].map(({ label, value, cls }) => (
+                  <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                    <p className="text-xs text-slate-500">{label}</p>
+                    <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-3 text-xs text-slate-500">
+                {lang === "ne"
+                  ? `${num(data.profit.itemsSold)} वटा सामान · ${num(data.profit.productCount)} किसिम बिक्री भयो`
+                  : `${num(data.profit.itemsSold)} items sold across ${num(data.profit.productCount)} products`}
+              </p>
+
+              {(data.profit.topEarners || []).length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {lang === "ne" ? "सबैभन्दा बढी कमाउने सामान" : "Best earners"}
+                  </p>
+                  <div className="mt-2 overflow-hidden rounded-2xl bg-white">
+                    {data.profit.topEarners.map((p: any) => (
+                      <div key={p.productId} className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2 last:border-b-0">
+                        <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{p.productName}</span>
+                        <span className="shrink-0 text-xs text-slate-500">
+                          {num(p.quantitySold)} {p.unit}
+                        </span>
+                        <span className="shrink-0 text-sm font-bold text-emerald-700">{fmt(num(p.profit))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {(data.profit.lossMakers || []).length > 0 ? (
+                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                  <p className="text-xs font-bold text-rose-800">
+                    {lang === "ne"
+                      ? "⚠️ यी सामानमा नाफा भएन — मूल्य जाँच्नुहोस्"
+                      : "⚠️ These sold at no profit — check the price"}
+                  </p>
+                  {data.profit.lossMakers.map((p: any) => (
+                    <div key={p.productId} className="mt-1 flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate text-rose-900">{p.productName}</span>
+                      <span className="shrink-0 font-bold text-rose-700">{fmt(num(p.profit))}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="rounded-[1.5rem] border border-blue-100 bg-blue-50/40 p-5 shadow-sm">
             <h4 className="text-lg font-bold text-slate-950">
               {lang === "ne" ? "उधारो स्थिति" : "Credit Position"}

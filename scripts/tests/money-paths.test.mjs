@@ -47,7 +47,13 @@ CREATE TABLE invoices (
 );
 CREATE TABLE invoice_items (
   id serial PRIMARY KEY, invoice_id integer NOT NULL,
-  product_id integer NOT NULL, product_name text NOT NULL, quantity integer NOT NULL
+  product_id integer NOT NULL, product_name text NOT NULL, quantity integer NOT NULL,
+  unit text NOT NULL DEFAULT 'piece',
+  unit_price numeric(12,2) NOT NULL DEFAULT 0,
+  -- Cost as it was when the item sold, so later price changes cannot
+  -- retroactively rewrite what past sales earned.
+  unit_cost numeric(12,2) NOT NULL DEFAULT 0,
+  line_total numeric(12,2) NOT NULL DEFAULT 0
 );
 CREATE TABLE customer_payments (
   id serial PRIMARY KEY, customer_id integer NOT NULL, invoice_id integer,
@@ -329,6 +335,62 @@ check("stored numbers are distinct in the database",
   `${stored[0].total} rows, ${stored[0].distinct_numbers} distinct`);
 check("no bill is left with the PENDING placeholder",
   (await q(`SELECT id FROM invoices WHERE invoice_number LIKE '%PENDING%'`)).length === 0);
+
+console.log("\n--- Test 10: profit uses the cost recorded at the time of sale ---");
+// Mirrors the gross-profit block in GET /admin/analytics. The point of storing
+// unit_cost on each line is that a later price change must not rewrite history.
+await q(`DELETE FROM invoice_items`);
+await q(`DELETE FROM invoices`);
+await q(`INSERT INTO invoices (id,customer_id,invoice_number,subtotal_amount) VALUES
+  (200,1,'INV-P1',3000),
+  (201,1,'INV-P2',1000)`);
+// Rice: sold 2 @ 1500, cost 1000 each -> profit 1000
+// Salt: sold 10 @ 30 (line 300), cost 32 each -> LOSS of 20
+await q(`INSERT INTO invoice_items (invoice_id,product_id,product_name,quantity,unit,unit_price,unit_cost,line_total) VALUES
+  (200,1,'Rice 25kg',2,'bora',1500,1000,3000),
+  (201,2,'Salt 1kg',10,'kg',30,32,300)`);
+// A voided invoice must not count toward profit at all.
+await q(`INSERT INTO invoices (id,customer_id,invoice_number,subtotal_amount,voided_at) VALUES
+  (202,1,'INV-VOID',9999,now())`);
+await q(`INSERT INTO invoice_items (invoice_id,product_id,product_name,quantity,unit,unit_price,unit_cost,line_total) VALUES
+  (202,1,'Rice 25kg',50,'bora',1500,1000,75000)`);
+
+const lines = await q(`
+  SELECT ii.product_id, ii.product_name, ii.quantity, ii.line_total, ii.unit_cost
+  FROM invoice_items ii
+  JOIN invoices i ON i.id = ii.invoice_id
+  WHERE i.voided_at IS NULL`);
+
+let revenue = 0, cost = 0;
+const perProduct = new Map();
+for (const l of lines) {
+  const r = num(l.line_total), c = num(l.unit_cost) * Number(l.quantity);
+  revenue += r; cost += c;
+  const e = perProduct.get(l.product_id) ?? { name: l.product_name, revenue: 0, cost: 0 };
+  e.revenue += r; e.cost += c; perProduct.set(l.product_id, e);
+}
+const gross = revenue - cost;
+const margin = revenue > 0 ? (gross / revenue) * 100 : 0;
+
+check("revenue counts only non-voided sales (3000 + 300)", revenue === 3300, `revenue ${revenue}`);
+check("cost uses the unit cost stored on each line (2000 + 320)", cost === 2320, `cost ${cost}`);
+check("gross profit is revenue minus that cost (980)", gross === 980, `profit ${gross}`);
+check("margin is profit as a share of sales (~29.7%)", Math.abs(margin - 29.6969) < 0.01, `${margin.toFixed(2)}%`);
+
+const rice = perProduct.get(1);
+const salt = perProduct.get(2);
+check("the voided 75,000 sale is excluded from the product breakdown",
+  rice.revenue === 3000, `rice revenue ${rice.revenue}`);
+check("an item sold below cost shows as a loss", salt.revenue - salt.cost === -20,
+  `salt profit ${salt.revenue - salt.cost}`);
+
+// A later price change must not alter what past sales earned.
+await q(`UPDATE products SET price = 99999 WHERE id = 1`);
+const afterRepricing = await one(`
+  SELECT coalesce(sum(ii.line_total),0) AS r FROM invoice_items ii
+  JOIN invoices i ON i.id = ii.invoice_id WHERE i.voided_at IS NULL`);
+check("changing a product's price today does not rewrite past profit",
+  num(afterRepricing.r) === 3300, `revenue still ${num(afterRepricing.r)}`);
 
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
