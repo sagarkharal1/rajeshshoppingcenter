@@ -607,6 +607,88 @@ router.get("/admin/customers", authMiddleware, async (_req, res) => {
 // register every stranger, all such sales share one reserved record.
 const WALK_IN_CODE = "WALK-IN";
 
+// Who owes money, and — more usefully — who has been owing it longest.
+// A balance alone cannot tell the shopkeeper who to chase: someone who paid
+// last week and someone silent for six months look identical in a plain list.
+router.get("/admin/credit-analysis", authMiddleware, async (_req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: customersTable.id,
+        name: customersTable.name,
+        phone: customersTable.phone,
+        customerCode: customersTable.customerCode,
+        creditBalance: customersTable.creditBalance,
+        totalSpent: customersTable.totalSpent,
+        lastPaymentAt: sql<string | null>`(
+          SELECT max(cp.created_at) FROM customer_payments cp
+          WHERE cp.customer_id = ${customersTable.id} AND cp.voided_at IS NULL
+        )`,
+        lastInvoiceAt: sql<string | null>`(
+          SELECT max(i.created_at) FROM invoices i
+          WHERE i.customer_id = ${customersTable.id} AND i.voided_at IS NULL
+        )`,
+        firstUnpaidAt: sql<string | null>`(
+          SELECT min(i.created_at) FROM invoices i
+          WHERE i.customer_id = ${customersTable.id} AND i.voided_at IS NULL
+            AND i.due_amount > 0
+        )`,
+      })
+      .from(customersTable)
+      .where(sql`${customersTable.creditBalance} > 0`);
+
+    const now = Date.now();
+    const daysSince = (value: string | null) =>
+      value ? Math.floor((now - new Date(value).getTime()) / 86_400_000) : null;
+
+    const customers = rows
+      .map((row) => {
+        const balance = asNumber(row.creditBalance);
+        const sinceLastPayment = daysSince(row.lastPaymentAt);
+        const sinceFirstUnpaid = daysSince(row.firstUnpaidAt);
+        // Age the debt from the last payment when there is one; otherwise from
+        // the oldest unpaid bill, so a customer who has never paid is not
+        // treated as brand new.
+        const age = sinceLastPayment ?? sinceFirstUnpaid ?? 0;
+        return {
+          id: row.id,
+          name: row.name,
+          phone: row.phone,
+          customerCode: row.customerCode,
+          balance,
+          totalSpent: asNumber(row.totalSpent),
+          lastPaymentAt: row.lastPaymentAt,
+          lastInvoiceAt: row.lastInvoiceAt,
+          neverPaid: row.lastPaymentAt === null,
+          daysSincePayment: age,
+          bucket: age > 60 ? "over60" : age > 30 ? "days31to60" : "days0to30",
+        };
+      })
+      // Longest-standing debt first — that is the call to make today.
+      .sort((a, b) => b.daysSincePayment - a.daysSincePayment || b.balance - a.balance);
+
+    const bucketFor = (name: string) => {
+      const list = customers.filter((c) => c.bucket === name);
+      return { count: list.length, amount: list.reduce((sum, c) => sum + c.balance, 0) };
+    };
+
+    res.json({
+      totalOutstanding: customers.reduce((sum, c) => sum + c.balance, 0),
+      customerCount: customers.length,
+      neverPaidCount: customers.filter((c) => c.neverPaid).length,
+      buckets: {
+        days0to30: bucketFor("days0to30"),
+        days31to60: bucketFor("days31to60"),
+        over60: bucketFor("over60"),
+      },
+      customers,
+    });
+  } catch (error) {
+    console.error("Credit analysis error:", error);
+    res.status(500).json({ error: "Failed to load credit analysis" });
+  }
+});
+
 router.post("/admin/customers/walk-in", authMiddleware, async (_req, res) => {
   try {
     const [existing] = await db

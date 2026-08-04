@@ -2,7 +2,7 @@
 
 import { paymentMethodLabel } from "@/lib/payment-labels";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, CheckCircle2, Eye, ReceiptText, TrendingDown } from "lucide-react";
 
@@ -67,6 +67,18 @@ export function CreditManager({
   onOpenCustomer,
 }: CreditManagerProps) {
   const dict = labels[lang];
+  const ne = lang === "ne";
+  // Debt ageing, so the list can be ordered by who has been owing longest
+  // rather than just by amount.
+  const [analysis, setAnalysis] = useState<any>(null);
+  useEffect(() => {
+    if (!api) return;
+    let cancelled = false;
+    api("/admin/credit-analysis")
+      .then((d) => { if (!cancelled) setAnalysis(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [api, customers]);
   const [selectedCustomer, setSelectedCustomer] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -154,6 +166,71 @@ export function CreditManager({
           <p className="mt-1 text-3xl font-bold text-blue-950">{money(highestDue)}</p>
         </div>
       </div>
+
+      {/* Ageing: a balance alone does not say who to chase. Someone silent for
+          three months matters more than a larger debt paid down last week. */}
+      {analysis ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-sm font-bold text-slate-900">
+            {ne ? "कति समयदेखि बाँकी छ" : "How long the money has been owed"}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {[
+              { key: "days0to30", label: ne ? "१ महिनाभित्र" : "Within a month", cls: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+              { key: "days31to60", label: ne ? "१–२ महिना" : "1–2 months", cls: "border-amber-200 bg-amber-50 text-amber-900" },
+              { key: "over60", label: ne ? "२ महिनाभन्दा बढी" : "Over 2 months", cls: "border-rose-200 bg-rose-50 text-rose-800" },
+            ].map(({ key, label, cls }) => {
+              const b = analysis.buckets?.[key] ?? { count: 0, amount: 0 };
+              return (
+                <div key={key} className={`rounded-xl border px-3 py-2 ${cls}`}>
+                  <p className="text-xs font-semibold">{label}</p>
+                  <p className="mt-1 text-lg font-bold">{money(Number(b.amount || 0))}</p>
+                  <p className="text-xs opacity-80">
+                    {Number(b.count || 0)} {ne ? "जना" : b.count === 1 ? "customer" : "customers"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {(analysis.customers || []).length > 0 ? (
+            <div className="mt-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                {ne ? "सबैभन्दा लामो समयदेखि नतिरेका" : "Owing longest — chase these first"}
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
+                {analysis.customers.slice(0, 8).map((c: any) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onOpenCustomer?.(c.id)}
+                    className="flex w-full flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+                      {c.name}
+                      {c.phone ? <span className="ml-2 text-xs font-normal text-slate-500">{c.phone}</span> : null}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        c.bucket === "over60"
+                          ? "bg-rose-100 text-rose-800"
+                          : c.bucket === "days31to60"
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-emerald-100 text-emerald-800"
+                      }`}
+                    >
+                      {c.neverPaid
+                        ? (ne ? "कहिल्यै तिरेको छैन" : "never paid")
+                        : (ne ? `${c.daysSincePayment} दिन` : `${c.daysSincePayment} days`)}
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-rose-700">{money(Number(c.balance || 0))}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <AnimatePresence>
         {message ? (

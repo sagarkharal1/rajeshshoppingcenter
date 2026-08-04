@@ -42,8 +42,10 @@ CREATE TABLE orders (
 CREATE TABLE invoices (
   id serial PRIMARY KEY, customer_id integer NOT NULL, invoice_number text NOT NULL,
   subtotal_amount numeric(12,2) NOT NULL, amount_paid numeric(12,2) NOT NULL DEFAULT 0,
+  due_amount numeric(12,2) NOT NULL DEFAULT 0,
   reward_points_earned integer NOT NULL DEFAULT 0,
-  voided_at timestamp, void_reason text
+  voided_at timestamp, void_reason text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE invoice_items (
   id serial PRIMARY KEY, invoice_id integer NOT NULL,
@@ -58,7 +60,8 @@ CREATE TABLE invoice_items (
 CREATE TABLE customer_payments (
   id serial PRIMARY KEY, customer_id integer NOT NULL, invoice_id integer,
   amount numeric(12,2) NOT NULL, payment_method text NOT NULL DEFAULT 'cash',
-  reference_note text, voided_at timestamp, void_reason text
+  reference_note text, voided_at timestamp, void_reason text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE customer_ledger (
   id serial PRIMARY KEY, customer_id integer NOT NULL, invoice_id integer, payment_id integer,
@@ -391,6 +394,71 @@ const afterRepricing = await one(`
   JOIN invoices i ON i.id = ii.invoice_id WHERE i.voided_at IS NULL`);
 check("changing a product's price today does not rewrite past profit",
   num(afterRepricing.r) === 3300, `revenue still ${num(afterRepricing.r)}`);
+
+console.log("\n--- Test 11: udharo ageing puts the longest debts first ---");
+// Mirrors GET /admin/credit-analysis: age a debt from the last payment, or
+// from the oldest unpaid bill when the customer has never paid anything.
+await q(`DELETE FROM customer_ledger`);
+await q(`DELETE FROM customer_payments`);
+await q(`DELETE FROM invoice_items`);
+await q(`DELETE FROM invoices`);
+await q(`DELETE FROM customers`);
+
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
+await q(`INSERT INTO customers (id,name,credit_balance) VALUES
+  (1,'Paid last week',500),
+  (2,'Quiet 45 days',1200),
+  (3,'Silent 6 months',3000),
+  (4,'Never paid',800),
+  (5,'Owes nothing',0)`);
+await q(`INSERT INTO customer_payments (customer_id,amount,created_at) VALUES
+  (1,100,$1),(2,100,$2),(3,100,$3)`, [daysAgo(7), daysAgo(45), daysAgo(180)]);
+// The never-payer has an old unpaid bill instead of any payment.
+await q(`INSERT INTO invoices (id,customer_id,invoice_number,subtotal_amount,due_amount,created_at)
+         VALUES (900,4,'INV-OLD',800,800,$1)`, [daysAgo(90)]);
+// A voided payment must not count as "recently paid".
+await q(`INSERT INTO customer_payments (customer_id,amount,created_at,voided_at)
+         VALUES (3,100,$1,now())`, [daysAgo(1)]);
+
+const aged = await q(`
+  SELECT c.id, c.name, c.credit_balance,
+    (SELECT max(cp.created_at) FROM customer_payments cp
+      WHERE cp.customer_id = c.id AND cp.voided_at IS NULL) AS last_payment_at,
+    (SELECT min(i.created_at) FROM invoices i
+      WHERE i.customer_id = c.id AND i.voided_at IS NULL AND i.due_amount > 0) AS first_unpaid_at
+  FROM customers c WHERE c.credit_balance > 0`);
+
+const nowMs = Date.now();
+const since = (v) => (v ? Math.floor((nowMs - new Date(v).getTime()) / 86400000) : null);
+const analysed = aged
+  .map((r) => {
+    const age = since(r.last_payment_at) ?? since(r.first_unpaid_at) ?? 0;
+    return {
+      name: r.name,
+      balance: num(r.credit_balance),
+      neverPaid: r.last_payment_at === null,
+      age,
+      bucket: age > 60 ? "over60" : age > 30 ? "days31to60" : "days0to30",
+    };
+  })
+  .sort((a, b) => b.age - a.age || b.balance - a.balance);
+
+check("customers with no due are left out", analysed.length === 4, `${analysed.length} listed`);
+check("the longest-standing debt is listed first", analysed[0].name === "Silent 6 months", analysed[0].name);
+check("a recent payer lands in the under-a-month bucket",
+  analysed.find((c) => c.name === "Paid last week").bucket === "days0to30");
+check("45 days lands in the 1-2 month bucket",
+  analysed.find((c) => c.name === "Quiet 45 days").bucket === "days31to60");
+check("6 months lands in the over-2-month bucket",
+  analysed.find((c) => c.name === "Silent 6 months").bucket === "over60");
+check("a voided payment does not make an old debt look recent",
+  analysed.find((c) => c.name === "Silent 6 months").age >= 179, `age ${analysed.find((c) => c.name === "Silent 6 months").age}`);
+const never = analysed.find((c) => c.name === "Never paid");
+check("someone who never paid is aged from their oldest bill, not treated as new",
+  never.neverPaid === true && never.age >= 89, `neverPaid=${never.neverPaid} age=${never.age}`);
+const over60 = analysed.filter((c) => c.bucket === "over60");
+check("over-2-month bucket totals only those debts",
+  over60.reduce((s, c) => s + c.balance, 0) === 3800, `${over60.reduce((s, c) => s + c.balance, 0)}`);
 
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
