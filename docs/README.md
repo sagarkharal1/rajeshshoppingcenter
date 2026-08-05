@@ -8,6 +8,8 @@ and must not be served to customers.
 | --- | --- |
 | `handover-print.html` | Printable A4 handover sheet, bilingual, logo embedded as a data URI so it prints with no internet |
 | `Rajesh-Shopping-Center-Handover.pdf` | The same sheet as a PDF, ready to email or print |
+| `reward-poster.html` | Shop-wall poster explaining the reward points scheme, bilingual, logo embedded |
+| `Rajesh-Reward-Poster.pdf` | The poster as a PDF, ready to print for the counter |
 
 ## Regenerating the PDF after editing the HTML
 
