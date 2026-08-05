@@ -2951,6 +2951,113 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </form>
 
+            {/* Reward scheme. These values were previously only settable in
+                code, so the shop could not run an offer at all. */}
+            <section className="rounded-[1.5rem] border border-violet-200 bg-violet-50/40 p-5 shadow-sm">
+              <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
+                <Gift className="h-5 w-5 text-violet-600" />
+                {lang === "ne" ? "पुरस्कार अंक" : "Reward points"}
+              </h4>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "कति रुपैयाँमा" : "For every NPR"}</span>
+                  <input
+                    type="number" min={1} className={shellInput()}
+                    value={settingsForm.rewardUnitAmount ?? "100"}
+                    onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardUnitAmount: e.target.value }))}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "कति अंक दिने" : "Give this many points"}</span>
+                  <input
+                    type="number" min={0} className={shellInput()}
+                    value={settingsForm.rewardRate ?? 1}
+                    onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardRate: e.target.value }))}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "१ अंकको मूल्य (रु)" : "One point is worth (NPR)"}</span>
+                  <input
+                    type="number" min={0} step="0.01" className={shellInput()}
+                    value={settingsForm.rewardPointValue ?? "1"}
+                    onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardPointValue: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                {lang === "ne"
+                  ? `अहिले: रु ${settingsForm.rewardUnitAmount || 100} किनेमा ${settingsForm.rewardRate || 1} अंक, र १ अंक = रु ${settingsForm.rewardPointValue || 1}।`
+                  : `Right now: spend NPR ${settingsForm.rewardUnitAmount || 100}, earn ${settingsForm.rewardRate || 1} point, and 1 point = NPR ${settingsForm.rewardPointValue || 1}.`}
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-violet-200 bg-white p-4">
+                <p className="text-sm font-bold text-violet-900">
+                  {lang === "ne" ? "विशेष अफर (ग्राहक तान्न)" : "Special offer (to attract customers)"}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {lang === "ne"
+                    ? "चाडपर्वमा दोब्बर अंक दिन सकिन्छ। १ राखे अफर बन्द हुन्छ।"
+                    : "Give double points during a festival. Set it to 1 to switch the offer off."}
+                </p>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <span>{lang === "ne" ? "कति गुणा अंक" : "Points multiplier"}</span>
+                    <select
+                      className={shellInput()}
+                      value={settingsForm.rewardBonusMultiplier ?? "1"}
+                      onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardBonusMultiplier: e.target.value }))}
+                    >
+                      <option value="1">{lang === "ne" ? "अफर छैन" : "No offer"}</option>
+                      <option value="1.5">1.5×</option>
+                      <option value="2">{lang === "ne" ? "२× (दोब्बर)" : "2× (double)"}</option>
+                      <option value="3">{lang === "ne" ? "३× (तेब्बर)" : "3× (triple)"}</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <span>{lang === "ne" ? "अफरको नाम (ग्राहकले देख्ने)" : "Offer name (customers see this)"}</span>
+                    <input
+                      className={shellInput()}
+                      value={settingsForm.rewardBonusLabel ?? ""}
+                      onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardBonusLabel: e.target.value }))}
+                      placeholder={lang === "ne" ? "जस्तै: दशैं अफर" : "e.g. Dashain offer"}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <span>{lang === "ne" ? "कहिलेदेखि (खाली = अहिलेदेखि)" : "Starts (blank = now)"}</span>
+                    <input
+                      type="date" className={shellInput()}
+                      value={settingsForm.rewardBonusStartsAt ?? ""}
+                      onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardBonusStartsAt: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <span>{lang === "ne" ? "कहिलेसम्म (खाली = नरोकिने)" : "Ends (blank = until switched off)"}</span>
+                    <input
+                      type="date" className={shellInput()}
+                      value={settingsForm.rewardBonusEndsAt ?? ""}
+                      onChange={(e) => setSettingsForm((v: any) => ({ ...v, rewardBonusEndsAt: e.target.value }))}
+                    />
+                  </label>
+                </div>
+
+                {Number(settingsForm.rewardBonusMultiplier ?? 1) > 1 ? (
+                  <p className="mt-3 rounded-xl bg-violet-100 px-3 py-2 text-sm font-bold text-violet-900">
+                    {lang === "ne"
+                      ? `🎉 ${settingsForm.rewardBonusMultiplier}× अंक — रु ${settingsForm.rewardUnitAmount || 100} मा ${Math.floor(Number(settingsForm.rewardRate || 1) * Number(settingsForm.rewardBonusMultiplier || 1))} अंक`
+                      : `🎉 ${settingsForm.rewardBonusMultiplier}× points — NPR ${settingsForm.rewardUnitAmount || 100} now earns ${Math.floor(Number(settingsForm.rewardRate || 1) * Number(settingsForm.rewardBonusMultiplier || 1))} points`}
+                  </p>
+                ) : null}
+              </div>
+
+              <p className="mt-3 text-xs text-slate-500">
+                {lang === "ne"
+                  ? "परिवर्तन गरेपछि तलको सेभ बटन थिच्न नबिर्सनुहोस्।"
+                  : "Remember to press Save below after changing these."}
+              </p>
+            </section>
+
             {/* Google Authenticator. The QR is drawn in the browser rather
                 than fetched from a QR web service, because the URL contains
                 the shared secret and must never leave this machine. */}

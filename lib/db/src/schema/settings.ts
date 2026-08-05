@@ -1,4 +1,4 @@
-import { integer, jsonb, numeric, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { integer, jsonb, numeric, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -40,6 +40,14 @@ export const settingsTable = pgTable("settings", {
   rewardPointValue: numeric("reward_point_value", { precision: 10, scale: 2 })
     .notNull()
     .default("1"),
+  // A declared offer period — "double points this week" — to draw customers
+  // in. A multiplier of 1 means no offer is running.
+  rewardBonusMultiplier: numeric("reward_bonus_multiplier", { precision: 5, scale: 2 })
+    .notNull()
+    .default("1"),
+  rewardBonusLabel: text("reward_bonus_label"),
+  rewardBonusStartsAt: timestamp("reward_bonus_starts_at"),
+  rewardBonusEndsAt: timestamp("reward_bonus_ends_at"),
   invoiceFooter: text("invoice_footer"),
   whatsappPhone: text("whatsapp_phone"),
   whatsappApiKey: text("whatsapp_api_key"),

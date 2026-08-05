@@ -1799,7 +1799,26 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
 
 router.put("/admin/settings", authMiddleware, async (req, res) => {
   try {
-    const settings = req.body;
+    const settings = { ...req.body };
+
+    // The bonus window arrives as "YYYY-MM-DD" from a date input, but these
+    // are timestamp columns. Convert, and treat an empty value as "no date"
+    // so clearing a field actually clears it. An end date covers the whole
+    // day, otherwise an offer would expire at midnight as the day began.
+    for (const field of ["rewardBonusStartsAt", "rewardBonusEndsAt"] as const) {
+      const raw = settings[field];
+      if (raw === undefined) continue;
+      if (!raw) {
+        settings[field] = null;
+        continue;
+      }
+      const parsed = new Date(
+        field === "rewardBonusEndsAt" && /^\d{4}-\d{2}-\d{2}$/.test(String(raw))
+          ? `${raw}T23:59:59`
+          : String(raw),
+      );
+      settings[field] = Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
     const existing = await getSettings();
     if (existing) {
       const [updated] = await db

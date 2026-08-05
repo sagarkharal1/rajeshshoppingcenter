@@ -532,6 +532,43 @@ const billedNet = await one(`
   FROM invoices WHERE customer_id = 1`);
 check("a voided discounted bill leaves nothing owed", num(billedNet.v) === 0, `billed ${num(billedNet.v)}`);
 
+console.log("\n--- Test 14: bonus points only pay out while the offer runs ---");
+// Mirrors activeRewardBonus() in business.ts.
+function activeBonus(settings, now = new Date()) {
+  const multiplier = Math.max(Number(settings?.rewardBonusMultiplier ?? 1) || 1, 1);
+  const startsAt = settings?.rewardBonusStartsAt ? new Date(settings.rewardBonusStartsAt) : null;
+  const endsAt = settings?.rewardBonusEndsAt ? new Date(settings.rewardBonusEndsAt) : null;
+  const active = multiplier > 1 && (!startsAt || now >= startsAt) && (!endsAt || now <= endsAt);
+  return { active, multiplier: active ? multiplier : 1 };
+}
+const pointsFor = (subtotal, settings, now) =>
+  Math.floor(Math.floor(subtotal / 100) * 1 * activeBonus(settings, now).multiplier);
+
+const today = new Date("2026-08-05T12:00:00Z");
+const festival = {
+  rewardBonusMultiplier: 2,
+  rewardBonusStartsAt: "2026-08-01T00:00:00Z",
+  rewardBonusEndsAt: "2026-08-10T00:00:00Z",
+};
+
+check("no offer running means normal points (1000 -> 10)",
+  pointsFor(1000, {}, today) === 10, `${pointsFor(1000, {}, today)} points`);
+check("during a double-points offer a 1000 bill earns 20",
+  pointsFor(1000, festival, today) === 20, `${pointsFor(1000, festival, today)} points`);
+check("before the offer starts, points are normal",
+  pointsFor(1000, festival, new Date("2026-07-30T12:00:00Z")) === 10);
+check("after the offer ends, points go back to normal",
+  pointsFor(1000, festival, new Date("2026-08-20T12:00:00Z")) === 10);
+check("an offer with no end date keeps running until switched off",
+  pointsFor(1000, { rewardBonusMultiplier: 3 }, today) === 30);
+check("a multiplier below 1 can never reduce what a customer earns",
+  pointsFor(1000, { rewardBonusMultiplier: 0.5 }, today) === 10);
+check("a multiplier of exactly 1 counts as no offer",
+  activeBonus({ rewardBonusMultiplier: 1 }, today).active === false);
+check("bonus points are whole numbers (1.5x on 10 points -> 15)",
+  pointsFor(1000, { rewardBonusMultiplier: 1.5 }, today) === 15,
+  `${pointsFor(1000, { rewardBonusMultiplier: 1.5 }, today)} points`);
+
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${"=".repeat(64)}`);

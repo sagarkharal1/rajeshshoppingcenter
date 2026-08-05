@@ -35,6 +35,13 @@ const PUBLIC_FIELDS = [
   "khaltiQrPath",
   "rewardRate",
   "rewardUnitAmount",
+  // Customers need to see what a point is worth and whether a bonus offer is
+  // running — that is the point of declaring one.
+  "rewardPointValue",
+  "rewardBonusMultiplier",
+  "rewardBonusLabel",
+  "rewardBonusStartsAt",
+  "rewardBonusEndsAt",
   "invoiceFooter",
   "whatsappPhone",
   "announcements",

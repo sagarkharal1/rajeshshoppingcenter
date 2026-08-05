@@ -106,6 +106,30 @@ function asNumber(value: unknown): number {
   return Number(value ?? 0);
 }
 
+/**
+ * Whether a bonus-points offer is running right now.
+ *
+ * An offer with no dates runs until the owner turns it off; dates narrow it to
+ * a window. The multiplier is floored at 1 so a bad value can never *reduce*
+ * what a customer earns.
+ */
+export function activeRewardBonus(settings: any, now: Date = new Date()) {
+  const multiplier = Math.max(Number(settings?.rewardBonusMultiplier ?? 1) || 1, 1);
+  const startsAt = settings?.rewardBonusStartsAt ? new Date(settings.rewardBonusStartsAt) : null;
+  const endsAt = settings?.rewardBonusEndsAt ? new Date(settings.rewardBonusEndsAt) : null;
+
+  const started = !startsAt || now >= startsAt;
+  const notFinished = !endsAt || now <= endsAt;
+  const active = multiplier > 1 && started && notFinished;
+
+  return {
+    active,
+    multiplier: active ? multiplier : 1,
+    label: active ? (settings?.rewardBonusLabel || null) : null,
+    endsAt: active ? endsAt : null,
+  };
+}
+
 // Date prefix only. The invoice's own id is appended once the row exists,
 // because a timestamp alone (even to the second) collides whenever two bills
 // are saved in the same second — leaving different customers holding bills
@@ -906,10 +930,14 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
       const [settings] = await tx.select().from(settingsTable).limit(1);
       const rewardRate = Number(settings?.rewardRate ?? 1);
       const rewardUnitAmount = asNumber(settings?.rewardUnitAmount ?? 100);
-      const rewardPointsEarned =
+      const basePoints =
         rewardUnitAmount > 0
           ? Math.floor(subtotalAmount / rewardUnitAmount) * rewardRate
           : 0;
+      // Multiply only while a declared offer is actually running, so an
+      // expired festival promotion cannot keep paying out.
+      const bonusMultiplier = activeRewardBonus(settings).multiplier;
+      const rewardPointsEarned = Math.floor(basePoints * bonusMultiplier);
 
       const [inserted] = await tx
         .insert(invoicesTable)

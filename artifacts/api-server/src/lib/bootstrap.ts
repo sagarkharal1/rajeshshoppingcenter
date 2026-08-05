@@ -54,6 +54,11 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reward_points_redeemed INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reward_discount NUMERIC(12,2) NOT NULL DEFAULT 0`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_point_value NUMERIC(10,2) NOT NULL DEFAULT 1`,
+    // 2026-08: A declared bonus period, e.g. double points during a festival.
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_label TEXT`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_starts_at TIMESTAMP`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_ends_at TIMESTAMP`,
   ];
   const client = await pool.connect();
   try {

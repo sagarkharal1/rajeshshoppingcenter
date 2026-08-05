@@ -32,6 +32,28 @@ export default function HomeModern() {
     .filter((product) => !hiddenCustomerCategories.has((product.categoryName || "").trim().toLowerCase()))
     .slice(0, 4);
   const notices = Array.isArray((settings as any)?.announcements) ? (settings as any).announcements.slice(0, 3) : [];
+
+  // Mirrors activeRewardBonus() on the server: an offer counts only while its
+  // window is open, so an expired promotion stops advertising itself.
+  const rewardOffer = (() => {
+    const s = settings as any;
+    const multiplier = Math.max(Number(s?.rewardBonusMultiplier ?? 1) || 1, 1);
+    const startsAt = s?.rewardBonusStartsAt ? new Date(s.rewardBonusStartsAt) : null;
+    const endsAt = s?.rewardBonusEndsAt ? new Date(s.rewardBonusEndsAt) : null;
+    const now = new Date();
+    const active = multiplier > 1 && (!startsAt || now >= startsAt) && (!endsAt || now <= endsAt);
+    return {
+      active,
+      multiplier,
+      label: s?.rewardBonusLabel || null,
+      endsText:
+        active && endsAt
+          ? (lang === "ne"
+              ? `${endsAt.toLocaleDateString("en-NP", { day: "numeric", month: "short" })} सम्म मात्र`
+              : `Only until ${endsAt.toLocaleDateString("en-NP", { day: "numeric", month: "short" })}`)
+          : null,
+    };
+  })();
   const shopPhoto = getImageUrl((settings as any)?.shopPhotoPath) || DEFAULT_SHOP_BANNER;
   const businessStory = String((settings as any)?.aboutText || "");
   const shopPhone = String((settings as any)?.whatsappPhone || settings?.phone || "+9779814401716");
@@ -182,6 +204,30 @@ export default function HomeModern() {
           </div>
 
           <div className="grid gap-4">
+            {/* A declared bonus period is only worth running if customers see
+                it, so it sits above the notices. */}
+            {rewardOffer.active ? (
+              <div className="rounded-[2rem] border-2 border-violet-300 bg-violet-50 p-6 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-700">
+                  {lang === "ne" ? "विशेष अफर" : "Special offer"}
+                </p>
+                <h3 className="mt-1 text-2xl font-bold text-violet-950">
+                  🎉 {rewardOffer.label
+                    || (lang === "ne"
+                      ? `${rewardOffer.multiplier}× पुरस्कार अंक`
+                      : `${rewardOffer.multiplier}× reward points`)}
+                </h3>
+                <p className="mt-2 text-sm text-violet-900">
+                  {lang === "ne"
+                    ? `अहिले किनमेल गर्दा ${rewardOffer.multiplier} गुणा अंक पाइन्छ। अंक जम्मा गरेर पछि बिलमा छुट लिन सकिन्छ।`
+                    : `Shop now and earn ${rewardOffer.multiplier}× the usual points. Points come off a future bill.`}
+                </p>
+                {rewardOffer.endsText ? (
+                  <p className="mt-2 text-xs font-semibold text-violet-800">{rewardOffer.endsText}</p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="rounded-[2rem] border border-border bg-card p-6 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
