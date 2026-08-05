@@ -88,6 +88,8 @@ const createInvoiceSchema = z.object({
   items: z.array(invoiceItemSchema).max(100).default([]),
   paymentMethod: z.enum(["cash", "credit", "esewa", "khalti", "bank"]),
   amountPaid: z.number().nonnegative().default(0),
+  // Reward points the customer wants to spend on this bill.
+  redeemPoints: z.number().int().nonnegative().max(1_000_000).default(0),
   note: z.string().max(1000).optional(),
   proofPath: z.string().max(500000).optional(),
 });
@@ -873,7 +875,25 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
 
       const subtotalAmount = detailedItems.reduce((sum, entry) => sum + entry.lineTotal, 0);
       const previousDueAmount = asNumber(customer.creditBalance);
-      const totalAmount = subtotalAmount + previousDueAmount;
+
+      // ── Reward points spent on this bill ────────────────────────────────
+      // Clamped by what the customer actually holds and by the bill itself,
+      // so points can never go negative and a discount can never exceed what
+      // is owed (which would otherwise hand out cash).
+      const [rewardSettings] = await tx.select().from(settingsTable).limit(1);
+      const pointValue = Math.max(asNumber(rewardSettings?.rewardPointValue ?? 1), 0);
+      const pointsHeld = Number(customer.rewardPoints ?? 0);
+      const requestedPoints = parsed.data.redeemPoints;
+
+      if (requestedPoints > pointsHeld) throw new Error("NOT_ENOUGH_POINTS");
+
+      const maxDiscountable = subtotalAmount + previousDueAmount;
+      const affordablePoints =
+        pointValue > 0 ? Math.floor(maxDiscountable / pointValue) : 0;
+      const redeemedPoints = Math.min(requestedPoints, affordablePoints);
+      const rewardDiscount = redeemedPoints * pointValue;
+
+      const totalAmount = Math.max(subtotalAmount + previousDueAmount - rewardDiscount, 0);
       const amountPaid = parsed.data.amountPaid;
       const dueAmount = Math.max(totalAmount - amountPaid, 0);
 
@@ -905,6 +925,8 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           paymentMethod: parsed.data.paymentMethod,
           paymentStatus: dueAmount > 0 ? "partial" : "paid",
           rewardPointsEarned,
+          rewardPointsRedeemed: redeemedPoints,
+          rewardDiscount: rewardDiscount.toFixed(2),
           note: parsed.data.note?.trim() || null,
           proofPath: parsed.data.proofPath?.trim() || null,
           printedAt: new Date(),
@@ -948,7 +970,7 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         .set({
           creditBalance: dueAmount.toFixed(2),
           totalSpent: (asNumber(customer.totalSpent) + subtotalAmount).toFixed(2),
-          rewardPoints: customer.rewardPoints + rewardPointsEarned,
+          rewardPoints: Math.max(customer.rewardPoints - redeemedPoints, 0) + rewardPointsEarned,
           updatedAt: new Date(),
         })
         .where(eq(customersTable.id, customer.id));
@@ -966,8 +988,22 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           subtotalAmount,
           previousDueAmount,
           rewardPointsEarned,
+          rewardPointsRedeemed: redeemedPoints,
+          rewardDiscount,
         },
       });
+
+      // Spending points is a reward transaction in its own right, so a
+      // customer's point history reads as earned/spent rather than only
+      // ever growing.
+      if (redeemedPoints > 0) {
+        await tx.insert(rewardTransactionsTable).values({
+          customerId: customer.id,
+          invoiceId: invoice.id,
+          points: -redeemedPoints,
+          reason: `Redeemed on invoice ${invoice.invoiceNumber}`,
+        });
+      }
 
       if (amountPaid > 0) {
         const [payment] = await tx
@@ -1033,6 +1069,9 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
     }
     if (message.startsWith("INSUFFICIENT_STOCK")) {
       return res.status(400).json({ error: message.split(":")[1] || "Insufficient stock" });
+    }
+    if (message === "NOT_ENOUGH_POINTS") {
+      return res.status(400).json({ error: "This customer does not have that many reward points." });
     }
     if (message === "WALK_IN_CREDIT_NOT_ALLOWED") {
       return res.status(400).json({
@@ -1124,7 +1163,9 @@ const voidSchema = z.object({
 async function recalculateCustomerBalance(tx: any, customerId: number) {
   const [totals] = await tx
     .select({
-      billed: sql<string>`coalesce(sum(${invoicesTable.subtotalAmount}) filter (where ${invoicesTable.voidedAt} is null), 0)`,
+      // Net of any reward discount: points already settled part of the bill,
+      // so that portion is not still owed.
+      billed: sql<string>`coalesce(sum(${invoicesTable.subtotalAmount} - coalesce(${invoicesTable.rewardDiscount}, 0)) filter (where ${invoicesTable.voidedAt} is null), 0)`,
     })
     .from(invoicesTable)
     .where(eq(invoicesTable.customerId, customerId));
@@ -1215,8 +1256,13 @@ router.post("/admin/invoices/:id/void", authMiddleware, async (req, res) => {
         .limit(1);
 
       if (customer) {
+        // Take back the points this bill awarded, and hand back any the
+        // customer spent on it — voiding must not quietly swallow points
+        // they paid with.
         const restoredPoints = Math.max(
-          Number(customer.rewardPoints ?? 0) - Number(invoice.rewardPointsEarned ?? 0),
+          Number(customer.rewardPoints ?? 0)
+            - Number(invoice.rewardPointsEarned ?? 0)
+            + Number((invoice as any).rewardPointsRedeemed ?? 0),
           0,
         );
         const restoredSpend = Math.max(
@@ -1234,6 +1280,14 @@ router.post("/admin/invoices/:id/void", authMiddleware, async (req, res) => {
             invoiceId: invoice.id,
             points: -Number(invoice.rewardPointsEarned ?? 0),
             reason: `Invoice ${invoice.invoiceNumber} voided`,
+          });
+        }
+        if (Number((invoice as any).rewardPointsRedeemed ?? 0) > 0) {
+          await tx.insert(rewardTransactionsTable).values({
+            customerId: customer.id,
+            invoiceId: invoice.id,
+            points: Number((invoice as any).rewardPointsRedeemed ?? 0),
+            reason: `Points returned — invoice ${invoice.invoiceNumber} voided`,
           });
         }
       }

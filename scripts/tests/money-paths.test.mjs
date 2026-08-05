@@ -44,6 +44,8 @@ CREATE TABLE invoices (
   subtotal_amount numeric(12,2) NOT NULL, amount_paid numeric(12,2) NOT NULL DEFAULT 0,
   due_amount numeric(12,2) NOT NULL DEFAULT 0,
   reward_points_earned integer NOT NULL DEFAULT 0,
+  reward_points_redeemed integer NOT NULL DEFAULT 0,
+  reward_discount numeric(12,2) NOT NULL DEFAULT 0,
   voided_at timestamp, void_reason text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -459,6 +461,76 @@ check("someone who never paid is aged from their oldest bill, not treated as new
 const over60 = analysed.filter((c) => c.bucket === "over60");
 check("over-2-month bucket totals only those debts",
   over60.reduce((s, c) => s + c.balance, 0) === 3800, `${over60.reduce((s, c) => s + c.balance, 0)}`);
+
+console.log("\n--- Test 12: spending reward points on a bill ---");
+// Mirrors the redemption block in POST /admin/invoices. 1 point = NPR 1 here,
+// earned at 1 point per NPR 100 spent.
+const POINT_VALUE = 1;
+function redeem({ pointsHeld, requestedPoints, subtotal, previousDue }) {
+  if (requestedPoints > pointsHeld) throw new Error("NOT_ENOUGH_POINTS");
+  const maxDiscountable = subtotal + previousDue;
+  const affordable = POINT_VALUE > 0 ? Math.floor(maxDiscountable / POINT_VALUE) : 0;
+  const redeemed = Math.min(requestedPoints, affordable);
+  const discount = redeemed * POINT_VALUE;
+  const total = Math.max(subtotal + previousDue - discount, 0);
+  return { redeemed, discount, total, pointsLeft: pointsHeld - redeemed };
+}
+
+const normal = redeem({ pointsHeld: 250, requestedPoints: 200, subtotal: 1000, previousDue: 0 });
+check("200 points takes NPR 200 off a 1000 bill", normal.discount === 200 && normal.total === 800,
+  `discount ${normal.discount}, total ${normal.total}`);
+check("the points are deducted from the customer", normal.pointsLeft === 50, `${normal.pointsLeft} left`);
+
+let refused = false;
+try { redeem({ pointsHeld: 50, requestedPoints: 500, subtotal: 1000, previousDue: 0 }); }
+catch (e) { refused = e.message === "NOT_ENOUGH_POINTS"; }
+check("spending more points than held is refused", refused);
+
+// The dangerous case: a discount larger than the bill would be handing out cash.
+const capped = redeem({ pointsHeld: 5000, requestedPoints: 5000, subtotal: 300, previousDue: 0 });
+check("a discount can never exceed the bill", capped.discount === 300 && capped.total === 0,
+  `discount ${capped.discount}, total ${capped.total}`);
+check("only the points actually used are taken", capped.redeemed === 300 && capped.pointsLeft === 4700,
+  `redeemed ${capped.redeemed}, left ${capped.pointsLeft}`);
+check("the bill never goes negative", capped.total >= 0);
+
+const withDue = redeem({ pointsHeld: 1000, requestedPoints: 400, subtotal: 500, previousDue: 700 });
+check("points can be spent against an old udharo balance too",
+  withDue.discount === 400 && withDue.total === 800, `total ${withDue.total}`);
+
+// Earning is unchanged: 1 point per NPR 100 of goods.
+const earned = Math.floor(1000 / 100) * 1;
+check("a 1000 bill still earns 10 points", earned === 10, `${earned} points`);
+
+console.log("\n--- Test 13: voiding a bill returns the points spent on it ---");
+await q(`DELETE FROM customer_ledger`);
+await q(`DELETE FROM customer_payments`);
+await q(`DELETE FROM invoice_items`);
+await q(`DELETE FROM invoices`);
+await q(`DELETE FROM customers`);
+await q(`INSERT INTO customers (id,name,reward_points) VALUES (1,'Ram',250)`);
+
+// Sell 1000, spend 200 points, earn 10.
+const redeemed = 200, earnedNow = 10;
+await q(`INSERT INTO invoices (id,customer_id,invoice_number,subtotal_amount,reward_points_earned,reward_points_redeemed,reward_discount)
+         VALUES (300,1,'INV-R1',1000,$1,$2,$3)`, [earnedNow, redeemed, redeemed * POINT_VALUE]);
+await q(`UPDATE customers SET reward_points = greatest(reward_points - $1, 0) + $2 WHERE id=1`, [redeemed, earnedNow]);
+const afterSale = Number((await one(`SELECT reward_points FROM customers WHERE id=1`)).reward_points);
+check("points after the sale are 250 - 200 + 10", afterSale === 60, `${afterSale} points`);
+
+// Void it: take back what it earned, hand back what it spent.
+const inv = await one(`SELECT * FROM invoices WHERE id=300`);
+await q(`UPDATE customers SET reward_points = greatest(reward_points - $1 + $2, 0) WHERE id=1`,
+  [Number(inv.reward_points_earned), Number(inv.reward_points_redeemed)]);
+await q(`UPDATE invoices SET voided_at = now() WHERE id=300`);
+const afterVoid = Number((await one(`SELECT reward_points FROM customers WHERE id=1`)).reward_points);
+check("voiding restores the customer to their original 250 points", afterVoid === 250, `${afterVoid} points`);
+
+// And the discount must not leave a phantom debt behind.
+const billedNet = await one(`
+  SELECT coalesce(sum(subtotal_amount - coalesce(reward_discount,0)) filter (where voided_at is null), 0) AS v
+  FROM invoices WHERE customer_id = 1`);
+check("a voided discounted bill leaves nothing owed", num(billedNet.v) === 0, `billed ${num(billedNet.v)}`);
 
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);

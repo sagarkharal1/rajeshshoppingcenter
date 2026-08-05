@@ -1910,6 +1910,57 @@ export function OwnerWorkspaceModern(props: any) {
                   </select>
                   <input type="number" min={0} className={shellInput()} value={invoiceForm.amountPaid} onChange={(e) => setInvoiceForm((v: any) => ({ ...v, amountPaid: e.target.value }))} placeholder={text.amountReceivedNow} />
                 </div>
+
+                {/* Spending reward points. Only shown for a saved customer
+                    who actually has some — a walk-in has no account to spend
+                    from, and an empty box would only confuse. */}
+                {currentCustomer && num(preview.pointsHeld) > 0 ? (
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-violet-900">
+                        {lang === "ne"
+                          ? `यो ग्राहकसँग ${num(preview.pointsHeld)} अंक छ (${money(num(preview.pointsHeld) * num(preview.pointValue))} बराबर)`
+                          : `This customer has ${num(preview.pointsHeld)} points (worth ${money(num(preview.pointsHeld) * num(preview.pointValue))})`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceForm((v: any) => ({ ...v, redeemPoints: String(Math.min(num(preview.pointsHeld), Math.floor((num(preview.subtotal) + num(preview.previousDue)) / Math.max(num(preview.pointValue), 1)))) }))}
+                        className="rounded-full bg-violet-600 px-4 py-1.5 text-xs font-bold text-white"
+                      >
+                        {lang === "ne" ? "सबै प्रयोग गर्नुहोस्" : "Use all"}
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <input
+                        type="number"
+                        min={0}
+                        max={num(preview.pointsHeld)}
+                        className={shellInput()}
+                        style={{ maxWidth: "12rem" }}
+                        value={invoiceForm.redeemPoints}
+                        onChange={(e) => setInvoiceForm((v: any) => ({ ...v, redeemPoints: e.target.value }))}
+                        placeholder={lang === "ne" ? "कति अंक काट्ने?" : "Points to use"}
+                      />
+                      {num(preview.redeemPoints) > 0 ? (
+                        <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-violet-800">
+                          −{money(num(preview.rewardDiscount))}
+                          {num(preview.redeemPoints) < num(invoiceForm.redeemPoints || 0)
+                            ? (lang === "ne" ? " (बिल जति मात्र)" : " (capped at the bill)")
+                            : ""}
+                        </span>
+                      ) : null}
+                      {invoiceForm.redeemPoints ? (
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceForm((v: any) => ({ ...v, redeemPoints: "" }))}
+                          className="text-xs font-semibold text-violet-700 underline"
+                        >
+                          {lang === "ne" ? "हटाउनुहोस्" : "clear"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <button
                     type="button"
@@ -2118,6 +2169,17 @@ export function OwnerWorkspaceModern(props: any) {
                       {[
                         [lang === "ne" ? "पुरानो बाँकी" : "Previous Due", money(lastInvoice?.invoice?.previousDueAmount ?? 0), "text-rose-700"],
                         [lang === "ne" ? "हालको बिल" : "Current Bill", money(lastInvoice?.invoice?.subtotalAmount ?? 0), "text-slate-950"],
+                        // Only shown when points were actually used, so an
+                        // ordinary bill stays uncluttered.
+                        ...(num(lastInvoice?.invoice?.rewardDiscount) > 0
+                          ? [[
+                              lang === "ne"
+                                ? `अंक छुट (${num(lastInvoice?.invoice?.rewardPointsRedeemed)} अंक)`
+                                : `Points discount (${num(lastInvoice?.invoice?.rewardPointsRedeemed)} pts)`,
+                              `−${money(num(lastInvoice?.invoice?.rewardDiscount))}`,
+                              "text-violet-700",
+                            ]]
+                          : []),
                         [lang === "ne" ? "अहिले तिरेको" : "Paid Now", money(lastInvoice?.invoice?.amountPaid ?? 0), "text-emerald-700"],
                         [lang === "ne" ? "बाँकी रकम" : "Balance Due", money(lastInvoice?.invoice?.dueAmount ?? 0), "text-rose-700 font-extrabold"],
                       ].map(([label, value, cls]) => (

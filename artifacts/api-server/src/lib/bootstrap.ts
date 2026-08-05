@@ -49,6 +49,11 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0`,
     // Orders already marked paid before this column existed were paid in full.
     `UPDATE orders SET amount_paid = total_amount WHERE payment_status = 'paid' AND amount_paid = 0`,
+    // 2026-08: Reward points become spendable, so a bill records how many were
+    // used and what they were worth at that moment.
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reward_points_redeemed INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS reward_discount NUMERIC(12,2) NOT NULL DEFAULT 0`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_point_value NUMERIC(10,2) NOT NULL DEFAULT 1`,
   ];
   const client = await pool.connect();
   try {

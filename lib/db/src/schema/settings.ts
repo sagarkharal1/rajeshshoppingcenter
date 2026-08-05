@@ -30,10 +30,16 @@ export const settingsTable = pgTable("settings", {
   esewaQrPath: text("esewa_qr_path"),
   khaltiId: text("khalti_id"),
   khaltiQrPath: text("khalti_qr_path"),
+  // Earning: rewardRate points for every rewardUnitAmount spent.
   rewardRate: integer("reward_rate").notNull().default(1),
   rewardUnitAmount: numeric("reward_unit_amount", { precision: 10, scale: 2 })
     .notNull()
     .default("100"),
+  // Spending: what one point is worth off a bill. At the default of 1, with
+  // 1 point earned per NPR 100, a customer gets 1% back.
+  rewardPointValue: numeric("reward_point_value", { precision: 10, scale: 2 })
+    .notNull()
+    .default("1"),
   invoiceFooter: text("invoice_footer"),
   whatsappPhone: text("whatsapp_phone"),
   whatsappApiKey: text("whatsapp_api_key"),

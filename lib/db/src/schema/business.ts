@@ -48,6 +48,12 @@ export const invoicesTable = pgTable("invoices", {
   paymentMethod: text("payment_method").notNull().default("cash"),
   paymentStatus: text("payment_status").notNull().default("paid"),
   rewardPointsEarned: integer("reward_points_earned").notNull().default(0),
+  // Points spent on this bill, and the money they were worth at the time.
+  // Both are stored so history stays accurate even if the point value changes.
+  rewardPointsRedeemed: integer("reward_points_redeemed").notNull().default(0),
+  rewardDiscount: numeric("reward_discount", { precision: 12, scale: 2 })
+    .notNull()
+    .default("0"),
   note: text("note"),
   proofPath: text("proof_path"),
   printedAt: timestamp("printed_at"),

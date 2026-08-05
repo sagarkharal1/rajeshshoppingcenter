@@ -240,7 +240,7 @@ function OwnerApp() {
   const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
   const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
-  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "", redeemPoints: "" });
   // Kept on the device rather than in shop settings: whether a printer is
   // attached depends on which counter machine is being used, not the shop.
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("auto-print-bill") === "true");
@@ -668,14 +668,28 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     }).filter(Boolean) as Array<{ productId: number; quantity: number; name: string; unit: string; price: number; total: number }>;
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const previousDue = num(currentCustomer?.creditBalance);
-    const total = subtotal + previousDue;
+
+    // Points spent, mirrored from the server so the counter shows the same
+    // figure the bill will be saved with. The server re-checks all of this.
+    const pointValue = Math.max(Number(settings?.rewardPointValue ?? 1), 0);
+    const pointsHeld = Number(currentCustomer?.rewardPoints ?? 0);
+    const requestedPoints = Math.max(0, Math.floor(num(invoiceForm.redeemPoints)));
+    const billBeforeDiscount = subtotal + previousDue;
+    const affordablePoints = pointValue > 0 ? Math.floor(billBeforeDiscount / pointValue) : 0;
+    const redeemPoints = Math.min(requestedPoints, pointsHeld, affordablePoints);
+    const rewardDiscount = redeemPoints * pointValue;
+
+    const total = Math.max(billBeforeDiscount - rewardDiscount, 0);
     const amountPaid = invoiceForm.amountPaid === "" ? (invoiceForm.paymentMethod === "credit" ? 0 : total) : num(invoiceForm.amountPaid);
     const due = Math.max(total - amountPaid, 0);
     const rewardRate = Number(settings?.rewardRate ?? 1);
     const rewardUnitAmount = Number(settings?.rewardUnitAmount ?? 100);
     const rewardPoints = rewardUnitAmount > 0 ? Math.floor(subtotal / rewardUnitAmount) * rewardRate : 0;
-    return { items, subtotal, previousDue, total, amountPaid, due, rewardPoints };
-  }, [currentCustomer, invoiceForm.amountPaid, invoiceForm.paymentMethod, lines, products, settings]);
+    return {
+      items, subtotal, previousDue, total, amountPaid, due, rewardPoints,
+      pointsHeld, redeemPoints, rewardDiscount, pointValue,
+    };
+  }, [currentCustomer, invoiceForm.amountPaid, invoiceForm.paymentMethod, invoiceForm.redeemPoints, lines, products, settings]);
 
   const paymentMethodLabel = useMemo(() => {
     const labels = lang === "ne"
@@ -1014,9 +1028,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       return;
     }
     try {
-      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, note: invoiceForm.note, proofPath: invoiceForm.proofPath, items: lines }) });
+      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, redeemPoints: preview.redeemPoints, note: invoiceForm.note, proofPath: invoiceForm.proofPath, items: lines }) });
       setLastInvoice(result);
-      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash", proofPath: "" });
+      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash", proofPath: "", redeemPoints: "" });
       setLines([]);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "बिक्री सुरक्षित भयो।" : "Sale saved.");
