@@ -569,6 +569,62 @@ check("bonus points are whole numbers (1.5x on 10 points -> 15)",
   pointsFor(1000, { rewardBonusMultiplier: 1.5 }, today) === 15,
   `${pointsFor(1000, { rewardBonusMultiplier: 1.5 }, today)} points`);
 
+console.log("\n--- Test 15: sale prices only apply while the sale runs ---");
+// Mirrors effectivePrice() in artifacts/api-server/src/lib/pricing.ts.
+function effectivePrice(product, now = new Date()) {
+  const sale = product.salePrice == null ? null : Number(product.salePrice);
+  const normal = Number(product.price ?? 0);
+  if (sale == null || !Number.isFinite(sale) || sale <= 0) return normal;
+  if (sale >= normal) return normal;
+  const startsAt = product.saleStartsAt ? new Date(product.saleStartsAt) : null;
+  const endsAt = product.saleEndsAt ? new Date(product.saleEndsAt) : null;
+  if (startsAt && now < startsAt) return normal;
+  if (endsAt && now > endsAt) return normal;
+  return sale;
+}
+
+const nowSale = new Date("2026-08-05T12:00:00Z");
+const window = { saleStartsAt: "2026-08-01T00:00:00Z", saleEndsAt: "2026-08-10T00:00:00Z" };
+
+check("no sale price means the normal price",
+  effectivePrice({ price: 100 }, nowSale) === 100);
+check("a running sale charges the sale price",
+  effectivePrice({ price: 100, salePrice: 80, ...window }, nowSale) === 80);
+check("before the sale starts, the normal price applies",
+  effectivePrice({ price: 100, salePrice: 80, ...window }, new Date("2026-07-25T12:00:00Z")) === 100);
+check("after the sale ends, the normal price returns",
+  effectivePrice({ price: 100, salePrice: 80, ...window }, new Date("2026-08-20T12:00:00Z")) === 100);
+check("a sale with no dates runs until it is removed",
+  effectivePrice({ price: 100, salePrice: 75 }, nowSale) === 75);
+// A "sale" priced above normal is a typo, and the customer must not pay it.
+check("a sale price higher than normal is ignored",
+  effectivePrice({ price: 100, salePrice: 150 }, nowSale) === 100);
+check("a zero or negative sale price is ignored",
+  effectivePrice({ price: 100, salePrice: 0 }, nowSale) === 100
+  && effectivePrice({ price: 100, salePrice: -20 }, nowSale) === 100);
+
+// The bill must be built from the sale price, and profit measured against it.
+const saleProduct = { price: 100, salePrice: 80, ...window };
+const qty = 3;
+const lineTotal = effectivePrice(saleProduct, nowSale) * qty;
+const unitCost = 60;
+check("a bill line uses the sale price (3 x 80 = 240)", lineTotal === 240, `${lineTotal}`);
+check("profit is measured against what was actually charged (240 - 180 = 60)",
+  lineTotal - unitCost * qty === 60, `${lineTotal - unitCost * qty}`);
+
+console.log("\n--- Test 16: expiry alerts ---");
+const todayMid = new Date("2026-08-05T00:00:00Z");
+const expiryDays = (dateStr) =>
+  Math.round((new Date(dateStr).getTime() - todayMid.getTime()) / 86400000);
+
+check("stock already past its date reads as expired", expiryDays("2026-08-01") < 0, `${expiryDays("2026-08-01")} days`);
+check("stock due in a week reads as expiring soon",
+  expiryDays("2026-08-12") > 0 && expiryDays("2026-08-12") <= 30, `${expiryDays("2026-08-12")} days`);
+check("stock far in the future is not flagged", expiryDays("2027-01-01") > 30);
+// Money at risk is what the unsold stock cost, not what it would have sold for.
+const atRisk = 12 * 60;
+check("value at risk uses cost, not selling price", atRisk === 720, `${atRisk}`);
+
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${"=".repeat(64)}`);

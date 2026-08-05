@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable, stockLedgerTable } from "@workspace/db/schema";
+import { effectivePrice } from "../lib/pricing";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
@@ -98,7 +99,7 @@ router.post("/orders", async (req, res) => {
       return {
         productId: product.id,
         productName: product.name,
-        price: Number(product.price),
+        price: effectivePrice(product),
         quantity: item.quantity,
         unit: product.unit,
       };

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -23,6 +23,15 @@ export const productsTable = pgTable("products", {
   extraCost: numeric("extra_cost", { precision: 10, scale: 2 }).notNull().default("0"),
   stockQuantity: integer("stock_quantity").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(0),
+  // Earliest expiry of the stock on the shelf. A single date per product is
+  // what a shop this size can realistically keep up to date; the alert is a
+  // prompt to go and look, not an inventory system.
+  expiryDate: date("expiry_date"),
+  // A temporary lower price. Outside the window — or with no sale price —
+  // the normal price applies.
+  salePrice: numeric("sale_price", { precision: 10, scale: 2 }),
+  saleStartsAt: timestamp("sale_starts_at"),
+  saleEndsAt: timestamp("sale_ends_at"),
   unit: text("unit").notNull().default("piece"),
   imageUrl: text("image_url"),
   categoryId: integer("category_id").notNull().references(() => categoriesTable.id),

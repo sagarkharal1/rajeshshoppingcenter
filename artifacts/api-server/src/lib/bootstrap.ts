@@ -59,6 +59,11 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_label TEXT`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_starts_at TIMESTAMP`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS reward_bonus_ends_at TIMESTAMP`,
+    // 2026-08: Expiry tracking and temporary sale prices on products.
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date DATE`,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price NUMERIC(10,2)`,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_starts_at TIMESTAMP`,
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_ends_at TIMESTAMP`,
   ];
   const client = await pool.connect();
   try {

@@ -16,6 +16,7 @@ import {
 } from "@workspace/db/schema";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { authMiddleware } from "../lib/auth";
+import { effectivePrice, priceInfo } from "../lib/pricing";
 
 const router: IRouter = Router();
 
@@ -191,6 +192,67 @@ function containsProofSearch(record: Record<string, unknown>, search: string) {
 function buildCustomerCode(id: number): string {
   return `CUST-${String(id).padStart(5, "0")}`;
 }
+
+// Stock that has expired or is about to. A prompt to go and check the shelf,
+// so goods are pulled or discounted before they are sold past their date.
+router.get("/admin/expiry-alerts", authMiddleware, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(Number(req.query.days ?? 30) || 30, 1), 365);
+
+    const rows = await db
+      .select({
+        id: productsTable.id,
+        name: productsTable.name,
+        unit: productsTable.unit,
+        stockQuantity: productsTable.stockQuantity,
+        expiryDate: productsTable.expiryDate,
+        price: productsTable.price,
+        buyingPrice: productsTable.buyingPrice,
+      })
+      .from(productsTable)
+      .where(
+        sql`${productsTable.expiryDate} is not null
+            AND ${productsTable.stockQuantity} > 0
+            AND ${productsTable.expiryDate} <= (current_date + ${days} * interval '1 day')`,
+      );
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const items = rows
+      .map((row) => {
+        const expiry = new Date(String(row.expiryDate));
+        expiry.setHours(0, 0, 0, 0);
+        const daysLeft = Math.round((expiry.getTime() - today.getTime()) / 86_400_000);
+        return {
+          id: row.id,
+          name: row.name,
+          unit: row.unit,
+          stockQuantity: row.stockQuantity,
+          expiryDate: row.expiryDate,
+          daysLeft,
+          expired: daysLeft < 0,
+          // What is still sitting on the shelf, at cost — the money at risk.
+          valueAtRisk: asNumber(row.buyingPrice) * Number(row.stockQuantity || 0),
+        };
+      })
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+
+    const expired = items.filter((i) => i.expired);
+    const expiringSoon = items.filter((i) => !i.expired);
+
+    res.json({
+      days,
+      expiredCount: expired.length,
+      expiringSoonCount: expiringSoon.length,
+      valueAtRisk: items.reduce((sum, i) => sum + i.valueAtRisk, 0),
+      items,
+    });
+  } catch (error) {
+    console.error("Expiry alerts error:", error);
+    res.status(500).json({ error: "Failed to load expiry alerts" });
+  }
+});
 
 router.get("/admin/dashboard-summary", authMiddleware, async (_req, res) => {
   try {
@@ -892,8 +954,10 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
           if (!product) throw new Error(`PRODUCT_NOT_FOUND:${item.productId}`);
           if (product.stockQuantity < item.quantity) throw new Error(`INSUFFICIENT_STOCK:${product.name}`);
           const unitCost = asNumber(product.buyingPrice) + asNumber(product.transportationCost) + asNumber(product.extraCost);
-          const lineTotal = asNumber(product.price) * item.quantity;
-          return { item, product, unitCost, lineTotal };
+          // Honour a running sale, decided here rather than by the caller.
+          const unitPrice = effectivePrice(product);
+          const lineTotal = unitPrice * item.quantity;
+          return { item, product, unitCost, unitPrice, lineTotal };
         });
       }
 
@@ -970,13 +1034,14 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
 
       if (detailedItems.length > 0) {
         await tx.insert(invoiceItemsTable).values(
-          detailedItems.map(({ item, product, unitCost, lineTotal }) => ({
+          detailedItems.map(({ item, product, unitCost, unitPrice, lineTotal }) => ({
             invoiceId: invoice.id,
             productId: product.id,
             productName: product.name,
             quantity: item.quantity,
             unit: product.unit,
-            unitPrice: asNumber(product.price).toFixed(2),
+            // The price actually charged, which may be a sale price.
+            unitPrice: asNumber(unitPrice).toFixed(2),
             unitCost: unitCost.toFixed(2),
             lineTotal: lineTotal.toFixed(2),
           })),

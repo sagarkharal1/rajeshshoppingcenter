@@ -711,6 +711,10 @@ router.post("/admin/products", authMiddleware, async (req, res) => {
       categoryId,
       inStock,
       featured,
+      expiryDate,
+      salePrice,
+      saleStartsAt,
+      saleEndsAt,
     } = req.body;
     const resolvedCategoryId = Number(categoryId) > 0 ? Number(categoryId) : await getOrCreateDefaultCategoryId();
     const [product] = await db
@@ -730,6 +734,10 @@ router.post("/admin/products", authMiddleware, async (req, res) => {
         categoryId: resolvedCategoryId,
         inStock: inStock ?? true,
         featured: featured ?? false,
+        expiryDate: expiryDate || null,
+        salePrice: salePrice === "" || salePrice == null ? null : String(salePrice),
+        saleStartsAt: saleStartsAt ? new Date(saleStartsAt) : null,
+        saleEndsAt: saleEndsAt ? new Date(`${saleEndsAt}T23:59:59`) : null,
       })
       .returning();
     res.status(201).json({
@@ -762,6 +770,10 @@ router.put("/admin/products/:id", authMiddleware, async (req, res) => {
       categoryId,
       inStock,
       featured,
+      expiryDate,
+      salePrice,
+      saleStartsAt,
+      saleEndsAt,
     } = req.body;
     const resolvedCategoryId = Number(categoryId) > 0 ? Number(categoryId) : await getOrCreateDefaultCategoryId();
     const [product] = await db
@@ -781,6 +793,12 @@ router.put("/admin/products/:id", authMiddleware, async (req, res) => {
         categoryId: resolvedCategoryId,
         inStock,
         featured,
+        expiryDate: expiryDate || null,
+        salePrice: salePrice === "" || salePrice == null ? null : String(salePrice),
+        saleStartsAt: saleStartsAt ? new Date(saleStartsAt) : null,
+        // An end date should cover the whole day, not expire at midnight as
+        // the day begins.
+        saleEndsAt: saleEndsAt ? new Date(`${saleEndsAt}T23:59:59`) : null,
       })
       .where(eq(productsTable.id, id))
       .returning();

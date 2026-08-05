@@ -1143,6 +1143,16 @@ export function OwnerWorkspaceModern(props: any) {
     }
   };
 
+  // Stock nearing or past its date — a prompt to go and check the shelf.
+  const [expiry, setExpiry] = useState<any>(null);
+  useEffect(() => {
+    let cancelled = false;
+    props.api?.("/admin/expiry-alerts")
+      .then((d: any) => { if (!cancelled) setExpiry(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [props.api, products]);
+
   // Reflect whether two-step security is already on, so the panel shows the
   // right controls without the owner having to guess.
   useEffect(() => {
@@ -1530,6 +1540,44 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </div>
             {/* Online order action banner — only when orders need payment decision */}
+            {/* Expiry warning sits with the other things needing attention
+                today, since acting late means throwing the stock away. */}
+            {expiry && (expiry.expiredCount > 0 || expiry.expiringSoonCount > 0) ? (
+              <div className={`mt-4 rounded-2xl border-2 p-4 ${expiry.expiredCount > 0 ? "border-rose-300 bg-rose-50" : "border-amber-300 bg-amber-50"}`}>
+                <p className={`text-sm font-bold ${expiry.expiredCount > 0 ? "text-rose-900" : "text-amber-900"}`}>
+                  {expiry.expiredCount > 0
+                    ? (lang === "ne"
+                        ? `⚠️ ${expiry.expiredCount} सामानको म्याद सकिएको छ — बेच्नु हुँदैन`
+                        : `⚠️ ${expiry.expiredCount} product(s) have expired — do not sell`)
+                    : (lang === "ne"
+                        ? `⏳ ${expiry.expiringSoonCount} सामानको म्याद सकिन लागेको छ`
+                        : `⏳ ${expiry.expiringSoonCount} product(s) expiring soon`)}
+                </p>
+                <div className="mt-2 grid gap-1">
+                  {(expiry.items || []).slice(0, 5).map((item: any) => (
+                    <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-1.5 text-sm">
+                      <span className="min-w-0 flex-1 truncate font-semibold text-slate-900">{item.name}</span>
+                      <span className="shrink-0 text-xs text-slate-500">
+                        {item.stockQuantity} {item.unit}
+                      </span>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${item.expired ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-900"}`}>
+                        {item.expired
+                          ? (lang === "ne" ? `${Math.abs(item.daysLeft)} दिन नाघ्यो` : `${Math.abs(item.daysLeft)} days past`)
+                          : (lang === "ne" ? `${item.daysLeft} दिन बाँकी` : `${item.daysLeft} days left`)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {num(expiry.valueAtRisk) > 0 ? (
+                  <p className="mt-2 text-xs font-semibold text-slate-600">
+                    {lang === "ne"
+                      ? `जोखिममा रहेको रकम: ${money(num(expiry.valueAtRisk))} (किनेको मूल्यमा)`
+                      : `Value at risk: ${money(num(expiry.valueAtRisk))} at cost`}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             {summary.totals.pendingOnlineOrders > 0 ? (
               <div
                 className="flex cursor-pointer items-center justify-between gap-4 rounded-[1.5rem] border-2 border-amber-300 bg-amber-50 px-5 py-4 shadow-sm"
@@ -2792,6 +2840,72 @@ export function OwnerWorkspaceModern(props: any) {
                     </label>
                   )
                 )}
+                {/* Expiry date — the shelf date for what is in stock now. */}
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "म्याद सकिने मिति (भए मात्र)" : "Expiry date (if it has one)"}</span>
+                  <input
+                    type="date"
+                    className={shellInput()}
+                    value={(productForm as any).expiryDate || ""}
+                    onChange={(e) => setProductForm((v: any) => ({ ...v, expiryDate: e.target.value }))}
+                  />
+                  <span className="text-xs font-normal text-slate-500">
+                    {lang === "ne"
+                      ? "राखेपछि म्याद सकिन लागेको सामान ड्यासबोर्डमा देखिन्छ।"
+                      : "Once set, items nearing their date show on the dashboard."}
+                  </span>
+                </label>
+
+                {/* Temporary sale price. Applied by the server only while the
+                    window is open, so an old sale cannot keep discounting. */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-sm font-bold text-amber-900">
+                    {lang === "ne" ? "विशेष छुट मूल्य (चाहिएमा)" : "Special offer price (optional)"}
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "छुट मूल्य" : "Sale price"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).salePrice || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, salePrice: e.target.value }))}
+                        placeholder={lang === "ne" ? "खाली = छुट छैन" : "blank = no offer"}
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "कहिलेदेखि" : "From"}</span>
+                      <input
+                        type="date" className={shellInput()}
+                        value={(productForm as any).saleStartsAt || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleStartsAt: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "कहिलेसम्म" : "Until"}</span>
+                      <input
+                        type="date" className={shellInput()}
+                        value={(productForm as any).saleEndsAt || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleEndsAt: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  {num((productForm as any).salePrice) > 0 && num((productForm as any).price) > 0 ? (
+                    num((productForm as any).salePrice) < num((productForm as any).price) ? (
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">
+                        {lang === "ne"
+                          ? `ग्राहकले ${money(num((productForm as any).price) - num((productForm as any).salePrice))} बचत गर्छन्।`
+                          : `Customers save ${money(num((productForm as any).price) - num((productForm as any).salePrice))}.`}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs font-semibold text-rose-700">
+                        {lang === "ne"
+                          ? "छुट मूल्य सामान्य मूल्यभन्दा कम हुनुपर्छ — नत्र लागू हुँदैन।"
+                          : "The sale price must be lower than the normal price, or it will be ignored."}
+                      </p>
+                    )
+                  ) : null}
+                </div>
+
                 <input
                   className={shellInput()}
                   value={(productForm as any).imageUrl || ""}

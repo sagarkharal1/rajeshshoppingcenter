@@ -3,6 +3,7 @@ import { ShoppingCart } from "lucide-react";
 import type { Product } from "@workspace/api-client-react";
 import { formatNPR, getImageUrl } from "@/lib/utils";
 import { useCart } from "@/lib/cart";
+import { salePriceInfo } from "@/lib/sale-price";
 import { useLanguage } from "@/lib/language";
 import { formatQuantity, getQuantityStep, normalizeQuantity } from "@/lib/quantity";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,8 @@ export function ProductCard({ product }: { product: Product }) {
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [imageFailed, setImageFailed] = useState(false);
   const quantityStep = getQuantityStep(product.unit);
+  // Display only — the server decides the price actually charged.
+  const sale = salePriceInfo(product as any);
   const quantityLabel = lang === "ne" ? "मात्रा" : "Quantity";
   const cartActionText = lang === "ne" ? "कार्टमा जानुहोस्" : "Go to cart";
   const keepSelectingText = lang === "ne" ? "वा सामान छानिरहनुहोस्" : "Keep selecting items";
@@ -67,11 +70,17 @@ export function ProductCard({ product }: { product: Product }) {
             {t.product.outOfStockBadge}
           </div>
         )}
-        {product.featured && product.inStock && (
+        {/* A running offer takes the corner: it is the thing most likely to
+            make someone stop and look. */}
+        {sale.onSale && product.inStock ? (
+          <div className="absolute top-3 left-3 rounded-full bg-rose-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+            {lang === "ne" ? `${sale.savingPercent}% छुट` : `${sale.savingPercent}% OFF`}
+          </div>
+        ) : product.featured && product.inStock ? (
           <div className="absolute top-3 left-3 bg-accent text-accent-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm">
             {t.product.featuredBadge}
           </div>
-        )}
+        ) : null}
       </Link>
 
       <div className="flex flex-1 flex-col p-3">
@@ -151,7 +160,14 @@ export function ProductCard({ product }: { product: Product }) {
 
         <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
           <div className="flex flex-col">
-            <span className="font-bold text-base text-primary">{formatNPR(product.price)}</span>
+            {sale.onSale ? (
+              <span className="flex flex-wrap items-baseline gap-1.5">
+                <span className="font-bold text-base text-rose-600">{formatNPR(sale.price)}</span>
+                <span className="text-xs text-muted-foreground line-through">{formatNPR(sale.normalPrice)}</span>
+              </span>
+            ) : (
+              <span className="font-bold text-base text-primary">{formatNPR(sale.price)}</span>
+            )}
             <span className="text-xs text-muted-foreground">{t.product.per} {product.unit}</span>
           </div>
 

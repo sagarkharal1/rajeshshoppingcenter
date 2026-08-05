@@ -238,7 +238,7 @@ function OwnerApp() {
   const [publicSettings, setPublicSettings] = useState<any>(null);
   const [customerForm, setCustomerForm] = useState({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
   const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
-  const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "" });
+  const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "", expiryDate: "", salePrice: "", saleStartsAt: "", saleEndsAt: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
   const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "", redeemPoints: "" });
   // Kept on the device rather than in shop settings: whether a printer is
@@ -991,6 +991,10 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       inStock: Number(productForm.stockQuantity || 0) > 0,
       featured: Boolean((productForm as any).featured),
       imageUrl: (productForm as any).imageUrl || null,
+      expiryDate: productForm.expiryDate || null,
+      salePrice: productForm.salePrice === "" ? null : num(productForm.salePrice),
+      saleStartsAt: productForm.saleStartsAt || null,
+      saleEndsAt: productForm.saleEndsAt || null,
     };
     try {
       if (editingProductId) {
@@ -999,7 +1003,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         await api("/admin/products", { method: "POST", body: JSON.stringify(payload) });
       }
       setEditingProductId(null);
-      setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
+      setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false, expiryDate: "", salePrice: "", saleStartsAt: "", saleEndsAt: "" } as any);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "सामान सुरक्षित भयो।" : "Product saved.");
     } catch (err) {
@@ -1071,6 +1075,10 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       reorderLevel: String(product.reorderLevel ?? 0),
       unit: product.unit ?? "piece",
       categoryId: String(product.categoryId ?? 1),
+      expiryDate: product.expiryDate ? String(product.expiryDate).slice(0, 10) : "",
+      salePrice: product.salePrice != null ? String(product.salePrice) : "",
+      saleStartsAt: product.saleStartsAt ? String(product.saleStartsAt).slice(0, 10) : "",
+      saleEndsAt: product.saleEndsAt ? String(product.saleEndsAt).slice(0, 10) : "",
       imageUrl: product.imageUrl ?? "",
       featured: Boolean(product.featured),
       inStock: Boolean(product.inStock),
@@ -1095,7 +1103,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       await api(`/admin/products/${productId}`, { method: "DELETE" });
       if (editingProductId === productId) {
         setEditingProductId(null);
-        setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false } as any);
+        setProductForm({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: String(categories[0]?.id ?? 1), imageUrl: "", featured: false, expiryDate: "", salePrice: "", saleStartsAt: "", saleEndsAt: "" } as any);
       }
       await load();
       showOwnerFeedback("success", lang === "ne" ? "सामान हटाइयो।" : "Product removed.");
