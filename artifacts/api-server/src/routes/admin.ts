@@ -694,6 +694,46 @@ router.delete("/admin/categories/:id", authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * The shop's own product code, used as the barcode on printed labels.
+ *
+ * Derived from the row id so it is unique without any lookup, and readable
+ * enough that someone can type it if a label is torn. CODE128 accepts letters
+ * and digits, so no check-digit arithmetic is needed.
+ */
+function buildProductCode(id: number): string {
+  return `RSC-${String(id).padStart(5, "0")}`;
+}
+
+// Give a code to every product that predates automatic codes, so existing
+// stock can be labelled without editing each item by hand.
+router.post("/admin/products/assign-codes", authMiddleware, async (_req, res) => {
+  try {
+    const missing = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(sql`${productsTable.sku} is null or trim(${productsTable.sku}) = ''`);
+
+    for (const row of missing) {
+      await db
+        .update(productsTable)
+        .set({ sku: buildProductCode(row.id) })
+        .where(eq(productsTable.id, row.id));
+    }
+
+    res.json({
+      success: true,
+      assigned: missing.length,
+      message: missing.length
+        ? `${missing.length} product${missing.length > 1 ? "s" : ""} now have a code and can be labelled.`
+        : "Every product already has a code.",
+    });
+  } catch (error) {
+    console.error("Assign product codes error:", error);
+    res.status(500).json({ error: "Failed to assign product codes" });
+  }
+});
+
 router.post("/admin/products", authMiddleware, async (req, res) => {
   try {
     const {
@@ -740,12 +780,24 @@ router.post("/admin/products", authMiddleware, async (req, res) => {
         saleEndsAt: saleEndsAt ? new Date(`${saleEndsAt}T23:59:59`) : null,
       })
       .returning();
+
+    // Every product gets a scannable code, whether or not the packet came
+    // with one. Built from the row id, so it is unique by construction and
+    // the shopkeeper never has to invent numbers.
+    const [finalProduct] = String(product.sku || "").trim()
+      ? [product]
+      : await db
+          .update(productsTable)
+          .set({ sku: buildProductCode(product.id) })
+          .where(eq(productsTable.id, product.id))
+          .returning();
+
     res.status(201).json({
-      ...product,
-      price: Number(product.price),
-      buyingPrice: Number(product.buyingPrice),
-      transportationCost: Number(product.transportationCost),
-      extraCost: Number(product.extraCost),
+      ...finalProduct,
+      price: Number(finalProduct.price),
+      buyingPrice: Number(finalProduct.buyingPrice),
+      transportationCost: Number(finalProduct.transportationCost),
+      extraCost: Number(finalProduct.extraCost),
     });
   } catch {
     res.status(500).json({ error: "Failed to create product" });

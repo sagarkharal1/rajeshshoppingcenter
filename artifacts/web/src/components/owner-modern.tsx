@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldAlert, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
 import { FlashNotice } from "@/components/flash-notice";
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { BarcodeLabels } from "@/components/barcode-labels";
 import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
 import { CustomerDetailModal } from "@/components/customer-detail-modal";
@@ -1080,6 +1081,8 @@ export function OwnerWorkspaceModern(props: any) {
   const [totpBusy, setTotpBusy] = useState(false);
   // Which field a scan should fill: the product's SKU, or the billing search.
   const [scanTarget, setScanTarget] = useState<null | "sku" | "search">(null);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [assigningCodes, setAssigningCodes] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
@@ -2720,6 +2723,28 @@ export function OwnerWorkspaceModern(props: any) {
 
         {tab === "products" ? (
           <section className="space-y-5">
+            {/* Own barcodes for goods that arrive without one — rice by the
+                sack, vegetables, anything repackaged here. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+              <div>
+                <h3 className="text-lg font-bold text-slate-950">
+                  {lang === "ne" ? "आफ्नै बारकोड स्टिकर" : "Your own barcode labels"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {lang === "ne"
+                    ? "कम्पनीको बारकोड नभएका सामानमा आफ्नै बारकोड टाँस्नुहोस् — अनि स्क्यान गरेर बिल बनाउन सकिन्छ।"
+                    : "Stick your own barcode on goods that came without one, then scan them into a bill."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLabelsOpen(true)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"
+              >
+                🏷️ {lang === "ne" ? "स्टिकर छाप्नुहोस्" : "Print labels"}
+              </button>
+            </div>
+
             <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} />
 
             {/* Stock Tracker */}
@@ -3603,6 +3628,27 @@ export function OwnerWorkspaceModern(props: any) {
           </section>
         ) : null}
       </main>
+
+      <BarcodeLabels
+        open={labelsOpen}
+        onClose={() => setLabelsOpen(false)}
+        products={products || []}
+        lang={lang as "en" | "ne"}
+        shopName={shopName}
+        assigning={assigningCodes}
+        onAssignCodes={async () => {
+          setAssigningCodes(true);
+          try {
+            const result = await props.api("/admin/products/assign-codes", { method: "POST" });
+            await props.reloadOwnerData?.();
+            showFeedback("success", result?.message || (lang === "ne" ? "कोड बनाइयो।" : "Codes assigned."));
+          } catch (error) {
+            showFeedback("error", error instanceof Error ? error.message : (lang === "ne" ? "कोड बनाउन सकिएन।" : "Could not assign codes."));
+          } finally {
+            setAssigningCodes(false);
+          }
+        }}
+      />
 
       <BarcodeScanner
         open={scanTarget !== null}

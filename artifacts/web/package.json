@@ -41,6 +41,7 @@
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
+    "@types/jsbarcode": "3.11.4",
     "@types/node": "catalog:",
     "@types/qrcode": "1.5.5",
     "@types/react": "catalog:",
@@ -77,6 +78,7 @@
   "dependencies": {
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
+    "jsbarcode": "3.11.6",
     "qrcode": "1.5.4"
   }
 }
