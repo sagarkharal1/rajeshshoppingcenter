@@ -1,8 +1,8 @@
 ﻿import { useState } from "react";
 import { useEffect, useRef } from "react";
 import { BarChart3, Bell, CheckCircle2, Clock3, CreditCard, ExternalLink, Gift, Home, KeyRound, Languages, LoaderCircle, LockKeyhole, PackagePlus, Printer, ReceiptText, RefreshCw, Save, Settings2, ShieldAlert, ShieldCheck, Sparkles, Store, Truck, Upload, Users, XCircle } from "lucide-react";
-import QRCode from "qrcode";
 import { FlashNotice } from "@/components/flash-notice";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
 import { CustomerDetailModal } from "@/components/customer-detail-modal";
@@ -1078,6 +1078,8 @@ export function OwnerWorkspaceModern(props: any) {
   const [totpSetup, setTotpSetup] = useState<{ secret: string; uri: string; qrDataUrl: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpBusy, setTotpBusy] = useState(false);
+  // Which field a scan should fill: the product's SKU, or the billing search.
+  const [scanTarget, setScanTarget] = useState<null | "sku" | "search">(null);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
@@ -1170,6 +1172,9 @@ export function OwnerWorkspaceModern(props: any) {
       const data = await props.api("/admin/totp-setup");
       // Drawn locally: the otpauth URI carries the shared secret, so sending
       // it to a QR web service would hand that secret to a third party.
+      // Imported here rather than at the top: this runs once, in the owner
+      // area, and customers should not download a QR library to buy rice.
+      const { default: QRCode } = await import("qrcode");
       const qrDataUrl = await QRCode.toDataURL(data.uri, { width: 320, margin: 1 });
       setTotpSetup({ secret: data.secret, uri: data.uri, qrDataUrl });
       setTotpCode("");
@@ -1919,12 +1924,24 @@ export function OwnerWorkspaceModern(props: any) {
                 ) : null}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "छिटो सामान थप्नुहोस्" : "Quick add products"}</p>
-                  <input
-                    className={`${shellInput()} mt-3`}
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder={lang === "ne" ? "सामान वा SKU खोज्नुहोस्" : "Search product or SKU"}
-                  />
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      className={shellInput()}
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      placeholder={lang === "ne" ? "सामान वा SKU खोज्नुहोस्" : "Search product or SKU"}
+                    />
+                    {/* Scanning fills the same search box, so packaged goods
+                        are found instantly while loose goods are still typed. */}
+                    <button
+                      type="button"
+                      onClick={() => setScanTarget("search")}
+                      className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                      title={lang === "ne" ? "बारकोड स्क्यान" : "Scan barcode"}
+                    >
+                      📷
+                    </button>
+                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {quickProducts.filter((product: any) => {
                       const query = productSearch.trim().toLowerCase();
@@ -2828,6 +2845,28 @@ export function OwnerWorkspaceModern(props: any) {
                         placeholder={field.label}
                       />
                     </label>
+                  ) : field.key === "sku" ? (
+                    // The SKU is where a packet's barcode belongs, so scanning
+                    // fills it directly instead of being copied by hand.
+                    <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
+                      <span>{field.label}</span>
+                      <div className="flex gap-2">
+                        <input
+                          className={shellInput()}
+                          value={(productForm as any).sku}
+                          onChange={(e) => setProductForm((v: any) => ({ ...v, sku: e.target.value }))}
+                          placeholder={lang === "ne" ? "बारकोड वा आफ्नै कोड" : "Barcode or your own code"}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScanTarget("sku")}
+                          className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                          title={lang === "ne" ? "बारकोड स्क्यान" : "Scan barcode"}
+                        >
+                          📷
+                        </button>
+                      </div>
+                    </label>
                   ) : (
                     <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
                       <span>{field.label}</span>
@@ -2903,6 +2942,68 @@ export function OwnerWorkspaceModern(props: any) {
                           : "The sale price must be lower than the normal price, or it will be ignored."}
                       </p>
                     )
+                  ) : null}
+                </div>
+
+                {/* Expiry and temporary sale price. Both optional — most
+                    loose goods need neither. */}
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "म्याद सकिने मिति (भए मात्र)" : "Expiry date (if any)"}</span>
+                  <input
+                    type="date"
+                    className={shellInput()}
+                    value={(productForm as any).expiryDate || ""}
+                    onChange={(e) => setProductForm((v: any) => ({ ...v, expiryDate: e.target.value }))}
+                  />
+                  <span className="text-xs font-normal text-slate-500">
+                    {lang === "ne"
+                      ? "राखेमा म्याद नजिकिँदा ओभरभ्यूमा चेतावनी देखिन्छ।"
+                      : "If set, a warning appears on the Overview as the date approaches."}
+                  </span>
+                </label>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-sm font-bold text-amber-900">
+                    {lang === "ne" ? "अफर मूल्य (सेल)" : "Sale price (special offer)"}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    {lang === "ne"
+                      ? "साधारण मूल्यभन्दा कम राख्नुहोस्। मिति नराखे तुरुन्तै सुरु हुन्छ र नरोकिने हुन्छ।"
+                      : "Must be lower than the normal price. With no dates it starts at once and runs until removed."}
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
+                      <span>{lang === "ne" ? "अफर मूल्य" : "Sale price"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).salePrice || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, salePrice: e.target.value }))}
+                        placeholder={lang === "ne" ? "खाली = अफर छैन" : "blank = no offer"}
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
+                      <span>{lang === "ne" ? "कहिलेदेखि" : "From"}</span>
+                      <input
+                        type="date" className={shellInput()}
+                        value={(productForm as any).saleStartsAt || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleStartsAt: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
+                      <span>{lang === "ne" ? "कहिलेसम्म" : "Until"}</span>
+                      <input
+                        type="date" className={shellInput()}
+                        value={(productForm as any).saleEndsAt || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleEndsAt: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  {(productForm as any).salePrice && num((productForm as any).salePrice) >= num((productForm as any).price) ? (
+                    <p className="mt-2 rounded-lg bg-rose-100 px-3 py-2 text-xs font-bold text-rose-800">
+                      {lang === "ne"
+                        ? "⚠️ अफर मूल्य साधारण मूल्यभन्दा कम हुनुपर्छ — नत्र लागू हुँदैन।"
+                        : "⚠️ The sale price must be lower than the normal price, or it will be ignored."}
+                    </p>
                   ) : null}
                 </div>
 
@@ -3502,6 +3603,25 @@ export function OwnerWorkspaceModern(props: any) {
           </section>
         ) : null}
       </main>
+
+      <BarcodeScanner
+        open={scanTarget !== null}
+        lang={lang as "en" | "ne"}
+        title={scanTarget === "sku"
+          ? (lang === "ne" ? "सामानको बारकोड स्क्यान" : "Scan the product barcode")
+          : (lang === "ne" ? "बेच्न सामान स्क्यान गर्नुहोस्" : "Scan an item to sell")}
+        onClose={() => setScanTarget(null)}
+        onScanned={(code) => {
+          if (scanTarget === "sku") {
+            setProductForm((v: any) => ({ ...v, sku: code }));
+          } else if (scanTarget === "search") {
+            // Feed the code into the same search box, so a scanned packet and
+            // a typed name behave identically from here on.
+            setProductSearch(code);
+          }
+          setScanTarget(null);
+        }}
+      />
 
       {confirmDialog ? (
         <div

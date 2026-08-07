@@ -625,6 +625,78 @@ check("stock far in the future is not flagged", expiryDays("2027-01-01") > 30);
 const atRisk = 12 * 60;
 check("value at risk uses cost, not selling price", atRisk === 720, `${atRisk}`);
 
+console.log("\n--- Test 15: sale prices apply only when they should ---");
+// Mirrors effectivePrice() in artifacts/api-server/src/lib/pricing.ts.
+function saleRunning(p, now = new Date()) {
+  const sale = p.salePrice == null ? null : Number(p.salePrice);
+  if (sale == null || !Number.isFinite(sale) || sale <= 0) return false;
+  if (sale >= Number(p.price ?? 0)) return false;
+  const startsAt = p.saleStartsAt ? new Date(p.saleStartsAt) : null;
+  const endsAt = p.saleEndsAt ? new Date(p.saleEndsAt) : null;
+  if (startsAt && now < startsAt) return false;
+  if (endsAt && now > endsAt) return false;
+  return true;
+}
+const priceNow = (p, now) => (saleRunning(p, now) ? Number(p.salePrice) : Number(p.price));
+
+const day = new Date("2026-08-05T12:00:00Z");
+const onSale = { price: 100, salePrice: 80, saleStartsAt: "2026-08-01", saleEndsAt: "2026-08-10T23:59:59" };
+
+check("a running sale price is charged", priceNow(onSale, day) === 80, `${priceNow(onSale, day)}`);
+check("before the sale starts the normal price is charged",
+  priceNow(onSale, new Date("2026-07-25T12:00:00Z")) === 100);
+check("after the sale ends the normal price returns",
+  priceNow(onSale, new Date("2026-08-20T12:00:00Z")) === 100);
+check("no sale price means the normal price", priceNow({ price: 100 }, day) === 100);
+check("a sale with no dates runs immediately",
+  priceNow({ price: 100, salePrice: 75 }, day) === 75);
+// A "sale" above the normal price is a typo; the customer must not pay it.
+check("a sale price higher than normal is ignored",
+  priceNow({ price: 100, salePrice: 150 }, day) === 100, `${priceNow({ price: 100, salePrice: 150 }, day)}`);
+check("a sale price equal to normal is not treated as a sale",
+  saleRunning({ price: 100, salePrice: 100 }, day) === false);
+check("a zero or negative sale price is ignored",
+  priceNow({ price: 100, salePrice: 0 }, day) === 100 && priceNow({ price: 100, salePrice: -5 }, day) === 100);
+
+// Profit must be measured against what was actually charged.
+const soldAtSale = { qty: 3, unitPrice: priceNow(onSale, day), unitCost: 60 };
+const saleProfit = soldAtSale.qty * (soldAtSale.unitPrice - soldAtSale.unitCost);
+check("profit on a discounted sale uses the discounted price (3 x (80-60) = 60)",
+  saleProfit === 60, `profit ${saleProfit}`);
+
+console.log("\n--- Test 16: expiry alerts ---");
+await q(`DELETE FROM products`);
+await q(`ALTER TABLE products ADD COLUMN IF NOT EXISTS expiry_date date`);
+const dayOffset = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+await q(`INSERT INTO products (id,name,stock_quantity,price,expiry_date) VALUES
+  (1,'Expired milk',5,80,$1),
+  (2,'Biscuits soon',20,45,$2),
+  (3,'Rice far off',40,2650,$3),
+  (4,'No expiry',10,120,NULL),
+  (5,'Expiring but none left',0,60,$2)`,
+  [dayOffset(-3), dayOffset(10), dayOffset(200)]);
+
+const alerts = await q(
+  `SELECT id, name, expiry_date, stock_quantity FROM products
+   WHERE expiry_date IS NOT NULL AND stock_quantity > 0
+     AND expiry_date <= (current_date + $1 * interval '1 day')
+   ORDER BY expiry_date`, [30]);
+
+check("only dated stock still on the shelf is flagged", alerts.length === 2,
+  alerts.map((a) => a.name).join(", "));
+check("the soonest expiry comes first", alerts[0].name === "Expired milk", alerts[0].name);
+check("stock expiring far in the future is not flagged",
+  !alerts.some((a) => a.name === "Rice far off"));
+check("a product with no expiry date is never flagged",
+  !alerts.some((a) => a.name === "No expiry"));
+check("an expiring product with nothing left in stock is not flagged",
+  !alerts.some((a) => a.name === "Expiring but none left"));
+
+const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+const daysLeft = (d) => Math.round((new Date(d).setHours(0,0,0,0) - today0.getTime()) / 86400000);
+check("already-expired stock reports negative days", daysLeft(alerts[0].expiry_date) < 0,
+  `${daysLeft(alerts[0].expiry_date)} days`);
+
 // ══════════════════════════════════════════════════════════════════════════
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${"=".repeat(64)}`);
