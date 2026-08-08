@@ -1,48 +1,74 @@
-name: rajesh-shopping-center
-region: sgp
+# DigitalOcean App Platform spec.
+#
+# This file mirrors the spec that is actually deployed. DigitalOcean does not
+# read it — the live spec lives in the DO dashboard under Settings -> App Spec
+# — so changing this file alone changes nothing. It is kept in the repo as a
+# record of how the app is wired, and as a starting point if the app ever has
+# to be recreated.
+#
+# Secrets below are placeholders. The real values are stored encrypted in
+# DigitalOcean and must never be committed here.
+name: rajeshshoppingcenter
+region: syd
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+domains:
+  - domain: rajeshshoppingcenter.com.np
+    type: PRIMARY
+    zone: rajeshshoppingcenter.com.np
+
+databases:
+  - name: db
+    engine: PG
+    version: "17"
+    production: true
+
+features:
+  - buildpack-stack=ubuntu-22
 
 static_sites:
-  - name: web
+  - name: rajeshshoppingcenter2
     github:
       repo: sagarkharal1/rajeshshoppingcenter
       branch: master
       deploy_on_push: true
     source_dir: /
-    build_command: pnpm install --frozen-lockfile && pnpm --filter @workspace/web run build
+    build_command: |
+      corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/web run build
     output_dir: artifacts/web/dist/public
     environment_slug: node-js
-    # The app routes in the browser, so paths like /catalog and /book exist
-    # only once index.html has loaded — there is no such file on disk. Without
-    # this fallback the host answers 404 to any direct visit, refresh, or
-    # shared link to anything other than the home page.
+    # The app routes in the browser, so /catalog, /book and the rest exist only
+    # once index.html has loaded — there are no such files on disk. Without this
+    # the host answers 404 to every direct visit, refresh, or shared link to
+    # anything other than the home page.
     catchall_document: index.html
-    routes:
-      - path: /
 
 services:
-  - name: api
+  - name: rajeshshoppingcenter
     github:
       repo: sagarkharal1/rajeshshoppingcenter
       branch: master
       deploy_on_push: true
     source_dir: /
-    build_command: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
-    run_command: pnpm --filter @workspace/api-server run start
+    build_command: |
+      corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    run_command: |
+      pnpm --filter @workspace/api-server run start
     environment_slug: node-js
     instance_count: 1
-    instance_size_slug: apps-s-1vcpu-1gb
-    http_port: 8080
-    health_check:
-      http_path: /api/healthz
-      initial_delay_seconds: 10
-      period_seconds: 15
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 5
+    # 512 MB. Backups load the whole database into memory to compress it, so
+    # this is the first thing likely to strain as years of bills accumulate.
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    http_port: 8081
     envs:
       - key: PORT
-        value: "8080"
+        scope: RUN_AND_BUILD_TIME
+        value: "8081"
       - key: BASE_PATH
+        scope: RUN_AND_BUILD_TIME
         value: /
       - key: DATABASE_URL
         scope: RUN_AND_BUILD_TIME
@@ -52,6 +78,36 @@ services:
         scope: RUN_AND_BUILD_TIME
         type: SECRET
         value: YOUR_ADMIN_JWT_SECRET
+      # Password recovery and order notifications are delivered here.
+      - key: TELEGRAM_BOT_TOKEN
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: YOUR_TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: YOUR_TELEGRAM_CHAT_ID
+      # Off-server backups to a private DigitalOcean Space. Without these the
+      # only copies live inside the container and are lost on every redeploy.
+      - key: BACKUP_SPACES_BUCKET
+        scope: RUN_AND_BUILD_TIME
+        value: rajeshshoppingcneterbackup
+      - key: BACKUP_SPACES_REGION
+        scope: RUN_AND_BUILD_TIME
+        value: sgp1
+      - key: BACKUP_SPACES_ENDPOINT
+        scope: RUN_AND_BUILD_TIME
+        value: https://sgp1.digitaloceanspaces.com
+      - key: BACKUP_SPACES_PREFIX
+        scope: RUN_AND_BUILD_TIME
+        value: rajesh-shopping-center/backups
+      - key: BACKUP_SPACES_ACCESS_KEY_ID
+        scope: RUN_AND_BUILD_TIME
+        value: YOUR_SPACES_ACCESS_KEY_ID
+      - key: BACKUP_SPACES_SECRET_ACCESS_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+        value: YOUR_SPACES_SECRET_ACCESS_KEY
 
 ingress:
   rules:
@@ -59,12 +115,10 @@ ingress:
         path:
           prefix: /api
       component:
-        name: api
+        name: rajeshshoppingcenter
         preserve_path_prefix: true
     - match:
         path:
           prefix: /
       component:
-        name: web
-
-
+        name: rajeshshoppingcenter2
