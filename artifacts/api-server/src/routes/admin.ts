@@ -29,6 +29,7 @@ import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
 import { JWT_SECRET, authMiddleware } from "../lib/auth.js";
+import { allocateDealerBill, round2 } from "../lib/dealer-bill.js";
 import {
   createJsonBackup,
   createSqlBackup,
@@ -1959,6 +1960,139 @@ router.get("/admin/audit-logs", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("Failed to fetch audit logs:", err);
     res.status(500).json({ error: "Failed to fetch audit logs" });
+  }
+});
+
+/**
+ * One dealer bill covering several products.
+ *
+ * A supplier's bill lists many items on one piece of paper, but stock could
+ * only be recorded a product at a time — and because dealer totals are summed
+ * from each ledger row's billAmount, entering a Rs 10,000 bill as five rows of
+ * Rs 10,000 made the shop look Rs 40,000 further in debt than it was. So the
+ * bill total is split across the lines here, and the whole bill is written in
+ * one transaction: either every line lands or none does.
+ */
+const dealerPurchaseSchema = z.object({
+  dealerName: z.string().min(1, "Dealer name is required").max(200).transform((v) => v.trim()),
+  dealerPhone: z.string().max(40).optional(),
+  billNumber: z.string().max(100).optional(),
+  // Optional: when given it is the authority and any lines left blank share
+  // out what is unaccounted for. When absent the lines add up to the bill.
+  billAmount: z.number().nonnegative().optional(),
+  paidAmount: z.number().nonnegative().default(0),
+  proofPath: z.string().max(500000).optional(),
+  reason: z.string().max(300).optional(),
+  // Carried over from the single-product form so goods sent back or arriving
+  // broken are still recorded as such rather than as a plain purchase.
+  returnStatus: z.string().max(300).optional(),
+  damagedReason: z.string().max(300).optional(),
+  items: z
+    .array(
+      z.object({
+        productId: z.number().int().positive(),
+        quantity: z.number().int().positive().max(100000),
+        amount: z.number().nonnegative().optional(),
+      }),
+    )
+    .min(1, "At least one product is required")
+    .max(60),
+});
+
+router.post("/admin/dealer-purchases", authMiddleware, async (req, res) => {
+  const parsed = dealerPurchaseSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid dealer bill",
+      details: parsed.error.issues.map((issue) => issue.message),
+    });
+  }
+
+  const { dealerName, dealerPhone, billNumber, paidAmount, proofPath, reason, items, returnStatus, damagedReason } =
+    parsed.data;
+  const ledgerType = damagedReason?.trim() ? "damaged" : returnStatus?.trim() ? "return" : "purchase";
+
+  // A product must not appear twice, or the second line would overwrite the
+  // first one's view of the stock it started from.
+  const seen = new Set<number>();
+  for (const item of items) {
+    if (seen.has(item.productId)) {
+      return res.status(400).json({ error: "The same product is listed twice. Combine those lines." });
+    }
+    seen.add(item.productId);
+  }
+
+  try {
+    const { lines: priced, billTotal } = allocateDealerBill(items, parsed.data.billAmount, paidAmount);
+
+    // Ties the lines together so they can be recognised as one piece of paper.
+    const billGroupId = `BILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const written = await db.transaction(async (tx) => {
+      const rows: Array<{ productId: number; productName: string; balanceAfter: number }> = [];
+      for (const line of priced) {
+        const [product] = await tx
+          .select({ name: productsTable.name, stockQuantity: productsTable.stockQuantity })
+          .from(productsTable)
+          .where(eq(productsTable.id, line.productId))
+          .for("update");
+
+        if (!product) throw new Error(`PRODUCT_MISSING:${line.productId}`);
+
+        const balanceBefore = product.stockQuantity || 0;
+        const balanceAfter = balanceBefore + line.quantity;
+
+        await tx
+          .update(productsTable)
+          .set({ stockQuantity: balanceAfter, inStock: balanceAfter > 0 })
+          .where(eq(productsTable.id, line.productId));
+
+        await tx.insert(stockLedgerTable).values({
+          productId: line.productId,
+          transactionType: ledgerType,
+          quantity: line.quantity,
+          reason: (reason || "Product purchase from dealer").trim(),
+          balanceBefore,
+          balanceAfter,
+          metadata: {
+            adjustmentType: "stock-in",
+            requestedQuantity: line.quantity,
+            dealerName,
+            dealerPhone: dealerPhone?.trim() || null,
+            billNumber: billNumber?.trim() || null,
+            billGroupId,
+            billLineCount: priced.length,
+            billTotalAmount: billTotal,
+            billAmount: line.amount,
+            paidAmount: line.paid,
+            dealerDue: Math.max(0, round2(line.amount - line.paid)),
+            proofPath: proofPath?.trim() || null,
+            returnStatus: returnStatus?.trim() || null,
+            damagedReason: damagedReason?.trim() || null,
+          },
+        });
+
+        rows.push({ productId: line.productId, productName: product.name, balanceAfter });
+      }
+      return rows;
+    });
+
+    res.status(201).json({
+      success: true,
+      billGroupId,
+      billAmount: billTotal,
+      paidAmount,
+      dealerDue: Math.max(0, round2(billTotal - paidAmount)),
+      lines: written,
+      message: `Saved ${written.length} product${written.length === 1 ? "" : "s"} on this dealer bill.`,
+    });
+  } catch (err) {
+    const message = (err as any)?.message || String(err);
+    if (message.startsWith("PRODUCT_MISSING:")) {
+      return res.status(400).json({ error: "One of the products no longer exists. Refresh and try again." });
+    }
+    console.error("Dealer purchase error:", err);
+    res.status(500).json({ error: "Failed to save the dealer bill" });
   }
 });
 

@@ -943,20 +943,48 @@ function ReportsTab({ lang, api, token, onRestored }: { lang: string; api: (url:
         </div>
       ) : null}
 
-      {/* Business Summary */}
-      <BusinessSummary lang={lang as "en" | "ne"} api={api} />
+      {/* Five full reports used to load and unroll one after another. Each is
+          now a heading you open when you want that particular answer. */}
+      <CollapsibleSection
+        title={lang === "ne" ? "व्यापारको सार" : "Business summary"}
+        description={lang === "ne" ? "बिक्री, नाफा र पसलको समग्र अवस्था" : "Sales, profit and the overall state of the shop"}
+        icon={BarChart3}
+      >
+        <BusinessSummary lang={lang as "en" | "ne"} api={api} />
+      </CollapsibleSection>
 
-      {/* Backup and Export */}
-      <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} onRestored={onRestored} />
+      <CollapsibleSection
+        title={lang === "ne" ? "ब्याकअप र डाउनलोड" : "Backup & export"}
+        description={lang === "ne" ? "सबै डाटाको प्रतिलिपि राख्नुहोस् वा फर्काउनुहोस्" : "Keep a copy of everything, or restore one"}
+        icon={Save}
+        tone="emerald"
+      >
+        <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} onRestored={onRestored} />
+      </CollapsibleSection>
 
-      {/* Business Proof Register */}
-      <ProofRegister lang={lang as "en" | "ne"} api={api} />
+      <CollapsibleSection
+        title={lang === "ne" ? "प्रमाणहरू" : "Proof register"}
+        description={lang === "ne" ? "भुक्तानीका फोटो र बिलका प्रमाण एकै ठाउँमा" : "Every payment screenshot and bill photo in one place"}
+        icon={ReceiptText}
+      >
+        <ProofRegister lang={lang as "en" | "ne"} api={api} />
+      </CollapsibleSection>
 
-      {/* Payment Methods Breakdown */}
-      <PaymentDashboard lang={lang as "en" | "ne"} api={api} />
+      <CollapsibleSection
+        title={lang === "ne" ? "भुक्तानीका माध्यम" : "Payment methods"}
+        description={lang === "ne" ? "नगद, eSewa, Khalti र बैंकबाट कति आयो" : "How much came in by cash, eSewa, Khalti and bank"}
+        icon={CreditCard}
+      >
+        <PaymentDashboard lang={lang as "en" | "ne"} api={api} />
+      </CollapsibleSection>
 
-      {/* Transaction History */}
-      <TransactionHistory lang={lang as "en" | "ne"} api={api} />
+      <CollapsibleSection
+        title={lang === "ne" ? "कारोबारको इतिहास" : "Transaction history"}
+        description={lang === "ne" ? "सबै बिल, भुक्तानी र किनमेलको सूची" : "Every bill, payment and purchase, listed"}
+        icon={Clock3}
+      >
+        <TransactionHistory lang={lang as "en" | "ne"} api={api} />
+      </CollapsibleSection>
     </section>
   );
 }
@@ -1768,14 +1796,17 @@ export function OwnerWorkspaceModern(props: any) {
 
         {tab === "billing" ? (
           <section className="grid gap-5 xl:grid-cols-[1fr_0.95fr]">
-            <form onSubmit={createInvoice} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-950">{lang === "ne" ? "काउन्टर बिक्री" : "Counter Sale"}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{lang === "ne" ? "दैनिक पसल बिक्री, नगद, उधारो, र स्टक रेकर्ड यहीँ राख्नुहोस्।" : "Record daily shop sales, cash, credit, and stock changes here."}</p>
-                </div>
-                <div className="rounded-2xl bg-slate-950 px-4 py-3 text-sm text-white">{text.totalPreview}: {money(preview.total)}</div>
-              </div>
+            {/* Open by default, unlike every other topic: this is the till.
+                Making the shopkeeper tap before every single sale would cost
+                more than the tidiness is worth. It can still be shut. */}
+            <CollapsibleSection
+              title={lang === "ne" ? "काउन्टर बिक्री" : "Counter sale"}
+              description={lang === "ne" ? "दैनिक पसल बिक्री — नगद, उधारो र स्टक यहीँबाट" : "The day's sales — cash, udharo and stock, all from here"}
+              icon={ReceiptText}
+              defaultOpen
+              status={`${text.totalPreview}: ${money(preview.total)}`}
+            >
+            <form onSubmit={createInvoice}>
               <div className="mt-4 grid gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{lang === "ne" ? "छिटो ग्राहक छनोट" : "Quick customer pick"}</p>
@@ -2018,7 +2049,11 @@ export function OwnerWorkspaceModern(props: any) {
                 <button className="rounded-2xl bg-accent px-4 py-4 text-lg font-bold text-accent-foreground shadow-lg">{lang === "ne" ? "बिक्री सुरक्षित गर्नुहोस्" : "Save Sale"}</button>
               </div>
             </form>
+            </CollapsibleSection>
 
+            {/* Deliberately not collapsible: the hidden print sheet lives in
+                here, and a shut topic unmounts its children — which would send
+                a blank page to the printer after every sale. */}
             <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-2xl font-bold text-slate-950">{text.invoicePreview}</h3>
               <div className="mt-4 rounded-[1.5rem] bg-[linear-gradient(135deg,#fffdf8_0%,#f7ebdd_100%)] p-5 print-hidden">
@@ -2282,23 +2317,23 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </div>
 
-            {/* Side-by-side: Product Orders | Transport Bookings */}
-            <div className="grid gap-5 lg:grid-cols-2">
-
-              {/* ── Product Orders ── */}
-              <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-lg font-bold text-slate-950">{lang === "ne" ? "उत्पादन अर्डर" : "Product Orders"}</h4>
-                    <p className="text-xs text-slate-500">{lang === "ne" ? "सामान खरिद अर्डरहरू" : "Shop purchases"}</p>
-                  </div>
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
-                    {(orders || []).length} {lang === "ne" ? "अर्डर" : "orders"}
-                    {newOrders.length > 0 && (
-                      <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{newOrders.length} new</span>
-                    )}
-                  </span>
-                </div>
+            {/* Orders and bookings are two different jobs; each opens on its
+                own so neither buries the other. The count and any "new" badge
+                stay on the closed heading, which is what tells the shopkeeper
+                whether it is worth opening at all. */}
+            <CollapsibleSection
+              title={lang === "ne" ? "उत्पादन अर्डर" : "Product orders"}
+              description={lang === "ne" ? "वेबसाइटबाट आएका सामानका अर्डर" : "Shop purchases ordered from the website"}
+              icon={ReceiptText}
+              status={
+                <span className="inline-flex items-center gap-2">
+                  {(orders || []).length}
+                  {newOrders.length > 0 ? (
+                    <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs text-white">{newOrders.length} new</span>
+                  ) : null}
+                </span>
+              }
+            >
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {(() => {
                   const isCompleted = (o: any) => o.status === "delivered" || o.status === "cancelled";
@@ -2477,52 +2512,58 @@ export function OwnerWorkspaceModern(props: any) {
                   </>;
                 })()}
                 </div>
-              </div>
+            </CollapsibleSection>
 
-              {/* ── Transport Bookings ── */}
-              <div className="rounded-[1.5rem] border border-amber-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-lg font-bold text-slate-950">{lang === "ne" ? "यातायात बुकिङ" : "Transport Bookings"}</h4>
-                    <p className="text-xs text-slate-500">{lang === "ne" ? "बोलेरो, ट्र्याक्टर, टेल्कोलाइन" : "Bolero, Tractor, Telcoline"}</p>
-                  </div>
-                  <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                    {(bookings || []).length} {lang === "ne" ? "बुकिङ" : "bookings"}
-                    {newBookings.length > 0 && (
-                      <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{newBookings.length} new</span>
-                    )}
-                  </span>
-                </div>
-                <BookingList
-                  bookings={bookings || []}
-                  lang={lang}
-                  updateBookingStatus={updateBookingStatus}
-                  runOwnerAction={runOwnerAction}
-                  confirmOwnerAction={confirmOwnerAction}
-                  shopInfo={shopInfo}
-                  onEditBooking={setEditingBookingId}
-                />
-              </div>
-
-            </div>{/* end side-by-side grid */}
+            <CollapsibleSection
+              title={lang === "ne" ? "यातायात बुकिङ" : "Transport bookings"}
+              description={lang === "ne" ? "बोलेरो, ट्र्याक्टर, टेल्कोलाइन" : "Bolero, tractor and Telcoline trips"}
+              icon={Truck}
+              tone="amber"
+              status={
+                <span className="inline-flex items-center gap-2">
+                  {(bookings || []).length}
+                  {newBookings.length > 0 ? (
+                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{newBookings.length} new</span>
+                  ) : null}
+                </span>
+              }
+            >
+              <BookingList
+                bookings={bookings || []}
+                lang={lang}
+                updateBookingStatus={updateBookingStatus}
+                runOwnerAction={runOwnerAction}
+                confirmOwnerAction={confirmOwnerAction}
+                shopInfo={shopInfo}
+                onEditBooking={setEditingBookingId}
+              />
+            </CollapsibleSection>
           </section>
         ) : null}
 
         {tab === "customers" ? (
           <section className="space-y-5">
-            {/* Credit Manager */}
-            <CreditManager
-              customers={customers}
-              lang={lang as "en" | "ne"}
-              api={props.api}
-              onRefresh={props.reloadOwnerData}
-              onOpenCustomer={setSelectedCustomerId}
-            />
+            <CollapsibleSection
+              title={lang === "ne" ? "उधारो व्यवस्थापन" : "Udharo (credit)"}
+              description={lang === "ne" ? "कसले कति तिर्न बाँकी छ र कति समय भयो" : "Who owes what, and how long it has been outstanding"}
+              icon={CreditCard}
+              tone="rose"
+            >
+              <CreditManager
+                customers={customers}
+                lang={lang as "en" | "ne"}
+                api={props.api}
+                onRefresh={props.reloadOwnerData}
+                onOpenCustomer={setSelectedCustomerId}
+              />
+            </CollapsibleSection>
 
-            {/* Customer Ledger and Forms */}
-            <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-2xl font-bold text-slate-950">{text.customerLedger}</h3>
+            <CollapsibleSection
+              title={text.customerLedger}
+              description={lang === "ne" ? "ग्राहक खोज्नुहोस् र उसको पूरा हिसाब हेर्नुहोस्" : "Find a customer and open their full account"}
+              icon={Users}
+              status={`${(customers || []).length}`}
+            >
               <input
                 className={`${shellInput()} mt-4`}
                 value={customerSearch}
@@ -2583,12 +2624,15 @@ export function OwnerWorkspaceModern(props: any) {
                   <p className="py-6 text-center text-sm text-slate-500">{lang === "ne" ? "ग्राहक हेर्न पहिले खोज्नुहोस्।" : "Search a customer to view details."}</p>
                 ) : null}
               </div>
-            </div>
+            </CollapsibleSection>
 
-            <div className="space-y-5">
-              <form onSubmit={recordPayment} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-2xl font-bold text-slate-950">{text.recordPayment}</h3>
-                <div className="mt-4 grid gap-4">
+            <CollapsibleSection
+              title={text.recordPayment}
+              description={lang === "ne" ? "ग्राहकले उधारो तिरेको रकम लेख्नुहोस्" : "Record money a customer has paid against their udharo"}
+              icon={CreditCard}
+              tone="emerald"
+            >
+              <form onSubmit={recordPayment} className="grid gap-4">
                   <select className={shellInput()} value={paymentForm.customerId} onChange={(e) => setPaymentForm((v: any) => ({ ...v, customerId: Number(e.target.value) }))}>
                     <option value={0}>{lang === "ne" ? "ग्राहक छनोट गर्नुहोस्" : "Select customer"}</option>
                     {customers.map((customer: any) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
@@ -2624,11 +2668,19 @@ export function OwnerWorkspaceModern(props: any) {
                   {customerBillScan.image ? <img src={customerBillScan.image} alt="Payment bill" className="h-48 w-full rounded-2xl border border-slate-200 object-contain bg-slate-50 p-2" /> : null}
                   <textarea className={`${shellInput()} min-h-24`} value={paymentForm.referenceNote} onChange={(e) => setPaymentForm((v: any) => ({ ...v, referenceNote: e.target.value }))} placeholder={text.note} />
                   <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{text.saveRepayment}</button>
-                </div>
               </form>
+            </CollapsibleSection>
 
-              <form onSubmit={createCustomer} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-                <h3 className="text-2xl font-bold text-slate-950">{editingCustomerId ? `${text.edit} ${lang === "ne" ? "ग्राहक" : "customer"}` : text.addCustomer}</h3>
+            {/* Remounted when an edit begins so the panel opens by itself,
+                rather than filling a form that is still shut. */}
+            <CollapsibleSection
+              key={editingCustomerId ? `edit-customer-${editingCustomerId}` : "new-customer"}
+              title={editingCustomerId ? `${text.edit} ${lang === "ne" ? "ग्राहक" : "customer"}` : text.addCustomer}
+              description={lang === "ne" ? "नाम, फोन, ठेगाना र नोट" : "Name, phone, address and notes"}
+              icon={Users}
+              defaultOpen={Boolean(editingCustomerId)}
+            >
+              <form onSubmit={createCustomer}>
                 <div className="mt-4 grid gap-4">
                   <input className={shellInput()} value={customerForm.name} onChange={(e) => setCustomerForm((v: any) => ({ ...v, name: e.target.value }))} placeholder={lang === "ne" ? "नाम" : "Name"} />
                   <input className={shellInput()} value={customerForm.phone} onChange={(e) => setCustomerForm((v: any) => ({ ...v, phone: e.target.value }))} placeholder={lang === "ne" ? "फोन" : "Phone"} />
@@ -2637,8 +2689,7 @@ export function OwnerWorkspaceModern(props: any) {
                   <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingCustomerId ? (lang === "ne" ? "ग्राहक अपडेट गर्नुहोस्" : "Update customer") : text.createCustomerButton}</button>
                 </div>
               </form>
-            </div>
-            </div>
+            </CollapsibleSection>
           </section>
         ) : null}
 
@@ -2666,20 +2717,33 @@ export function OwnerWorkspaceModern(props: any) {
               </button>
             </div>
 
-            <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} />
+            {/* Goods the shop sells and money owed to suppliers are two
+                different jobs. They used to sit open on the same page, one
+                after another; now each is a topic you open when you need it. */}
+            <CollapsibleSection
+              title={lang === "ne" ? "डिलर / सप्लायर" : "Dealers & suppliers"}
+              description={lang === "ne" ? "सामान किन्नु, बिल राख्नु, डिलरलाई तिर्नु र कति बाँकी छ हेर्नु" : "Record a purchase, keep their bill, pay a dealer, and see what is still owed"}
+              icon={Truck}
+              tone="amber"
+            >
+              <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} />
+            </CollapsibleSection>
 
-            {/* Stock Tracker */}
-            <StockTracker products={products} lang={lang as "en" | "ne"} api={props.api} />
+            <CollapsibleSection
+              title={lang === "ne" ? "स्टकको आउजाउ" : "Stock movement"}
+              description={lang === "ne" ? "कुन सामान कहिले कति आयो र गयो" : "What came in and went out, and when"}
+              icon={PackagePlus}
+            >
+              <StockTracker products={products} lang={lang as "en" | "ne"} api={props.api} />
+            </CollapsibleSection>
 
-            {/* Product Costs & Management */}
-            <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-950">{text.productCosts}</h3>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3">
+            <CollapsibleSection
+              title={text.productCosts}
+              description={lang === "ne" ? "हरेक सामानको किन्दाको भाउ, बेच्ने मूल्य र नाफा" : "Buying cost, selling price and margin for every product"}
+              icon={Store}
+              status={`${(products || []).length}`}
+            >
+              <div className="grid gap-3">
                 {products.map((product: any) => {
                   const cost = num(product.buyingPrice) + num(product.transportationCost) + num(product.extraCost);
                   return (
@@ -2749,7 +2813,7 @@ export function OwnerWorkspaceModern(props: any) {
                   );
                 })}
               </div>
-            </div>
+            </CollapsibleSection>
 
             {/* Remounted when an edit starts (the key changes), which is what
                 makes the panel spring open on "Edit" instead of silently
@@ -3057,7 +3121,6 @@ export function OwnerWorkspaceModern(props: any) {
                 <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingProductId ? text.updateProduct : text.saveProduct}</button>
               </form>
             </CollapsibleSection>
-            </div>
           </section>
         ) : null}
 

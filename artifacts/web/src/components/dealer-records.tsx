@@ -81,12 +81,17 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     savePayment: ne ? "भुक्तानी सेभ गर्नुहोस्" : "Save payment",
     searchDealer: ne ? "डिलर खोज्नुहोस्" : "Search dealer",
   };
+  // One dealer bill, many products — a supplier's bill covers a whole load, and
+  // splitting it into separate entries both wasted time and multiplied the
+  // dealer's totals, since each entry carried the full bill amount.
+  type PurchaseLine = { productId: number; quantity: string; amount: string };
+  const emptyLine = (): PurchaseLine => ({ productId: 0, quantity: "", amount: "" });
+
   const [purchaseForm, setPurchaseForm] = useState({
-    productId: 0,
+    lines: [emptyLine()] as PurchaseLine[],
     dealerName: "",
     dealerPhone: "",
     billNumber: "",
-    quantity: "",
     billAmount: "",
     paidAmount: "",
     proofPath: "",
@@ -94,6 +99,27 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     returnStatus: "",
     damagedReason: "",
   });
+
+  const setLine = (index: number, patch: Partial<PurchaseLine>) =>
+    setPurchaseForm((current) => ({
+      ...current,
+      lines: current.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }));
+  const addLine = () =>
+    setPurchaseForm((current) => ({ ...current, lines: [...current.lines, emptyLine()] }));
+  const removeLine = (index: number) =>
+    setPurchaseForm((current) => ({
+      ...current,
+      lines: current.lines.length > 1 ? current.lines.filter((_, i) => i !== index) : current.lines,
+    }));
+
+  const filledLines = purchaseForm.lines.filter(
+    (line) => Number(line.productId) > 0 && Number(line.quantity) > 0,
+  );
+  const linesTotal = filledLines.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  // What the shop will actually be recorded as owing: the typed bill total when
+  // there is one, otherwise the lines added up.
+  const effectiveBillTotal = Number(purchaseForm.billAmount || 0) || linesTotal;
   const [paymentForm, setPaymentForm] = useState({
     productId: 0,
     dealerName: "",
@@ -139,37 +165,51 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
     event.preventDefault();
     // Previously this returned silently, so a half-filled form looked like a
     // button that simply did nothing.
-    if (!purchaseForm.productId || !purchaseForm.dealerName || !Number(purchaseForm.quantity)) {
+    if (!purchaseForm.dealerName || filledLines.length === 0) {
       setMessage(
         ne
-          ? "सामान, डिलरको नाम र परिमाण तीनवटै चाहिन्छ।"
-          : "Product, dealer name, and quantity are all required.",
+          ? "डिलरको नाम र कम्तीमा एउटा सामान (परिमाण सहित) चाहिन्छ।"
+          : "The dealer's name and at least one product with a quantity are required.",
+      );
+      return;
+    }
+    const duplicate = filledLines.find(
+      (line, index) => filledLines.findIndex((other) => other.productId === line.productId) !== index,
+    );
+    if (duplicate) {
+      setMessage(
+        ne
+          ? "एउटै सामान दुई पटक छ। मिलाएर एउटै लाइनमा लेख्नुहोस्।"
+          : "The same product is listed twice. Combine those into one line.",
       );
       return;
     }
     setBusy(true);
     setMessage("");
     try {
-      await api(`/admin/products/${purchaseForm.productId}/adjust-stock`, {
-        method: "PUT",
+      const result = await api("/admin/dealer-purchases", {
+        method: "POST",
         body: JSON.stringify({
-          quantity: Number(purchaseForm.quantity),
-          reason: purchaseForm.reason || "Product purchase from dealer",
-          transactionType: purchaseForm.damagedReason ? "damaged" : purchaseForm.returnStatus ? "return" : "purchase",
           dealerName: purchaseForm.dealerName,
-          dealerPhone: purchaseForm.dealerPhone,
-          billNumber: purchaseForm.billNumber,
-          billAmount: Number(purchaseForm.billAmount || 0),
+          dealerPhone: purchaseForm.dealerPhone || undefined,
+          billNumber: purchaseForm.billNumber || undefined,
+          billAmount: purchaseForm.billAmount ? Number(purchaseForm.billAmount) : undefined,
           paidAmount: Number(purchaseForm.paidAmount || 0),
           proofPath: purchaseForm.proofPath || undefined,
-          returnStatus: purchaseForm.returnStatus,
-          damagedReason: purchaseForm.damagedReason,
+          reason: purchaseForm.reason || "Product purchase from dealer",
+          returnStatus: purchaseForm.returnStatus || undefined,
+          damagedReason: purchaseForm.damagedReason || undefined,
+          items: filledLines.map((line) => ({
+            productId: Number(line.productId),
+            quantity: Number(line.quantity),
+            amount: line.amount === "" ? undefined : Number(line.amount),
+          })),
         }),
       });
       setPurchaseForm((current) => ({
         ...current,
+        lines: [emptyLine()],
         billNumber: "",
-        quantity: "",
         billAmount: "",
         paidAmount: "",
         proofPath: "",
@@ -179,7 +219,12 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
       }));
       await load();
       await onRefresh?.();
-      setMessage(ne ? "डिलर खरिद सेभ भयो।" : "Dealer purchase saved.");
+      const saved = Number(result?.lines?.length ?? filledLines.length);
+      setMessage(
+        ne
+          ? `डिलर बिल सेभ भयो — ${saved} वटा सामान।`
+          : `Dealer bill saved — ${saved} product${saved === 1 ? "" : "s"}.`,
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : ne ? "डिलर खरिद सेभ गर्न सकिएन।" : "Could not save dealer purchase.");
     } finally {
@@ -277,16 +322,85 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
             {label.addTitle}
           </h4>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.productId} onChange={(event) => setPurchaseForm((current) => ({ ...current, productId: Number(event.target.value) }))}>
-              <option value={0}>{label.selectProduct}</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-            </select>
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerName} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerName: event.target.value }))} placeholder={label.dealerName} />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.dealerPhone} onChange={(event) => setPurchaseForm((current) => ({ ...current, dealerPhone: event.target.value }))} placeholder={label.dealerPhone} />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" value={purchaseForm.billNumber} onChange={(event) => setPurchaseForm((current) => ({ ...current, billNumber: event.target.value }))} placeholder={label.billNumber} />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.quantity} onChange={(event) => setPurchaseForm((current) => ({ ...current, quantity: event.target.value }))} placeholder={label.quantity} />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.billAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, billAmount: event.target.value }))} placeholder={label.billAmount} />
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={purchaseForm.billNumber} onChange={(event) => setPurchaseForm((current) => ({ ...current, billNumber: event.target.value }))} placeholder={label.billNumber} />
+
+            {/* One row per item on the supplier's bill. */}
+            <div className="md:col-span-2">
+              <p className="mb-2 text-sm font-bold text-slate-700">
+                {ne ? "यो बिलका सामानहरू" : "Products on this bill"}
+              </p>
+              <div className="space-y-2">
+                {purchaseForm.lines.map((line, index) => (
+                  <div key={index} className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 sm:grid-cols-[1.6fr_0.7fr_0.9fr_auto]">
+                    <select
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                      value={line.productId}
+                      onChange={(event) => setLine(index, { productId: Number(event.target.value) })}
+                    >
+                      <option value={0}>{label.selectProduct}</option>
+                      {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                    </select>
+                    <input
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                      type="number"
+                      min={1}
+                      value={line.quantity}
+                      onChange={(event) => setLine(index, { quantity: event.target.value })}
+                      placeholder={label.quantity}
+                    />
+                    <input
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                      type="number"
+                      min={0}
+                      value={line.amount}
+                      onChange={(event) => setLine(index, { amount: event.target.value })}
+                      placeholder={ne ? "यसको रकम" : "Amount"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLine(index)}
+                      disabled={purchaseForm.lines.length === 1}
+                      aria-label={ne ? "यो लाइन हटाउनुहोस्" : "Remove this line"}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-rose-600 disabled:opacity-30"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={addLine}
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700"
+                >
+                  + {ne ? "अर्को सामान थप्नुहोस्" : "Add another product"}
+                </button>
+                {linesTotal > 0 ? (
+                  <p className="text-sm font-semibold text-slate-700">
+                    {ne ? "लाइनहरूको जम्मा" : "Lines add up to"}: {money(linesTotal)}
+                  </p>
+                ) : null}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {ne
+                  ? "प्रत्येक सामानको रकम लेख्नु राम्रो। नलेखे बिलको कुल रकम परिमाण अनुसार बाँडिन्छ।"
+                  : "Amounts per product are best. Leave them blank and the bill total is shared out by quantity."}
+              </p>
+            </div>
+
+            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.billAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, billAmount: event.target.value }))} placeholder={ne ? "बिलको कुल रकम (वैकल्पिक)" : "Bill total (optional)"} />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" value={purchaseForm.paidAmount} onChange={(event) => setPurchaseForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder={label.paidNow} />
+            {effectiveBillTotal > 0 ? (
+              <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 md:col-span-2">
+                {ne ? "बिल" : "Bill"}: {money(effectiveBillTotal)} · {ne ? "तिरेको" : "paid"}: {money(Number(purchaseForm.paidAmount || 0))} ·{" "}
+                <span className={effectiveBillTotal - Number(purchaseForm.paidAmount || 0) > 0 ? "text-rose-700" : "text-emerald-700"}>
+                  {ne ? "बाँकी" : "due"}: {money(Math.max(0, effectiveBillTotal - Number(purchaseForm.paidAmount || 0)))}
+                </span>
+              </p>
+            ) : null}
             <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 md:col-span-2">
               {label.billPhoto}
               <input

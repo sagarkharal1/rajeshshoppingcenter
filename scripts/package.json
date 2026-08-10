@@ -10,8 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:money": "node tests/money-paths.test.mjs",
     "test:restore": "node tests/backup-restore.test.mjs",
-    "test": "node tests/money-paths.test.mjs && node tests/backup-restore.test.mjs && node tests/totp.test.mjs",
-    "test:totp": "node tests/totp.test.mjs"
+    "test": "node tests/money-paths.test.mjs && node tests/backup-restore.test.mjs && node tests/totp.test.mjs && tsx tests/dealer-bill.test.ts",
+    "test:totp": "node tests/totp.test.mjs",
+    "test:dealer": "tsx tests/dealer-bill.test.ts"
   },
   "dependencies": {
     "pg": "^8.20.0"
