@@ -48,6 +48,12 @@ export const settingsTable = pgTable("settings", {
   rewardBonusLabel: text("reward_bonus_label"),
   rewardBonusStartsAt: timestamp("reward_bonus_starts_at"),
   rewardBonusEndsAt: timestamp("reward_bonus_ends_at"),
+  // Printed at the foot of every bill and receipt. The stamp is the shop's
+  // rubber stamp photographed once; the signature is either an image or, when
+  // none is uploaded, a ruled line to sign by hand.
+  stampPath: text("stamp_path"),
+  signaturePath: text("signature_path"),
+  signatureName: text("signature_name"),
   invoiceFooter: text("invoice_footer"),
   whatsappPhone: text("whatsapp_phone"),
   whatsappApiKey: text("whatsapp_api_key"),

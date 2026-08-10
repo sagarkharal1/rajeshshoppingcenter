@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CreditCard, PackagePlus, RefreshCw, RotateCcw, Search, ShieldAlert, Truck } from "lucide-react";
 import { LoadError } from "@/components/load-error";
+import { openProofDocument } from "@/lib/print-slips";
 
 type Product = {
   id: number;
@@ -23,6 +24,8 @@ type DealerEntry = {
   dealerDue: number;
   returnStatus?: string | null;
   damagedReason?: string | null;
+  /** Photo of the bill the supplier handed over. */
+  proofPath?: string | null;
 };
 
 type Dealer = {
@@ -407,6 +410,32 @@ export function DealerRecords({ products, api, onRefresh, lang = "en" }: DealerR
                         </div>
                         {entry.returnStatus ? <p className="mt-2 flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{entry.returnStatus}</p> : null}
                         {entry.damagedReason ? <p className="mt-2 flex items-center gap-2 text-rose-700"><ShieldAlert className="h-4 w-4" />{entry.damagedReason}</p> : null}
+                        {entry.proofPath ? (
+                          <button
+                            type="button"
+                            onClick={() => openProofDocument(
+                              entry.proofPath as string,
+                              `${dealer.name}${entry.billNumber ? ` • ${lang === "ne" ? "बिल" : "Bill"} ${entry.billNumber}` : ""}`,
+                              lang,
+                              `${entry.productName} • ${new Date(entry.date).toLocaleDateString()} • ${money(entry.billAmount)}`,
+                            )}
+                            className="mt-3 flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2 text-left hover:bg-slate-100"
+                          >
+                            <img src={entry.proofPath} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-slate-200 bg-white object-cover" />
+                            <span className="min-w-0">
+                              <span className="block text-xs font-bold text-slate-800">
+                                {lang === "ne" ? "डिलरले दिएको बिल हेर्नुहोस्" : "View the dealer's bill"}
+                              </span>
+                              <span className="block text-[11px] text-slate-500">
+                                {lang === "ne" ? "ठूलो बनाएर हेर्न वा छाप्न थिच्नुहोस्" : "Tap to enlarge or print"}
+                              </span>
+                            </span>
+                          </button>
+                        ) : (
+                          <p className="mt-3 text-[11px] text-slate-400">
+                            {lang === "ne" ? "यसमा डिलरको बिलको फोटो छैन।" : "No photo of the dealer's bill on this entry."}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

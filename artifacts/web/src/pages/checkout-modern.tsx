@@ -129,6 +129,35 @@ export default function CheckoutModern() {
     }
   };
 
+  // Every image the customer attaches goes through here. Compression can still
+  // fall short — an already-tiny file it cannot improve on, or a browser where
+  // the canvas step failed — so the size is checked while they are still
+  // looking at the upload box. Left unchecked, an oversized photo passed
+  // validation only at submit, and the whole order failed with no clue why.
+  const MAX_UPLOAD_CHARS = 480_000;
+  const attachImage = async (
+    file: File,
+    field: "customerPhotoPath" | "paymentScreenshotPath",
+  ) => {
+    setSubmitError("");
+    try {
+      const dataUrl = await readImageCompressed(file);
+      if (dataUrl.length > MAX_UPLOAD_CHARS) {
+        setSubmitError(
+          lang === "ne"
+            ? "यो फोटो धेरै ठूलो भयो। कृपया अर्को सानो फोटो छान्नुहोस्, वा फोटो नराखी अर्डर गर्नुहोस्।"
+            : "That photo is too large. Please pick a smaller one, or place the order without a photo.",
+        );
+        return;
+      }
+      setFormData((current) => ({ ...current, [field]: dataUrl }));
+    } catch {
+      setSubmitError(
+        lang === "ne" ? "फोटो पढ्न सकिएन। अर्को फोटो प्रयास गर्नुहोस्।" : "Could not read that photo. Try another one.",
+      );
+    }
+  };
+
   if (items.length === 0 && !isSuccess) {
     setLocation("/cart");
     return null;
@@ -191,7 +220,11 @@ export default function CheckoutModern() {
       });
       const order = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error((order as any)?.error || t.checkout.failedMsg);
+        // Carry the server's per-field reasons across, or the catch below can
+        // only report a bare "Validation failed".
+        const failure: any = new Error((order as any)?.error || t.checkout.failedMsg);
+        failure.details = (order as any)?.details;
+        throw failure;
       }
       setPlacedItems(items);
       setPlacedTotal(totalPrice);
@@ -483,8 +516,7 @@ export default function CheckoutModern() {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const dataUrl = await readFileAsDataUrl(file);
-                        setFormData((current) => ({ ...current, customerPhotoPath: dataUrl }));
+                        await attachImage(file, "customerPhotoPath");
                         e.target.value = "";
                       }}
                     />
@@ -508,8 +540,7 @@ export default function CheckoutModern() {
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const dataUrl = await readImageCompressed(file);
-                          setFormData((current) => ({ ...current, paymentScreenshotPath: dataUrl }));
+                          await attachImage(file, "paymentScreenshotPath");
                           e.target.value = "";
                         }}
                       />

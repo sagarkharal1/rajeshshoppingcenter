@@ -7,6 +7,8 @@ import { BarcodeLabels } from "@/components/barcode-labels";
 import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
 import { CustomerDetailModal } from "@/components/customer-detail-modal";
+import { CollapsibleSection } from "@/components/collapsible-section";
+import { printOrderSlip, printBookingSlip } from "@/lib/print-slips";
 import { TransactionHistory } from "@/components/transaction-history";
 import { EditOrderModal } from "@/components/edit-order-modal";
 import { EditBookingModal } from "@/components/edit-booking-modal";
@@ -118,111 +120,16 @@ function getOwnerBookingStatusMeta(status: string, lang: "en" | "ne") {
 }
 
 // ── Print helpers: open a printable slip in a new window ──────────────────
-type ShopInfo = { name: string; phone: string; address: string; pan: string };
-
-// The slip opens in a blank window, so the logo needs an absolute URL —
-// a relative path would resolve against about:blank and never load.
-// The 160px print copy keeps the slip fast on slow connections (the full
-// logo is 1.7 MB); if it's missing we fall back to the full logo once.
-function printedLetterhead(shop: ShopInfo, subtitle: string) {
-  const logoUrl = `${window.location.origin}/rajesh-logo-print.png`;
-  const fallbackUrl = `${window.location.origin}/rajesh-logo.png`;
-  return `
-<div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #1e3a5f;padding-bottom:12px">
-  <img src="${logoUrl}" alt="" style="width:64px;height:64px;object-fit:contain;flex:none"
-       onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${fallbackUrl}'}else{this.style.display='none'}">
-  <div style="min-width:0">
-    <h2 style="margin:0;font-size:20px;color:#1e3a5f;line-height:1.2">${shop.name}</h2>
-    <p style="margin:2px 0 0;color:#64748b;font-size:13px">${subtitle}${shop.pan ? " · PAN: " + shop.pan : ""}</p>
-    <p style="margin:2px 0 0;color:#64748b;font-size:12px">${shop.address}${shop.phone ? " · " + shop.phone : ""}</p>
-  </div>
-</div>`;
-}
-
-function printOrderSlip(order: any, lang: string, shop: ShopInfo) {
-  const payMethod = order.paymentMethod === "esewa" ? "eSewa" : order.paymentMethod === "khalti" ? "Khalti" : order.paymentMethod === "bank" ? "Bank/QR" : order.paymentMethod === "cash" ? "Cash" : order.paymentMethod || "—";
-  const isPaid = order.paymentStatus === "paid";
-  const isCredited = !isPaid; // treat non-paid as credit/pending
-  const items = (order.items || []).map((item: any) =>
-    `<tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9">${item.productName}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center">${item.quantity} ${item.unit || "pc"}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right">NPR ${(Number(item.price) * Number(item.quantity)).toLocaleString()}</td>
-    </tr>`
-  ).join("");
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Order #${order.id}</title>
-<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}table{width:100%;border-collapse:collapse}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.credit{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
-</head><body>
-${printedLetterhead(shop, lang === "ne" ? "अनलाइन अर्डर स्लिप" : "Online Order Slip")}
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p><strong>Order #${order.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(order.createdAt).toLocaleString()}</span></p>
-<p style="margin:4px 0"><strong>${order.customerName}</strong></p>
-<p style="margin:2px 0;color:#64748b;font-size:13px">📞 ${order.customerPhone}</p>
-${order.customerAddress ? `<p style="margin:2px 0;color:#64748b;font-size:13px">📍 ${order.customerAddress}</p>` : ""}
-${order.customerEmail ? `<p style="margin:2px 0;color:#64748b;font-size:13px">✉ ${order.customerEmail}</p>` : ""}
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<table><thead><tr>
-  <th style="text-align:left;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Item</th>
-  <th style="text-align:center;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Qty</th>
-  <th style="text-align:right;padding:6px 8px;font-size:12px;color:#64748b;background:#f8fafc">Amount</th>
-</tr></thead><tbody>${items}</tbody></table>
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<div style="text-align:right">
-  <p style="margin:4px 0;font-size:18px;font-weight:700">Total: NPR ${Number(order.totalAmount).toLocaleString()}</p>
-  ${(() => {
-    const total = Number(order.totalAmount || 0);
-    const paidAmount = Number(order.amountPaid || 0);
-    const dueAmount = Math.max(total - paidAmount, 0);
-    if (isPaid || paidAmount <= 0) return "";
-    return `<p style="margin:4px 0;color:#166534;font-size:14px;font-weight:600">${lang === "ne" ? "बुझेको" : "Paid"}: NPR ${paidAmount.toLocaleString()}</p>
-  <p style="margin:4px 0;color:#92400e;font-size:14px;font-weight:600">${lang === "ne" ? "बाँकी" : "Due"}: NPR ${dueAmount.toLocaleString()}</p>`;
-  })()}
-  <p style="margin:4px 0;color:#64748b;font-size:13px">Payment method: ${payMethod}</p>
-  <span class="badge ${isPaid ? "paid" : "credit"}">${isPaid ? (lang === "ne" ? "✅ भुक्तानी भयो (नगद)" : "✅ Paid — Cash / Digital") : Number(order.amountPaid || 0) > 0 ? (lang === "ne" ? "📒 आंशिक भुक्तानी" : "📒 Partially Paid") : (lang === "ne" ? "📒 उधारो / बाँकी" : "📒 On Credit / Pending")}</span>
-</div>
-${order.notes ? `<hr style="margin:12px 0;border:1px solid #e2e8f0"><p style="font-size:13px;color:#64748b"><strong>Notes:</strong> ${order.notes}</p>` : ""}
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p style="text-align:center;color:#64748b;font-size:12px">${shop.name}${shop.phone ? " · " + shop.phone : ""}${shop.address ? " · " + shop.address : ""}</p>
-<button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
-</body></html>`;
-  const w = window.open("", "_blank", "width=500,height=700");
-  if (w) { w.document.write(html); w.document.close(); }
-}
-
-function printBookingSlip(booking: any, lang: string, shop: ShopInfo) {
-  const serviceLabel = booking.serviceType === "tractor" ? (lang === "ne" ? "ट्र्याक्टर" : "Tractor") : booking.serviceType === "telcoline" ? "Tata Telcoline" : (lang === "ne" ? "बोलेरो / जिप" : "Bolero / Jeep");
-  const charged = Number(booking.chargedAmount ?? 0);
-  const paid = Number(booking.amountPaid ?? 0);
-  const due = Math.max(0, charged - paid);
-  const payMethod = booking.paymentMethod || "cash";
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Booking #${booking.id}</title>
-<style>body{font-family:sans-serif;max-width:420px;margin:20px auto;padding:20px}h2{margin:0 0 4px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9}.badge{display:inline-block;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:700}.paid{background:#dcfce7;color:#166534}.due{background:#fef3c7;color:#92400e}@media print{button{display:none}}</style>
-</head><body>
-${printedLetterhead(shop, lang === "ne" ? "यातायात बुकिङ स्लिप" : "Transport Booking Slip")}
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p><strong>Booking #${booking.id}</strong> &nbsp;<span style="color:#64748b;font-size:13px">${new Date(booking.bookingDate || booking.createdAt).toLocaleString()}</span></p>
-<p style="margin:4px 0"><strong>${booking.customerName}</strong></p>
-<p style="margin:2px 0;color:#64748b;font-size:13px">📞 ${booking.customerPhone}</p>
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<div class="row"><span style="color:#64748b">${lang === "ne" ? "सेवा" : "Service"}</span><strong>${serviceLabel}</strong></div>
-<div class="row"><span style="color:#64748b">${lang === "ne" ? "रुट" : "Route"}</span><strong>${booking.pickupLocation} → ${booking.destination}</strong></div>
-<div class="row"><span style="color:#64748b">${lang === "ne" ? "मिति" : "Date"}</span><strong>${new Date(booking.bookingDate || booking.createdAt).toLocaleDateString()}</strong></div>
-${booking.notes ? `<div class="row"><span style="color:#64748b">${lang === "ne" ? "नोट" : "Notes"}</span><span>${booking.notes}</span></div>` : ""}
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<div class="row"><span>${lang === "ne" ? "कुल शुल्क" : "Total Charged"}</span><strong>NPR ${charged.toLocaleString()}</strong></div>
-<div class="row"><span>${lang === "ne" ? "तिरेको" : "Paid"}</span><strong style="color:${due > 0 ? "#b45309" : "#166534"}">NPR ${paid.toLocaleString()}</strong></div>
-${due > 0 ? `<div class="row"><span>${lang === "ne" ? "बाँकी" : "Remaining Due"}</span><strong style="color:#b45309">NPR ${due.toLocaleString()}</strong></div>` : ""}
-<div style="text-align:right;margin-top:8px">
-  <p style="margin:4px 0;color:#64748b;font-size:13px">${lang === "ne" ? "भुक्तानी तरिका" : "Payment method"}: ${payMethod}</p>
-  <span class="badge ${due <= 0 ? "paid" : "due"}">${due <= 0 ? (lang === "ne" ? "✅ पूरा भुक्तानी" : "✅ Fully Paid") : (lang === "ne" ? `📒 बाँकी: NPR ${due.toLocaleString()}` : `📒 Due: NPR ${due.toLocaleString()}`)}</span>
-</div>
-<hr style="margin:12px 0;border:1px solid #e2e8f0">
-<p style="text-align:center;color:#64748b;font-size:12px">${shop.name}${shop.phone ? " · " + shop.phone : ""}${shop.address ? " · " + shop.address : ""}</p>
-<button onclick="window.print()" style="margin-top:16px;width:100%;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer">🖨️ Print</button>
-</body></html>`;
-  const w = window.open("", "_blank", "width=500,height=660");
-  if (w) { w.document.write(html); w.document.close(); }
-}
+type ShopInfo = {
+  name: string;
+  phone: string;
+  address: string;
+  pan: string;
+  // Optional marks printed on slips; blank means "leave room to sign by hand".
+  stampPath?: string;
+  signaturePath?: string;
+  signatureName?: string;
+};
 
 export function OwnerLoginModern({
   shopName,
@@ -1129,6 +1036,9 @@ export function OwnerWorkspaceModern(props: any) {
     phone: shopPhone || settingsForm?.phone || "+977-9814401716",
     address: shopAddress || settingsForm?.address || "Musikot-5, Gulmi",
     pan: settingsForm?.panNumber || "302951817",
+    stampPath: settingsForm?.stampPath || "",
+    signaturePath: settingsForm?.signaturePath || "",
+    signatureName: settingsForm?.signatureName || "",
   };
 
   const showFeedback = (type: "success" | "error", message: string) => {
@@ -2333,11 +2243,22 @@ export function OwnerWorkspaceModern(props: any) {
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
                         {lang === "ne" ? "अधिकृत दस्तखत र छाप" : "Authorised Signature & Stamp"}
                       </p>
-                      <div className="ml-auto mt-1 h-20 w-28 rounded border-2 border-dashed border-slate-300 flex items-center justify-center">
-                        <p className="text-[10px] text-slate-300">{lang === "ne" ? "छाप" : "STAMP"}</p>
+                      {/* An uploaded stamp prints itself; with none uploaded
+                          the dashed box is simply room for the rubber stamp. */}
+                      <div className="ml-auto mt-1 h-20 w-28 overflow-hidden rounded border-2 border-dashed border-slate-300 flex items-center justify-center">
+                        {settingsForm?.stampPath ? (
+                          <img src={settingsForm.stampPath} alt="" className="max-h-full max-w-full object-contain" />
+                        ) : (
+                          <p className="text-[10px] text-slate-300">{lang === "ne" ? "छाप" : "STAMP"}</p>
+                        )}
                       </div>
+                      {settingsForm?.signaturePath ? (
+                        <img src={settingsForm.signaturePath} alt="" className="ml-auto mt-1 h-10 max-w-[9rem] object-contain" />
+                      ) : null}
                       <div className="mt-1 border-b border-slate-400"></div>
-                      <p className="mt-1 text-xs text-slate-400">{lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center"}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {settingsForm?.signatureName || (lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center")}
+                      </p>
                     </div>
                   </div>
 
@@ -2830,9 +2751,17 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </div>
 
-            <form onSubmit={createProduct} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-2xl font-bold text-slate-950">{editingProductId ? text.updateProduct : text.addProduct}</h3>
-              <div className="mt-4 grid gap-4">
+            {/* Remounted when an edit starts (the key changes), which is what
+                makes the panel spring open on "Edit" instead of silently
+                filling a form nobody can see. */}
+            <CollapsibleSection
+              key={editingProductId ? `edit-product-${editingProductId}` : "new-product"}
+              title={editingProductId ? text.updateProduct : text.addProduct}
+              description={lang === "ne" ? "नाम, मूल्य, किन्दाको भाउ, स्टक, म्याद र छुट" : "Name, selling price, buying cost, stock, expiry and discounts"}
+              icon={PackagePlus}
+              defaultOpen={Boolean(editingProductId)}
+            >
+              <form onSubmit={createProduct} className="grid gap-4">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   <span>{lang === "ne" ? "कुन श्रेणीमा राख्ने?" : "Which category?"}</span>
                   <select
@@ -3126,8 +3055,8 @@ export function OwnerWorkspaceModern(props: any) {
                   </div>
                 ) : null}
                 <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingProductId ? text.updateProduct : text.saveProduct}</button>
-              </div>
-            </form>
+              </form>
+            </CollapsibleSection>
             </div>
           </section>
         ) : null}
@@ -3137,10 +3066,15 @@ export function OwnerWorkspaceModern(props: any) {
         ) : null}
 
         {tab === "branding" ? (
-          <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-            <form onSubmit={saveMediaSettings} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-2xl font-bold text-slate-950">{text.mediaCenter}</h3>
-              <div className="mt-4 grid gap-4">
+          // A single column of shut topics, not a wall of open forms: the owner
+          // reads the list, taps the one thing they came to change.
+          <section className="grid gap-4">
+            <CollapsibleSection
+              title={text.mediaCenter}
+              description={lang === "ne" ? "पसलको नाम, फोन, ठेगाना, eSewa/Khalti आईडी र बिलको फुटर" : "Shop name, phone, address, eSewa/Khalti IDs and the bill footer"}
+              icon={Store}
+            >
+              <form onSubmit={saveMediaSettings} className="grid gap-4">
                 <input className={shellInput()} value={settingsForm.shopName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, shopName: e.target.value }))} placeholder={lang === "ne" ? "पसल नाम" : "Shop name"} />
                 <input className={shellInput()} value={settingsForm.proprietorName || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, proprietorName: e.target.value }))} placeholder={lang === "ne" ? "प्रोप्राइटर नाम" : "Proprietor name"} />
                 <input className={shellInput()} value={settingsForm.phone || ""} onChange={(e) => setSettingsForm((current: any) => ({ ...current, phone: e.target.value }))} placeholder={lang === "ne" ? "फोन नम्बर" : "Phone number"} />
@@ -3154,24 +3088,16 @@ export function OwnerWorkspaceModern(props: any) {
                   <Save className="h-4 w-4" />
                   {settingsBusy ? (lang === "ne" ? "सेभ हुँदैछ..." : "Saving...") : text.saveMediaSettings}
                 </button>
-              </div>
-            </form>
+              </form>
+            </CollapsibleSection>
 
-            <form onSubmit={changePassword} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "मालिक सुरक्षा" : "Owner security"}</h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {lang === "ne"
-                      ? "मालिक सेसन १५ मिनेट निष्क्रिय भएपछि आफैं बन्द हुन्छ। यहाँबाट पासवर्ड परिवर्तन गर्नुहोस्।"
-                      : "Owner sessions lock automatically after 15 minutes of inactivity. Change the owner password here."}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-4">
+            <CollapsibleSection
+              title={lang === "ne" ? "मालिक सुरक्षा" : "Owner security"}
+              description={lang === "ne" ? "पासवर्ड परिवर्तन गर्नुहोस्। सेसन १५ मिनेट निष्क्रिय भएपछि आफैं बन्द हुन्छ।" : "Change the owner password. Sessions lock after 15 minutes of inactivity."}
+              icon={ShieldCheck}
+              tone="emerald"
+            >
+              <form onSubmit={changePassword} className="grid gap-4">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4" />{lang === "ne" ? "हालको पासवर्ड" : "Current password"}</span>
                   <input type="password" className={shellInput()} value={passwordForm.currentPassword} onChange={(e) => setPasswordForm((current: any) => ({ ...current, currentPassword: e.target.value }))} />
@@ -3188,18 +3114,18 @@ export function OwnerWorkspaceModern(props: any) {
                   <ShieldCheck className="h-4 w-4" />
                   {passwordBusy ? (lang === "ne" ? "परिवर्तन हुँदैछ..." : "Updating...") : (lang === "ne" ? "पासवर्ड परिवर्तन गर्नुहोस्" : "Change password")}
                 </button>
-              </div>
-            </form>
+              </form>
+            </CollapsibleSection>
 
             {/* Reward scheme. These values were previously only settable in
                 code, so the shop could not run an offer at all. */}
-            <section className="rounded-[1.5rem] border border-violet-200 bg-violet-50/40 p-5 shadow-sm">
-              <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
-                <Gift className="h-5 w-5 text-violet-600" />
-                {lang === "ne" ? "पुरस्कार अंक" : "Reward points"}
-              </h4>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <CollapsibleSection
+              title={lang === "ne" ? "पुरस्कार अंक" : "Reward points"}
+              description={lang === "ne" ? "कति किनेमा कति अंक, एक अंकको मूल्य, र विशेष अफर" : "Points earned per purchase, what a point is worth, and special offers"}
+              icon={Gift}
+              tone="violet"
+            >
+              <div className="grid gap-3 sm:grid-cols-3">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   <span>{lang === "ne" ? "कति रुपैयाँमा" : "For every NPR"}</span>
                   <input
@@ -3296,21 +3222,18 @@ export function OwnerWorkspaceModern(props: any) {
                   ? "परिवर्तन गरेपछि तलको सेभ बटन थिच्न नबिर्सनुहोस्।"
                   : "Remember to press Save below after changing these."}
               </p>
-            </section>
+            </CollapsibleSection>
 
             {/* Google Authenticator. The QR is drawn in the browser rather
                 than fetched from a QR web service, because the URL contains
                 the shared secret and must never leave this machine. */}
-            <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <h4 className="flex items-center gap-2 text-xl font-bold text-slate-950">
-                <ShieldCheck className={`h-5 w-5 ${totpEnabled ? "text-emerald-600" : "text-slate-400"}`} />
-                {lang === "ne" ? "दुई-चरण सुरक्षा (Google Authenticator)" : "Two-step security (Google Authenticator)"}
-              </h4>
-              <p className={`mt-1 text-sm font-semibold ${totpEnabled ? "text-emerald-700" : "text-slate-500"}`}>
-                {totpEnabled
-                  ? (lang === "ne" ? "✓ चालु छ — लगइन गर्दा कोड चाहिन्छ" : "✓ Turned on — a code is required at login")
-                  : (lang === "ne" ? "अहिले बन्द छ" : "Currently off")}
-              </p>
+            <CollapsibleSection
+              title={lang === "ne" ? "दुई-चरण सुरक्षा (Google Authenticator)" : "Two-step security (Google Authenticator)"}
+              description={lang === "ne" ? "लगइन गर्दा फोनको ६ अंकको कोड पनि माग्ने" : "Also ask for a 6-digit code from your phone at login"}
+              icon={ShieldCheck}
+              tone={totpEnabled ? "emerald" : "default"}
+              status={totpEnabled ? (lang === "ne" ? "✓ चालु" : "✓ On") : (lang === "ne" ? "बन्द" : "Off")}
+            >
 
               {!totpEnabled && !totpSetup ? (
                 <>
@@ -3424,16 +3347,17 @@ export function OwnerWorkspaceModern(props: any) {
                   </button>
                 </div>
               ) : null}
-            </section>
+            </CollapsibleSection>
 
             {/* Danger zone — wipes demo/test data so the shop can start clean.
                 Deliberately placed last, behind a typed phrase and the admin
                 password, because it cannot be undone from inside the app. */}
-            <section className="rounded-[1.5rem] border-2 border-rose-200 bg-rose-50/40 p-5 shadow-sm">
-              <h4 className="flex items-center gap-2 text-xl font-bold text-rose-900">
-                <ShieldAlert className="h-5 w-5" />
-                {lang === "ne" ? "खतरा क्षेत्र — सबै डाटा मेटाउने" : "Danger zone — erase all data"}
-              </h4>
+            <CollapsibleSection
+              title={lang === "ne" ? "खतरा क्षेत्र — सबै डाटा मेटाउने" : "Danger zone — erase all data"}
+              description={lang === "ne" ? "पसलका सबै बिल, ग्राहक र सामान मेटाउँछ। फर्काउन मिल्दैन।" : "Erases every bill, customer and product. Cannot be undone."}
+              icon={ShieldAlert}
+              tone="rose"
+            >
               <p className="mt-2 text-sm leading-relaxed text-rose-800">
                 {lang === "ne"
                   ? "यसले सबै ग्राहक, बिल, उधारो, भुक्तानी, बुकिङ, डिलर र सामानको रेकर्ड मेटाउँछ। पसलको सेटिङ र तपाईंको लगइन रहन्छ। मेटाउनुअघि ब्याकअप आफैं बन्छ, तर एपभित्रबाट फिर्ता ल्याउन मिल्दैन।"
@@ -3485,16 +3409,15 @@ export function OwnerWorkspaceModern(props: any) {
                     : (lang === "ne" ? "सबै डाटा मेटाउनुहोस्" : "Delete all data")}
                 </button>
               </div>
-            </section>
+            </CollapsibleSection>
 
-            <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+            <CollapsibleSection
+              title={lang === "ne" ? "पसल सूचना" : "Shop notices"}
+              description={lang === "ne" ? "होमपेजमा देखिने सूचना यहीँबाट राख्नुहोस्।" : "Manage the notices shown on the homepage here."}
+              icon={Bell}
+            >
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-xl font-bold text-slate-950">{lang === "ne" ? "पसल सूचना" : "Shop notices"}</h4>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {lang === "ne" ? "होमपेजमा देखिने सूचना यहीँबाट राख्नुहोस्।" : "Manage the notices shown on the homepage here."}
-                  </p>
-                </div>
+                <div />
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -3577,9 +3500,71 @@ export function OwnerWorkspaceModern(props: any) {
                   </div>
                 )}
               </div>
-            </section>
+            </CollapsibleSection>
 
-            <section className="space-y-5">
+            {/* Optional. Every printed bill already leaves a ruled line and a
+                dashed box to sign and stamp by hand; uploading images only
+                means reprints and emailed copies carry the marks too. */}
+            <CollapsibleSection
+              title={lang === "ne" ? "छाप र हस्ताक्षर" : "Stamp & signature"}
+              description={lang === "ne" ? "बिलमा आफैं छापिने छाप र हस्ताक्षर (नराखे पनि हुन्छ — हातले गर्ने ठाउँ सधैं छापिन्छ)" : "Printed onto bills automatically. Optional — every bill always leaves room to sign and stamp by hand."}
+              icon={ShieldCheck}
+              status={settingsForm?.stampPath || settingsForm?.signaturePath ? (lang === "ne" ? "✓ राखिएको" : "✓ Set") : (lang === "ne" ? "हातले" : "By hand")}
+            >
+              <div className="grid gap-5">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  <span>{lang === "ne" ? "हस्ताक्षरमुनि लेखिने नाम" : "Name printed under the signature"}</span>
+                  <input
+                    className={shellInput()}
+                    value={settingsForm.signatureName || ""}
+                    onChange={(e) => setSettingsForm((current: any) => ({ ...current, signatureName: e.target.value }))}
+                    placeholder={lang === "ne" ? "जस्तै: राजेश सिपिङ् सेन्टर" : "e.g. Rajesh Shopping Center"}
+                  />
+                </label>
+                {[
+                  ["stampPath", lang === "ne" ? "पसलको छाप" : "Shop stamp", lang === "ne" ? "छापलाई सेतो कागजमा थिचेर फोटो खिच्नुहोस्।" : "Press the rubber stamp on white paper and photograph it."],
+                  ["signaturePath", lang === "ne" ? "हस्ताक्षर" : "Signature", lang === "ne" ? "सेतो कागजमा हस्ताक्षर गरेर फोटो खिच्नुहोस्।" : "Sign on white paper and photograph it."],
+                ].map(([field, label, hint]) => (
+                  <div key={field} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <h4 className="text-base font-bold text-slate-950">{label}</h4>
+                    <p className="mt-1 text-xs text-slate-500">{hint}</p>
+                    <label className="mt-3 flex items-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
+                      <Upload className="h-4 w-4" />
+                      {text.uploadImage}
+                      <input type="file" accept="image/*" className="mt-3 block w-full text-sm" onChange={(e) => handleSettingsMediaUpload(e, field as any)} />
+                    </label>
+                    {settingsForm[field] ? (
+                      <div className="mt-3 flex items-center gap-3">
+                        <img src={settingsForm[field]} alt={String(label)} className="h-20 rounded-xl border border-slate-200 bg-slate-50 object-contain p-2" />
+                        <button
+                          type="button"
+                          onClick={() => setSettingsForm((current: any) => ({ ...current, [field]: "" }))}
+                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
+                        >
+                          {lang === "ne" ? "हटाउनुहोस्" : "Remove"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => saveMediaSettings()}
+                  disabled={settingsBusy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 font-semibold text-accent-foreground disabled:opacity-60"
+                >
+                  <Save className="h-4 w-4" />
+                  {settingsBusy ? (lang === "ne" ? "सेभ हुँदैछ..." : "Saving...") : (lang === "ne" ? "सेभ गर्नुहोस्" : "Save")}
+                </button>
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title={lang === "ne" ? "भुक्तानी QR फोटोहरू" : "Payment QR photos"}
+              description={lang === "ne" ? "ग्राहकले स्क्यान गर्ने बैंक, eSewa र Khalti को QR फोटो।" : "The bank, eSewa and Khalti QR photos customers scan to pay."}
+              icon={Upload}
+            >
+            <div className="space-y-5">
               {[
                 ["bankQrPath", lang === "ne" ? "बैंक QR फोटो" : "Bank QR photo"],
                 ["esewaQrPath", lang === "ne" ? "eSewa QR फोटो" : "eSewa QR photo"],
@@ -3624,7 +3609,8 @@ export function OwnerWorkspaceModern(props: any) {
                   ) : null}
                 </div>
               ))}
-            </section>
+            </div>
+            </CollapsibleSection>
           </section>
         ) : null}
       </main>
@@ -3709,6 +3695,7 @@ export function OwnerWorkspaceModern(props: any) {
         lang={lang as "en" | "ne"}
         api={props.api}
         onRefresh={props.reloadOwnerData}
+        shop={shopInfo}
       />
 
       <EditOrderModal

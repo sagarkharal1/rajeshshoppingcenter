@@ -68,40 +68,48 @@ const CATEGORIES = [
 
 // price = selling price, buyingPrice = cost. Margins kept realistic for a
 // village general store (thin on staples, wider on hardware and clothing).
+//
+// Three fields exist purely so the newer features have something to show:
+//   expiryInDays  — days from today; negative means already past its date
+//   sale          — a discount running now, for the "daily special" list
+//   omitted sku   — the app invents a code (RSC-00001…) so labels can be
+//                   printed for goods that arrived without a barcode
 const PRODUCTS = [
   // किराना
   { cat: "किराना", name: "मसिनो चामल (२५ केजी)", sku: "RICE-25", price: 2650, buyingPrice: 2380, transportationCost: 60, unit: "bora", stock: 40, reorder: 8, featured: true },
   { cat: "किराना", name: "जिरा मसिनो चामल (५ केजी)", sku: "RICE-05", price: 620, buyingPrice: 545, transportationCost: 15, unit: "packet", stock: 60, reorder: 12 },
-  { cat: "किराना", name: "मुसुरो दाल (१ केजी)", sku: "DAL-MSR", price: 210, buyingPrice: 178, unit: "kg", stock: 85, reorder: 15, featured: true },
+  { cat: "किराना", name: "मुसुरो दाल (१ केजी)", sku: "DAL-MSR", price: 210, buyingPrice: 178, unit: "kg", stock: 85, reorder: 15, featured: true, expiryInDays: 300 },
   { cat: "किराना", name: "रहर दाल (१ केजी)", sku: "DAL-RHR", price: 245, buyingPrice: 208, unit: "kg", stock: 50, reorder: 10 },
-  { cat: "किराना", name: "तोरीको तेल (१ लिटर)", sku: "OIL-MST", price: 340, buyingPrice: 292, unit: "litre", stock: 70, reorder: 15, featured: true },
-  { cat: "किराना", name: "सूर्यमुखी तेल (१ लिटर)", sku: "OIL-SUN", price: 295, buyingPrice: 255, unit: "litre", stock: 45, reorder: 10 },
-  { cat: "किराना", name: "चिनी (१ केजी)", sku: "SUGAR-1", price: 125, buyingPrice: 108, unit: "kg", stock: 120, reorder: 25 },
+  { cat: "किराना", name: "तोरीको तेल (१ लिटर)", sku: "OIL-MST", price: 340, buyingPrice: 292, unit: "litre", stock: 70, reorder: 15, featured: true, expiryInDays: 210 },
+  // Already past its date — this is the one the expiry alert should shout about.
+  { cat: "किराना", name: "सूर्यमुखी तेल (१ लिटर)", sku: "OIL-SUN", price: 295, buyingPrice: 255, unit: "litre", stock: 45, reorder: 10, expiryInDays: -4 },
+  { cat: "किराना", name: "चिनी (१ केजी)", sku: "SUGAR-1", price: 125, buyingPrice: 108, unit: "kg", stock: 120, reorder: 25, sale: { price: 115, days: 5 } },
   { cat: "किराना", name: "आयोडिन नुन (१ केजी)", sku: "SALT-1", price: 32, buyingPrice: 24, unit: "kg", stock: 150, reorder: 30 },
-  { cat: "किराना", name: "चिया पत्ती (५०० ग्राम)", sku: "TEA-500", price: 285, buyingPrice: 240, unit: "packet", stock: 55, reorder: 10 },
-  { cat: "किराना", name: "बेसन (१ केजी)", sku: "BESAN-1", price: 165, buyingPrice: 138, unit: "kg", stock: 40, reorder: 8 },
-  { cat: "किराना", name: "चाउचाउ (प्याक)", sku: "NOODLE-P", price: 25, buyingPrice: 19, unit: "piece", stock: 300, reorder: 60 },
-  { cat: "किराना", name: "बिस्कुट (प्याक)", sku: "BISC-P", price: 45, buyingPrice: 34, unit: "piece", stock: 180, reorder: 40 },
+  { cat: "किराना", name: "चिया पत्ती (५०० ग्राम)", sku: "TEA-500", price: 285, buyingPrice: 240, unit: "packet", stock: 55, reorder: 10, expiryInDays: 120 },
+  // No sku on purpose: the app should invent one, ready for a printed label.
+  { cat: "किराना", name: "बेसन (१ केजी)", price: 165, buyingPrice: 138, unit: "kg", stock: 40, reorder: 8 },
+  { cat: "किराना", name: "चाउचाउ (प्याक)", sku: "NOODLE-P", price: 25, buyingPrice: 19, unit: "piece", stock: 300, reorder: 60, expiryInDays: 6 },
+  { cat: "किराना", name: "बिस्कुट (प्याक)", sku: "BISC-P", price: 45, buyingPrice: 34, unit: "piece", stock: 180, reorder: 40, expiryInDays: 21 },
 
   // तरकारी
-  { cat: "तरकारी", name: "आलु (१ केजी)", sku: "VEG-ALU", price: 75, buyingPrice: 58, unit: "kg", stock: 200, reorder: 40, featured: true },
+  { cat: "तरकारी", name: "आलु (१ केजी)", sku: "VEG-ALU", price: 75, buyingPrice: 58, unit: "kg", stock: 200, reorder: 40, featured: true, sale: { price: 65, days: 2 } },
   { cat: "तरकारी", name: "प्याज (१ केजी)", sku: "VEG-PYJ", price: 110, buyingPrice: 88, unit: "kg", stock: 150, reorder: 30 },
   { cat: "तरकारी", name: "गोलभेडा (१ केजी)", sku: "VEG-TMT", price: 90, buyingPrice: 68, unit: "kg", stock: 80, reorder: 20 },
   { cat: "तरकारी", name: "काउली (१ केजी)", sku: "VEG-CFL", price: 85, buyingPrice: 62, unit: "kg", stock: 60, reorder: 15 },
-  { cat: "तरकारी", name: "बन्दा (१ केजी)", sku: "VEG-CBG", price: 70, buyingPrice: 50, unit: "kg", stock: 65, reorder: 15 },
+  { cat: "तरकारी", name: "बन्दा (१ केजी)", price: 70, buyingPrice: 50, unit: "kg", stock: 65, reorder: 15 },
   { cat: "तरकारी", name: "अदुवा (१ केजी)", sku: "VEG-GNG", price: 260, buyingPrice: 215, unit: "kg", stock: 30, reorder: 8 },
 
   // फलफूल
-  { cat: "फलफूल", name: "स्याउ (१ केजी)", sku: "FRT-APL", price: 320, buyingPrice: 265, unit: "kg", stock: 45, reorder: 10, featured: true },
-  { cat: "फलफूल", name: "केरा (दर्जन)", sku: "FRT-BAN", price: 180, buyingPrice: 145, unit: "dozen", stock: 40, reorder: 10 },
-  { cat: "फलफूल", name: "सुन्तला (१ केजी)", sku: "FRT-ORG", price: 210, buyingPrice: 170, unit: "kg", stock: 35, reorder: 8 },
+  { cat: "फलफूल", name: "स्याउ (१ केजी)", sku: "FRT-APL", price: 320, buyingPrice: 265, unit: "kg", stock: 45, reorder: 10, featured: true, sale: { price: 285, days: 3 } },
+  { cat: "फलफूल", name: "केरा (दर्जन)", sku: "FRT-BAN", price: 180, buyingPrice: 145, unit: "dozen", stock: 40, reorder: 10, expiryInDays: 4 },
+  { cat: "फलफूल", name: "सुन्तला (१ केजी)", price: 210, buyingPrice: 170, unit: "kg", stock: 35, reorder: 8 },
 
   // हार्डवेयर
   { cat: "हार्डवेयर", name: "सिमेन्ट (५० केजी बोरा)", sku: "HW-CEM", price: 1050, buyingPrice: 920, transportationCost: 45, unit: "bora", stock: 60, reorder: 15, featured: true },
   { cat: "हार्डवेयर", name: "डन्डी १२ एमएम (प्रति केजी)", sku: "HW-ROD12", price: 128, buyingPrice: 110, unit: "kg", stock: 400, reorder: 80 },
   { cat: "हार्डवेयर", name: "जिआई पाइप १/२ इन्च (फिट)", sku: "HW-PIPE", price: 145, buyingPrice: 118, unit: "piece", stock: 90, reorder: 20 },
   { cat: "हार्डवेयर", name: "पेन्ट (४ लिटर)", sku: "HW-PNT4", price: 1850, buyingPrice: 1520, unit: "piece", stock: 25, reorder: 5 },
-  { cat: "हार्डवेयर", name: "किला (१ केजी)", sku: "HW-NAIL", price: 165, buyingPrice: 128, unit: "kg", stock: 70, reorder: 15 },
+  { cat: "हार्डवेयर", name: "किला (१ केजी)", price: 165, buyingPrice: 128, unit: "kg", stock: 70, reorder: 15 },
 
   // ग्यास
   { cat: "ग्यास तथा इन्धन", name: "एलपी ग्यास सिलिन्डर (रिफिल)", sku: "GAS-REF", price: 1910, buyingPrice: 1795, transportationCost: 40, unit: "piece", stock: 35, reorder: 8, featured: true },
@@ -109,7 +117,7 @@ const PRODUCTS = [
 
   // लत्ताकपडा
   { cat: "लत्ताकपडा तथा जुत्ता", name: "स्कूल जुत्ता (जोर)", sku: "CL-SHOE", price: 1250, buyingPrice: 940, unit: "piece", stock: 30, reorder: 6 },
-  { cat: "लत्ताकपडा तथा जुत्ता", name: "चप्पल (जोर)", sku: "CL-SLP", price: 380, buyingPrice: 265, unit: "piece", stock: 65, reorder: 15 },
+  { cat: "लत्ताकपडा तथा जुत्ता", name: "चप्पल (जोर)", sku: "CL-SLP", price: 380, buyingPrice: 265, unit: "piece", stock: 65, reorder: 15, sale: { price: 330, days: 7 } },
   { cat: "लत्ताकपडा तथा जुत्ता", name: "गम बुट (जोर)", sku: "CL-BOOT", price: 890, buyingPrice: 665, unit: "piece", stock: 28, reorder: 6 },
 ];
 
@@ -146,6 +154,7 @@ const daysAgoIso = (days) => {
   date.setDate(date.getDate() - days);
   return date.toISOString().split("T")[0];
 };
+const daysFromNowIso = (days) => daysAgoIso(-days);
 
 async function main() {
   console.log(`Seeding demo data into ${API_BASE}\n`);
@@ -170,13 +179,23 @@ async function main() {
 
   // 3. Products
   const products = [];
+  let onSale = 0;
+  let dated = 0;
+  let autoCoded = 0;
   for (const item of PRODUCTS) {
+    // Started yesterday, so the discount is already live whatever the clock
+    // says — a sale beginning at midnight UTC would not open until morning here.
+    const sale = item.sale
+      ? { salePrice: item.sale.price, saleStartsAt: daysAgoIso(1), saleEndsAt: daysFromNowIso(item.sale.days) }
+      : {};
     const created = await call("/admin/products", {
       method: "POST",
       body: {
         name: item.name,
         description: `${item.name} — demo stock`,
-        sku: item.sku,
+        ...(item.sku ? { sku: item.sku } : {}),
+        ...(item.expiryInDays === undefined ? {} : { expiryDate: daysFromNowIso(item.expiryInDays) }),
+        ...sale,
         price: item.price,
         buyingPrice: item.buyingPrice,
         transportationCost: item.transportationCost ?? 0,
@@ -189,9 +208,12 @@ async function main() {
         featured: Boolean(item.featured),
       },
     });
-    products.push({ ...item, id: created.id ?? created.product?.id });
+    products.push({ ...item, id: created.id ?? created.product?.id, sku: created.sku ?? item.sku });
+    if (item.sale) onSale++;
+    if (item.expiryInDays !== undefined) dated++;
+    if (!item.sku) autoCoded++;
   }
-  console.log(`✓ ${products.length} products`);
+  console.log(`✓ ${products.length} products (${onSale} on sale, ${dated} with expiry dates, ${autoCoded} given an automatic code)`);
 
   // 4. Customers
   const customers = [];
@@ -295,7 +317,34 @@ async function main() {
   }
   console.log(`✓ ${payments} credit repayments`);
 
-  // 8. Transport bookings (jeep / tractor)
+  // 8. A few customers spend the points the earlier sales earned them, so the
+  //    reward ledger has both sides of the story in it, not just earnings.
+  let redemptions = 0;
+  let pointsSpent = 0;
+  const afterSales = await call("/admin/customers");
+  const earners = (Array.isArray(afterSales) ? afterSales : afterSales.customers || [])
+    .filter((c) => Number(c.rewardPoints || 0) >= 15)
+    .slice(0, 4);
+  for (const customer of earners) {
+    const product = pick(products);
+    const points = Math.min(Number(customer.rewardPoints), 10 + rand(15));
+    await call("/admin/invoices", {
+      method: "POST",
+      body: {
+        customerId: customer.id,
+        items: [{ productId: product.id, quantity: 1 + rand(2) }],
+        paymentMethod: "cash",
+        amountPaid: 0,
+        redeemPoints: points,
+        note: "पोइन्ट प्रयोग गरी किनमेल (demo)",
+      },
+    });
+    redemptions++;
+    pointsSpent += points;
+  }
+  console.log(`✓ ${redemptions} sales paid partly with reward points (${pointsSpent} points spent)`);
+
+  // 9. Transport bookings (jeep / tractor)
   let bookings = 0;
   for (let i = 0; i < 14; i++) {
     const customer = pick(CUSTOMERS);
@@ -327,8 +376,12 @@ Things worth trying:
   • Reports tab — sales, profit, dealer dues, credit outstanding
   • Customers — open one with udharo, record a payment, then void it
   • Billing — try the "New / unknown customer" cash sale
-  • Products — check low-stock warnings and stock history
-  • Bookings — confirm one and collect payment
+  • Billing — pick a customer with points and spend some on the bill
+  • Products — low-stock warnings, stock history, and the expiry alert
+                (सूर्यमुखी तेल is already past its date, चाउचाउ is close)
+  • Products — four items had no code, so the app made one (RSC-…)
+  • Print barcode labels for those and scan one back into a bill
+  • Home page — the discounted items should show as today's specials
 
 When you are finished, remove all of it with:
   Owner area → Media & updates tab → red Danger zone box → type DELETE ALL DATA

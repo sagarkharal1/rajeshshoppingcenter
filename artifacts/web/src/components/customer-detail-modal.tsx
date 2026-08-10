@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Printer, ArrowUp, ArrowDown, Phone, MapPin, Gift, ReceiptText, Truck, CreditCard } from "lucide-react";
+import { printBill, type BillShopInfo } from "@/lib/print-bill";
+import { printOrderSlip, printBookingSlip, printPaymentReceipt, openProofDocument } from "@/lib/print-slips";
 
 interface Order {
   id: number;
@@ -91,6 +93,7 @@ interface CustomerDetailModalProps {
   lang?: "en" | "ne";
   api?: (url: string, opts?: any) => Promise<any>;
   onRefresh?: () => Promise<void> | void;
+  shop?: BillShopInfo;
 }
 
 const labels = {
@@ -157,6 +160,7 @@ export function CustomerDetailModal({
   lang = "en",
   api,
   onRefresh,
+  shop = { name: "Rajesh Shopping Center" },
 }: CustomerDetailModalProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -168,6 +172,13 @@ export function CustomerDetailModal({
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [voidBusyId, setVoidBusyId] = useState<number | null>(null);
+  const [billBusyId, setBillBusyId] = useState<number | null>(null);
+  // Voiding used to happen straight off a browser prompt: type anything, press
+  // OK, the bill was gone. Now the bill is named and priced in a dialog first.
+  const [voidTarget, setVoidTarget] = useState<
+    { kind: "invoices" | "payments"; id: number; label: string; amount: number } | null
+  >(null);
+  const [voidReason, setVoidReason] = useState("");
 
   const dict: any = { ...labels.en, ...labels[lang] };
 
@@ -222,30 +233,98 @@ export function CustomerDetailModal({
     }
   };
 
+  // Fetches the bill with its lines and opens it as a printable slip. The list
+  // only carries totals, so the items have to be loaded on demand.
+  const openBill = async (invoiceId: number) => {
+    if (!api) return;
+    setBillBusyId(invoiceId);
+    setPaymentMessage("");
+    try {
+      const data = await api(`/admin/invoices/${invoiceId}`);
+      const result = printBill(
+        data.invoice,
+        data.items || [],
+        data.customer || customer,
+        lang,
+        shop,
+      );
+      if (!result.ok) {
+        setPaymentMessage(
+          lang === "ne"
+            ? "पप-अप रोकिएको छ। ब्राउजरमा पप-अप खोल्न दिनुहोस्।"
+            : "The pop-up was blocked. Allow pop-ups for this site and try again.",
+        );
+      }
+    } catch (err) {
+      setPaymentMessage(
+        err instanceof Error ? err.message : lang === "ne" ? "बिल खोल्न सकिएन।" : "Could not open the bill.",
+      );
+    } finally {
+      setBillBusyId(null);
+    }
+  };
+
+  // Orders, bookings and payments already hold everything their slip needs, so
+  // unlike a bill they open without another round trip to the server.
+  const popupBlocked = () =>
+    setPaymentMessage(
+      lang === "ne"
+        ? "पप-अप रोकिएको छ। ब्राउजरमा पप-अप खोल्न दिनुहोस्।"
+        : "The pop-up was blocked. Allow pop-ups for this site and try again.",
+    );
+
+  const openOrder = (order: any) => {
+    setPaymentMessage("");
+    if (!printOrderSlip({ ...order, customerName: order.customerName || customer?.name }, lang, shop).ok) popupBlocked();
+  };
+  const openBooking = (booking: any) => {
+    setPaymentMessage("");
+    if (!printBookingSlip({ ...booking, customerName: booking.customerName || customer?.name, customerPhone: booking.customerPhone || customer?.phone }, lang, shop).ok) popupBlocked();
+  };
+  const openPayment = (payment: any) => {
+    setPaymentMessage("");
+    // The ledger stores the balance left after each entry. Pulling it out here
+    // is what lets the receipt print "was 11,759, paid 2,000, now 9,759" — the
+    // only form a customer can actually check against their own khata.
+    const entry = (customer?.ledgerEntries as any[] | undefined)?.find(
+      (item) => Number(item?.paymentId) === Number(payment.id),
+    );
+    const balanceAfter = entry && entry.balanceAfter != null ? Number(entry.balanceAfter) : null;
+    if (
+      !printPaymentReceipt(
+        { ...payment, createdAt: payment.createdAt || payment.date },
+        customer,
+        lang,
+        shop,
+        balanceAfter,
+      ).ok
+    ) {
+      popupBlocked();
+    }
+  };
+
   // Voiding writes a reversing entry rather than deleting: the mistaken record
   // stays visible, and stock, credit balance, and reward points are corrected.
-  const voidRecord = async (kind: "invoices" | "payments", id: number, label: string) => {
-    if (!api) return;
-    const reason = window.prompt(
-      lang === "ne"
-        ? `${label} किन रद्द गर्ने? (कारण लेख्नुहोस्)`
-        : `Why are you voiding ${label}? (reason is recorded)`,
-    );
-    if (reason === null) return;
-    if (!reason.trim()) {
+  const confirmVoid = async () => {
+    if (!api || !voidTarget) return;
+    const reason = voidReason.trim();
+    if (!reason) {
       setPaymentMessage(lang === "ne" ? "कारण लेख्नु आवश्यक छ।" : "A reason is required.");
       return;
     }
+    const { kind, id } = voidTarget;
     setVoidBusyId(id);
     setPaymentMessage("");
     try {
       const result = await api(`/admin/${kind}/${id}/void`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       });
       setPaymentMessage(
         result?.message || (lang === "ne" ? "रद्द भयो। हिसाब मिलाइयो।" : "Voided. Balance corrected."),
       );
+      setVoidTarget(null);
+      setVoidReason("");
       await fetchCustomerData();
       await onRefresh?.();
       window.setTimeout(() => setPaymentMessage(""), 5000);
@@ -258,9 +337,13 @@ export function CustomerDetailModal({
 
   if (!isOpen) return null;
 
-  const productDue = customer
-    ? (customer.invoices || []).reduce((sum, invoice) => sum + Number(invoice.dueAmount || 0), 0)
-    : 0;
+  // A bill's stored dueAmount is the customer's running balance at the moment
+  // it was written — it already contains everything owed before it. Adding
+  // those up counts the same debt once per bill (and counts voided bills too),
+  // which is how someone owing 11,759 was shown as owing 22,359. The balance
+  // the server maintains — surviving bills minus surviving payments — is the
+  // one true figure, and it covers shop bills only; transport is separate.
+  const productDue = customer ? Math.max(Number(customer.creditBalance || 0), 0) : 0;
   const transportDue = customer
     ? (customer.bookings || []).reduce((sum, booking) => {
         const status = String(booking.status || "").toLowerCase();
@@ -416,9 +499,11 @@ export function CustomerDetailModal({
                   { label: dict.transportDue, value: transportDue, icon: Truck, className: "border-amber-200 bg-amber-50 text-amber-900" },
                   {
                     label: dict.totalDue,
-                    value: customer.creditBalance,
+                    // Shop bills plus unpaid jeep/tractor trips. Showing only
+                    // the shop balance here understated what a customer owes.
+                    value: productDue + transportDue,
                     icon: CreditCard,
-                    className: customer.creditBalance > 0 ? "border-rose-200 bg-rose-50 text-rose-900" : "border-emerald-200 bg-emerald-50 text-emerald-900",
+                    className: productDue + transportDue > 0 ? "border-rose-200 bg-rose-50 text-rose-900" : "border-emerald-200 bg-emerald-50 text-emerald-900",
                   },
                 ].map((card) => (
                   <div key={card.label} className={`rounded-2xl border p-4 ${card.className}`}>
@@ -439,7 +524,9 @@ export function CustomerDetailModal({
                         {lang === "ne" ? "उधारो भुक्तानी लिनुहोस्" : "Collect Credit Payment"}
                       </h3>
                       <p className="text-sm text-emerald-700">
-                        {lang === "ne" ? "सामान र ट्रान्सपोर्ट दुबैको कुल बाँकी" : "Total due across products and transport"}: Rs. {customer.creditBalance.toLocaleString()}
+                        {/* Money taken here settles shop bills only; an unpaid
+                            jeep or tractor trip is collected on the booking. */}
+                        {lang === "ne" ? "सामानको उधारो बाँकी" : "Shop credit outstanding"}: Rs. {productDue.toLocaleString()}
                       </p>
                     </div>
                     {paymentMessage ? (
@@ -558,7 +645,9 @@ export function CustomerDetailModal({
                                   {item.kind === "payment" ? "+" : ""}Rs. {item.amount.toLocaleString()}
                                 </p>
                                 {item.due > 0 ? (
-                                  <p className="text-sm font-bold text-rose-700">Due: Rs. {item.due.toLocaleString()}</p>
+                                  <p className="text-sm font-bold text-rose-700">
+                                    {lang === "ne" ? "यसपछिको बाँकी" : "Balance after"}: Rs. {item.due.toLocaleString()}
+                                  </p>
                                 ) : null}
                               </div>
                             </div>
@@ -592,7 +681,11 @@ export function CustomerDetailModal({
                                 Rs. {invoice.totalAmount.toLocaleString()}
                               </p>
                               {invoice.voidedAt ? null : invoice.dueAmount > 0 ? (
-                                <p className="text-sm font-bold text-rose-700">Due: Rs. {invoice.dueAmount.toLocaleString()}</p>
+                                // Not this bill's own due — the khata balance
+                                // once this bill was added.
+                                <p className="text-sm font-bold text-rose-700">
+                                  {lang === "ne" ? "यसपछिको बाँकी" : "Balance after"}: Rs. {invoice.dueAmount.toLocaleString()}
+                                </p>
                               ) : (
                                 <p className="text-sm font-bold text-emerald-700">Paid</p>
                               )}
@@ -603,20 +696,46 @@ export function CustomerDetailModal({
                               {lang === "ne" ? "रद्द गरिएको" : "VOIDED"}
                               {invoice.voidReason ? ` — ${invoice.voidReason}` : ""}
                             </p>
-                          ) : (
+                          ) : null}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {/* Opens even for a voided bill: seeing what was
+                                cancelled is how a mistake gets understood. */}
                             <button
                               type="button"
-                              onClick={() => voidRecord("invoices", invoice.id, invoice.invoiceNumber)}
-                              disabled={voidBusyId === invoice.id}
-                              className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                              onClick={() => openBill(invoice.id)}
+                              disabled={billBusyId === invoice.id}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                             >
-                              {voidBusyId === invoice.id
-                                ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
-                                : (lang === "ne" ? "गलत भयो? बिल रद्द गर्नुहोस्" : "Made a mistake? Void this bill")}
+                              <Printer className="h-3.5 w-3.5" />
+                              {billBusyId === invoice.id
+                                ? (lang === "ne" ? "खोल्दै..." : "Opening...")
+                                : (lang === "ne" ? "बिल हेर्नुहोस् / छाप्नुहोस्" : "View / print bill")}
                             </button>
-                          )}
+                            {invoice.voidedAt ? null : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVoidReason("");
+                                  setVoidTarget({
+                                    kind: "invoices",
+                                    id: invoice.id,
+                                    label: invoice.invoiceNumber,
+                                    amount: invoice.totalAmount,
+                                  });
+                                }}
+                                disabled={voidBusyId === invoice.id}
+                                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                              >
+                                {lang === "ne" ? "गलत भयो? बिल रद्द गर्नुहोस्" : "Made a mistake? Void this bill"}
+                              </button>
+                            )}
+                          </div>
                           {invoice.proofPath ? (
-                            <img src={invoice.proofPath} alt="Invoice proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            // Tap to see it full size — a thumbnail of a payment
+                            // screenshot is too small to read a reference from.
+                            <button type="button" onClick={() => openProofDocument(invoice.proofPath as string, `${invoice.invoiceNumber} — ${lang === "ne" ? "भुक्तानीको प्रमाण" : "payment proof"}`, lang)} className="mt-3 block w-full">
+                              <img src={invoice.proofPath} alt="Invoice proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            </button>
                           ) : null}
                         </div>
                       ))
@@ -697,7 +816,13 @@ export function CustomerDetailModal({
                                   </div>
                                 ))}
                                 <div className="pt-2 border-t border-gray-200 flex gap-2">
-                                  <button className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2">
+                                  {/* Had no handler at all until now: pressing
+                                      Print simply did nothing. */}
+                                  <button
+                                    type="button"
+                                    onClick={() => openOrder(order)}
+                                    className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm rounded font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
+                                  >
                                     <Printer className="h-4 w-4" />
                                     {dict.print}
                                   </button>
@@ -753,8 +878,18 @@ export function CustomerDetailModal({
                             )}
                           </div>
                           {booking.proofPath ? (
-                            <img src={booking.proofPath} alt="Booking proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            <button type="button" onClick={() => openProofDocument(booking.proofPath as string, `Booking #${booking.id} — ${lang === "ne" ? "भुक्तानीको प्रमाण" : "payment proof"}`, lang)} className="mt-3 block w-full">
+                              <img src={booking.proofPath} alt="Booking proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            </button>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={() => openBooking(booking)}
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            <Printer className="h-3.5 w-3.5" />
+                            {lang === "ne" ? "स्लिप हेर्नुहोस् / छाप्नुहोस्" : "View / print slip"}
+                          </button>
                         </div>
                       ))
                     ) : (
@@ -792,20 +927,39 @@ export function CustomerDetailModal({
                               {lang === "ne" ? "रद्द गरिएको" : "VOIDED"}
                               {payment.voidReason ? ` — ${payment.voidReason}` : ""}
                             </p>
-                          ) : (
+                          ) : null}
+                          <div className="mt-3 flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => voidRecord("payments", payment.id, `Rs. ${payment.amount.toLocaleString()}`)}
-                              disabled={voidBusyId === payment.id}
-                              className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                              onClick={() => openPayment(payment)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                             >
-                              {voidBusyId === payment.id
-                                ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
-                                : (lang === "ne" ? "गलत रकम? रद्द गर्नुहोस्" : "Wrong amount? Void this payment")}
+                              <Printer className="h-3.5 w-3.5" />
+                              {lang === "ne" ? "रसिद हेर्नुहोस् / छाप्नुहोस्" : "View / print receipt"}
                             </button>
-                          )}
+                            {payment.voidedAt ? null : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVoidReason("");
+                                  setVoidTarget({
+                                    kind: "payments",
+                                    id: payment.id,
+                                    label: lang === "ne" ? "भुक्तानी" : "payment",
+                                    amount: payment.amount,
+                                  });
+                                }}
+                                disabled={voidBusyId === payment.id}
+                                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-60"
+                              >
+                                {lang === "ne" ? "गलत रकम? रद्द गर्नुहोस्" : "Wrong amount? Void this payment"}
+                              </button>
+                            )}
+                          </div>
                           {payment.proofPath ? (
-                            <img src={payment.proofPath} alt="Payment proof" className="mt-3 max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            <button type="button" onClick={() => openProofDocument(payment.proofPath as string, `${lang === "ne" ? "भुक्तानीको प्रमाण" : "Payment proof"} — Rs. ${payment.amount.toLocaleString()}`, lang, new Date(payment.date).toLocaleString())} className="mt-3 block w-full">
+                              <img src={payment.proofPath} alt="Payment proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
+                            </button>
                           ) : null}
                         </div>
                       ))
@@ -873,6 +1027,68 @@ export function CustomerDetailModal({
             </div>
           )}
         </motion.div>
+
+        {voidTarget ? (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => (voidBusyId ? null : setVoidTarget(null))}
+          >
+            <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-900">
+                {voidTarget.kind === "invoices"
+                  ? (lang === "ne" ? "यो बिल रद्द गर्ने?" : "Void this bill?")
+                  : (lang === "ne" ? "यो भुक्तानी रद्द गर्ने?" : "Void this payment?")}
+              </h3>
+              <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+                {voidTarget.label} — Rs. {Number(voidTarget.amount || 0).toLocaleString()}
+              </p>
+              <p className="mt-3 text-sm text-slate-600">
+                {voidTarget.kind === "invoices"
+                  ? (lang === "ne"
+                      ? "सामान स्टकमा फर्किन्छ, उधारो हिसाब मिल्छ र यसबाट पाएको अंक फिर्ता हुन्छ। बिल मेटिँदैन — रद्द भएको देखिन्छ।"
+                      : "Stock goes back, the udharo balance is corrected, and points from this bill are taken back. The bill is not deleted — it stays visible, marked voided.")
+                  : (lang === "ne"
+                      ? "ग्राहकको उधारो यो रकमले बढ्नेछ। रेकर्ड मेटिँदैन — रद्द भएको देखिन्छ।"
+                      : "The customer's udharo will go up by this amount. The record is not deleted — it stays visible, marked voided.")}
+              </p>
+              <label className="mt-4 block text-sm font-semibold text-slate-700">
+                {lang === "ne" ? "किन रद्द गर्दै हुनुहुन्छ?" : "Why are you voiding it?"}
+              </label>
+              <input
+                autoFocus
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                placeholder={lang === "ne" ? "जस्तै: गलत ग्राहकलाई हालियो" : "e.g. entered for the wrong customer"}
+                className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                {lang === "ne" ? "यो कारण रेकर्डमा सधैं देखिन्छ।" : "This reason stays on the record permanently."}
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVoidTarget(null)}
+                  disabled={voidBusyId !== null}
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                >
+                  {lang === "ne" ? "पर्दैन" : "Keep it"}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmVoid}
+                  disabled={voidBusyId !== null || !voidReason.trim()}
+                  className="rounded-2xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {voidBusyId !== null
+                    ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
+                    : (lang === "ne" ? "हो, रद्द गर्नुहोस्" : "Yes, void it")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </motion.div>
     </AnimatePresence>
   );

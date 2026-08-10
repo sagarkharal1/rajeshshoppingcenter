@@ -600,7 +600,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
 
   const load = async () => {
     if (!token) return;
-    const [summaryData, customersData, productsData, categoriesData, settingsData, ordersData, bookingsData] = await Promise.all([
+    const [summaryData, customersData, productsData, categoriesData, publicSettingsData, ordersData, bookingsData, ownerSettingsData] = await Promise.all([
       api<any>("/admin/dashboard-summary"),
       api<any[]>("/admin/customers"),
       api<any[]>("/admin/products"),
@@ -608,7 +608,11 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       api<any>("/settings"),
       api<any[]>("/admin/orders"),
       api<any[]>("/admin/bookings"),
+      // The stamp and signature are owner-only, so they never appear in the
+      // public settings payload — they have to be fetched separately.
+      api<any>("/admin/settings").catch(() => ({})),
     ]);
+    const settingsData = { ...publicSettingsData, ...(ownerSettingsData || {}) };
     setSummary(summaryData);
     setCustomers(customersData);
     setProducts(productsData);
@@ -642,6 +646,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       rewardBonusStartsAt: settingsData?.rewardBonusStartsAt ? String(settingsData.rewardBonusStartsAt).slice(0, 10) : "",
       rewardBonusEndsAt: settingsData?.rewardBonusEndsAt ? String(settingsData.rewardBonusEndsAt).slice(0, 10) : "",
       invoiceFooter: settingsData?.invoiceFooter ?? "",
+      stampPath: settingsData?.stampPath ?? "",
+      signaturePath: settingsData?.signaturePath ?? "",
+      signatureName: settingsData?.signatureName ?? "",
       aboutText: settingsData?.aboutText ?? "",
       deliveryPolicy: settingsData?.deliveryPolicy ?? "",
       termsConditions: settingsData?.termsConditions ?? "",
@@ -1211,6 +1218,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
           rewardBonusStartsAt: settingsForm.rewardBonusStartsAt || null,
           rewardBonusEndsAt: settingsForm.rewardBonusEndsAt || null,
           invoiceFooter: settingsForm.invoiceFooter || null,
+          stampPath: settingsForm.stampPath || null,
+          signaturePath: settingsForm.signaturePath || null,
+          signatureName: settingsForm.signatureName || null,
           aboutText: settingsForm.aboutText || null,
           deliveryPolicy: settingsForm.deliveryPolicy || null,
           termsConditions: settingsForm.termsConditions || null,

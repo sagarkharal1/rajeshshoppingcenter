@@ -1867,6 +1867,33 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
   }
 });
 
+// Owner-only view of the settings row.
+//
+// The public GET /settings deliberately strips everything down to an allowlist,
+// which is right for the storefront but leaves the owner screen unable to load
+// its own private assets — the shop stamp and signature. Those must never be
+// public: anyone holding them could print a bill that looks authorised.
+const OWNER_ONLY_SECRETS = [
+  "adminPasswordHash",
+  "adminOtp",
+  "adminOtpExpiry",
+  "totpSecret",
+  "totpPendingSecret",
+  "whatsappApiKey",
+] as const;
+
+router.get("/admin/settings", authMiddleware, async (_req, res) => {
+  try {
+    const [settings] = await db.select().from(settingsTable).limit(1);
+    if (!settings) return res.json({});
+    const safe: Record<string, unknown> = { ...settings };
+    for (const key of OWNER_ONLY_SECRETS) delete safe[key];
+    res.json(safe);
+  } catch {
+    res.status(500).json({ error: "Failed to load settings" });
+  }
+});
+
 router.put("/admin/settings", authMiddleware, async (req, res) => {
   try {
     const settings = { ...req.body };
@@ -2346,6 +2373,10 @@ router.get("/admin/dealers", authMiddleware, async (_req, res) => {
         dealerDue: isPayment ? 0 : dealerDue,
         returnStatus: metadata.returnStatus || null,
         damagedReason: metadata.damagedReason || null,
+        // The photo of the supplier's own bill. It was being saved on the
+        // ledger row and then dropped here, so the shop could upload a bill
+        // and never see it again — which is the whole point of keeping it.
+        proofPath: metadata.proofPath || null,
       });
 
       dealerMap.set(key, dealer);

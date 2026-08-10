@@ -64,6 +64,10 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price NUMERIC(10,2)`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_starts_at TIMESTAMP`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_ends_at TIMESTAMP`,
+    // 2026-08: Shop stamp and signature printed on bills and receipts.
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS stamp_path TEXT`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_path TEXT`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_name TEXT`,
   ];
   const client = await pool.connect();
   try {
