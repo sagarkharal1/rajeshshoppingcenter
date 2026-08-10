@@ -81,6 +81,12 @@ router.post("/orders", async (req, res) => {
         name: productsTable.name,
         price: productsTable.price,
         unit: productsTable.unit,
+        stockQuantity: productsTable.stockQuantity,
+        // Without these four the sale window is invisible to effectivePrice and
+        // an online order quietly charges the full price during a discount.
+        salePrice: productsTable.salePrice,
+        saleStartsAt: productsTable.saleStartsAt,
+        saleEndsAt: productsTable.saleEndsAt,
       })
       .from(productsTable)
       .where(inArray(productsTable.id, requestedItems.map((item) => item.productId)));
@@ -90,6 +96,35 @@ router.post("/orders", async (req, res) => {
     if (missing.length > 0) {
       return res.status(400).json({
         error: "Some items are no longer available. Please refresh your cart and try again.",
+      });
+    }
+
+    // Refuse to take an order for more than the shop holds. The counter sale
+    // has always checked this; the website did not, so a customer could order
+    // 80 sacks against 70 in stock and be told nothing was wrong.
+    //
+    // This is a check, not a reservation: placing an order does not move stock,
+    // so two customers can each be accepted for the last 70 before either is
+    // fulfilled. The shopkeeper sees both and decides — which is how the shop
+    // already works, and better than silently rejecting the second customer.
+    const shortfalls = requestedItems
+      .map((item) => {
+        const product = catalogById.get(item.productId)!;
+        const available = Number(product.stockQuantity ?? 0);
+        return { name: product.name, unit: product.unit || "", wanted: item.quantity, available };
+      })
+      .filter((entry) => entry.wanted > entry.available);
+
+    if (shortfalls.length > 0) {
+      return res.status(400).json({
+        error: "Some items do not have enough stock.",
+        details: shortfalls.map((entry) =>
+          entry.available > 0
+            ? `${entry.name}: only ${entry.available} ${entry.unit} available, you asked for ${entry.wanted}`
+            : `${entry.name} is out of stock right now`,
+        ),
+        // Lets the cart correct itself instead of making the customer guess.
+        stockIssues: shortfalls,
       });
     }
 

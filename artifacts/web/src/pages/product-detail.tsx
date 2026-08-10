@@ -57,6 +57,12 @@ export default function ProductDetail() {
 
   const imageUrl = getImageUrl(product.imageUrl);
   const productMeta = product as typeof product & { stockQuantity?: number; sku?: string };
+  // Hold the quantity picker to what the shop actually has. The server refuses
+  // an over-stock order anyway; stopping it here means the customer is told
+  // while choosing, not after filling in name, phone and address.
+  const availableStock = Number(productMeta.stockQuantity ?? 0);
+  const cappedQuantity = (value: number) => (availableStock > 0 ? Math.min(value, availableStock) : value);
+  const atStockLimit = availableStock > 0 && quantity >= availableStock;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -163,22 +169,30 @@ export default function ProductDetail() {
                   <input
                     type="number"
                     min={quantityStep}
+                    max={availableStock > 0 ? availableStock : undefined}
                     step={quantityStep}
                     inputMode="decimal"
                     value={formatQuantity(quantity)}
-                    onChange={(event) => setQuantity(normalizeQuantity(event.target.value, product.unit))}
+                    onChange={(event) => setQuantity(cappedQuantity(normalizeQuantity(event.target.value, product.unit)))}
                     onFocus={(event) => event.currentTarget.select()}
                     className="h-full w-20 border-x-2 border-border bg-transparent px-2 text-center text-lg font-bold outline-none"
                     aria-label={quantityLabel}
                   />
                   <button
-                    onClick={() => setQuantity(normalizeQuantity(quantity + quantityStep, product.unit))}
-                    disabled={!product.inStock}
+                    onClick={() => setQuantity(cappedQuantity(normalizeQuantity(quantity + quantityStep, product.unit)))}
+                    disabled={!product.inStock || atStockLimit}
                     className="w-14 h-full flex items-center justify-center hover:bg-muted disabled:opacity-50 transition-colors"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
                 </div>
+                {atStockLimit ? (
+                  <p className="w-full text-sm font-semibold text-amber-600">
+                    {lang === "ne"
+                      ? `पसलमा ${formatQuantity(availableStock)} ${product.unit} मात्र छ`
+                      : `Only ${formatQuantity(availableStock)} ${product.unit} available`}
+                  </p>
+                ) : null}
 
                 <button
                   onClick={handleAdd}

@@ -47,6 +47,12 @@ export default function CartModern() {
             const imageUrl = getImageUrl(item.product.imageUrl);
             const quantityStep = getQuantityStep(item.product.unit);
             const quantityLabel = lang === "ne" ? "मात्रा" : "Quantity";
+            // The shop cannot sell what it does not have, so the cart refuses
+            // to go past it rather than letting the customer fill in a form and
+            // be turned away at the last step.
+            const available = Number((item.product as any).stockQuantity ?? 0);
+            const capped = (value: number) => (available > 0 ? Math.min(value, available) : value);
+            const atLimit = available > 0 && item.quantity >= available;
             return (
               <div key={item.product.id} className="rounded-[1.5rem] border border-border bg-card p-4 shadow-sm">
                 <div className="flex gap-4">
@@ -73,18 +79,34 @@ export default function CartModern() {
                         <input
                           type="number"
                           min={quantityStep}
+                          max={available > 0 ? available : undefined}
                           step={quantityStep}
                           inputMode="decimal"
                           value={formatQuantity(item.quantity)}
-                          onChange={(event) => updateQuantity(item.product.id, normalizeQuantity(event.target.value, item.product.unit))}
+                          onChange={(event) => updateQuantity(item.product.id, capped(normalizeQuantity(event.target.value, item.product.unit)))}
                           onFocus={(event) => event.currentTarget.select()}
                           className="flex h-10 w-16 border-x border-border bg-background px-2 text-center font-bold outline-none"
                           aria-label={quantityLabel}
                         />
-                        <button onClick={() => updateQuantity(item.product.id, normalizeQuantity(item.quantity + quantityStep, item.product.unit))} className="flex h-10 w-10 items-center justify-center bg-muted/50">
+                        <button
+                          onClick={() => updateQuantity(item.product.id, capped(normalizeQuantity(item.quantity + quantityStep, item.product.unit)))}
+                          disabled={atLimit}
+                          className="flex h-10 w-10 items-center justify-center bg-muted/50 disabled:opacity-40"
+                        >
                           <Plus className="h-4 w-4" />
                         </button>
                       </div>
+                      {available <= 0 ? (
+                        <p className="w-full text-sm font-semibold text-destructive">
+                          {lang === "ne" ? "अहिले स्टकमा छैन" : "Out of stock right now"}
+                        </p>
+                      ) : atLimit ? (
+                        <p className="w-full text-sm font-semibold text-amber-600">
+                          {lang === "ne"
+                            ? `पसलमा ${formatQuantity(available)} ${item.product.unit} मात्र छ`
+                            : `Only ${formatQuantity(available)} ${item.product.unit} available`}
+                        </p>
+                      ) : null}
                       <div className="text-right">
                         <p className="text-lg font-bold text-primary">{formatNPR(item.product.price * item.quantity)}</p>
                       </div>
