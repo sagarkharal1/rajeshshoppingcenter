@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { ownerLoginLimiter } from "./lib/rate-limits.js";
 
 const app: Express = express();
 
@@ -34,17 +35,20 @@ app.use(
   }),
 );
 
+// DigitalOcean puts a load balancer in front of this app, so every request
+// arrives from the balancer's address. Without this, req.ip is that one
+// address for everybody: the rate limiters key all visitors into a single
+// bucket, and express-rate-limit refuses to enforce a limit it knows is
+// keyed on nonsense — which is why the login limiter and the customer
+// lookups were counting requests without ever blocking one.
+//
+// Trusting exactly one hop is the safe form: the balancer's own entry in
+// X-Forwarded-For is believed, anything a client puts there is not.
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true, limit: "6mb" }));
-
-const adminLoginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: "Too many login attempts. Please wait 15 minutes and try again." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 const adminApiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -54,7 +58,9 @@ const adminApiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use("/api/admin/login", adminLoginLimiter);
+// Shared across instances, unlike the general throttle below: guessing the
+// owner's password is worth counting properly.
+app.use("/api/admin/login", ownerLoginLimiter);
 app.use("/api/admin", adminApiLimiter);
 
 app.get("/", (_req, res) => {

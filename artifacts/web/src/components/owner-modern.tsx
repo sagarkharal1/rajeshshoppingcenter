@@ -8,6 +8,7 @@ import { scanBillImage } from "@/lib/bill-ocr";
 import { GlobalSearch } from "@/components/global-search";
 import { CustomerDetailModal } from "@/components/customer-detail-modal";
 import { CollapsibleSection } from "@/components/collapsible-section";
+import { ProductProfileModal } from "@/components/product-profile-modal";
 import { printOrderSlip, printBookingSlip } from "@/lib/print-slips";
 import { TransactionHistory } from "@/components/transaction-history";
 import { EditOrderModal } from "@/components/edit-order-modal";
@@ -1002,6 +1003,7 @@ export function OwnerWorkspaceModern(props: any) {
   // Adding a category needed a developer before this: the picker listed what
   // already existed and offered no way to start a new one.
   const [focusDealer, setFocusDealer] = useState<string | null>(null);
+  const [profileProductId, setProfileProductId] = useState<number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
   const [assigningCodes, setAssigningCodes] = useState(false);
@@ -1346,8 +1348,7 @@ export function OwnerWorkspaceModern(props: any) {
                 api={props.api}
                 onResultClick={(result: any) => {
                   if (result.type === "product") {
-                    setTab("products");
-                    setProductSearch(result.label);
+                    setProfileProductId(Number(result.id));
                   } else if (result.type === "dealer") {
                     // Dealers live under Products; land on that supplier open.
                     setTab("products");
@@ -2732,12 +2733,15 @@ export function OwnerWorkspaceModern(props: any) {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                          {/* Opens the whole picture — cost, margin, who has
+                              bought it, stock in and out — rather than the few
+                              extra lines the old expander showed. */}
                           <button
                             type="button"
-                            onClick={() => setExpandedProductId((current) => current === product.id ? null : product.id)}
-                            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
+                            onClick={() => setProfileProductId(product.id)}
+                            className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
                           >
-                            {expandedProductId === product.id ? (lang === "ne" ? "लुकाउनुहोस्" : "Hide") : (lang === "ne" ? "हेर्नुहोस्" : "View")}
+                            {lang === "ne" ? "पूरा विवरण" : "Full details"}
                           </button>
                           <button type="button" onClick={() => startEditProduct(product)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700">{text.edit}</button>
                           <button type="button" onClick={() => confirmOwnerAction(
@@ -3695,6 +3699,18 @@ export function OwnerWorkspaceModern(props: any) {
           </div>
         </div>
       ) : null}
+
+      <ProductProfileModal
+        productId={profileProductId}
+        onClose={() => setProfileProductId(null)}
+        api={props.api}
+        lang={lang as "en" | "ne"}
+        onEdit={(id: number) => {
+          setProfileProductId(null);
+          setTab("products");
+          startEditProduct((products || []).find((item: any) => item.id === id));
+        }}
+      />
 
       <CustomerDetailModal
         isOpen={selectedCustomerId !== null}

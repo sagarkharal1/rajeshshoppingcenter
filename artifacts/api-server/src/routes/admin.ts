@@ -57,6 +57,10 @@ const OTP_TTL_MINUTES = 10;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const loginAttempts = new Map<string, { count: number; firstAttemptAt: number }>();
+// Numeric columns arrive as strings from the driver; every money sum here has
+// to start by turning them back into numbers.
+const asNumber = (value: unknown) => Number(value ?? 0);
+
 const categorySchema = z.object({
   name: z.string().min(1).max(120).transform((value) => value.trim()),
   description: z.string().max(400).optional(),
@@ -2587,6 +2591,116 @@ router.post("/admin/dealer-entries/:id/void", authMiddleware, async (req, res) =
   } catch (err) {
     console.error("Failed to void dealer entry:", err);
     res.status(500).json({ error: "Failed to void the entry" });
+  }
+});
+
+/**
+ * Everything the shop knows about one product, in one answer.
+ *
+ * The pieces existed — price here, stock movements there, sales somewhere else
+ * — but nowhere to see them together, so questions like "is this actually
+ * making us money" meant reading three screens and doing the sum by hand.
+ */
+router.get("/admin/products/:id/profile", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid product id" });
+  }
+
+  try {
+    const [product] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, id))
+      .limit(1);
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    const [category] = product.categoryId
+      ? await db
+          .select({ name: categoriesTable.name })
+          .from(categoriesTable)
+          .where(eq(categoriesTable.id, product.categoryId))
+          .limit(1)
+      : [undefined];
+
+    // Sales come from the invoice lines, which carry the price and the cost as
+    // they were on the day — later price changes cannot rewrite past profit.
+    const sales = await db
+      .select({
+        invoiceId: invoiceItemsTable.invoiceId,
+        invoiceNumber: invoicesTable.invoiceNumber,
+        customerName: customersTable.name,
+        quantity: invoiceItemsTable.quantity,
+        unit: invoiceItemsTable.unit,
+        unitPrice: invoiceItemsTable.unitPrice,
+        unitCost: invoiceItemsTable.unitCost,
+        lineTotal: invoiceItemsTable.lineTotal,
+        date: invoicesTable.createdAt,
+        voidedAt: invoicesTable.voidedAt,
+      })
+      .from(invoiceItemsTable)
+      .innerJoin(invoicesTable, eq(invoiceItemsTable.invoiceId, invoicesTable.id))
+      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(eq(invoiceItemsTable.productId, id))
+      .orderBy(desc(invoicesTable.createdAt))
+      .limit(50);
+
+    const live = sales.filter((sale) => !sale.voidedAt);
+    const soldQuantity = live.reduce((sum, sale) => sum + Number(sale.quantity || 0), 0);
+    const revenue = live.reduce((sum, sale) => sum + Number(sale.lineTotal || 0), 0);
+    const costOfSales = live.reduce(
+      (sum, sale) => sum + Number(sale.unitCost || 0) * Number(sale.quantity || 0),
+      0,
+    );
+
+    const movements = await db
+      .select({
+        id: stockLedgerTable.id,
+        date: stockLedgerTable.createdAt,
+        change: stockLedgerTable.quantity,
+        balanceAfter: stockLedgerTable.balanceAfter,
+        reason: stockLedgerTable.reason,
+        transactionType: stockLedgerTable.transactionType,
+      })
+      .from(stockLedgerTable)
+      .where(eq(stockLedgerTable.productId, id))
+      .orderBy(desc(stockLedgerTable.createdAt))
+      .limit(30);
+
+    const unitCost =
+      asNumber(product.buyingPrice) + asNumber(product.transportationCost) + asNumber(product.extraCost);
+
+    res.json({
+      product: {
+        ...product,
+        categoryName: category?.name || null,
+        price: asNumber(product.price),
+        buyingPrice: asNumber(product.buyingPrice),
+        transportationCost: asNumber(product.transportationCost),
+        extraCost: asNumber(product.extraCost),
+        salePrice: product.salePrice == null ? null : asNumber(product.salePrice),
+        unitCost,
+        marginPerUnit: asNumber(product.price) - unitCost,
+        stockValueAtCost: unitCost * Number(product.stockQuantity || 0),
+      },
+      sales: live.map((sale) => ({
+        ...sale,
+        unitPrice: asNumber(sale.unitPrice),
+        unitCost: asNumber(sale.unitCost),
+        lineTotal: asNumber(sale.lineTotal),
+      })),
+      totals: {
+        soldQuantity,
+        revenue,
+        costOfSales,
+        profit: revenue - costOfSales,
+        salesCount: live.length,
+      },
+      movements,
+    });
+  } catch (err) {
+    console.error("Product profile error:", err);
+    res.status(500).json({ error: "Failed to load the product" });
   }
 });
 
