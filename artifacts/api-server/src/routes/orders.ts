@@ -7,6 +7,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
+import { customerLookupLimiter } from "../lib/rate-limits.js";
 
 const router: IRouter = Router();
 
@@ -335,7 +336,7 @@ router.post("/orders", async (req, res) => {
   }
 });
 
-router.get("/orders/:id/track", async (req, res) => {
+router.get("/orders/:id/track", customerLookupLimiter, async (req, res) => {
   const id = Number(req.params.id);
   const phone = typeof req.query.phone === "string" ? req.query.phone.trim() : "";
   if (!Number.isInteger(id) || id <= 0 || !phone) {
@@ -349,12 +350,11 @@ router.get("/orders/:id/track", async (req, res) => {
       .where(eq(ordersTable.id, id))
       .limit(1);
 
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
-    if (normalizePhone(order.customerPhone) !== normalizePhone(phone)) {
-      return res.status(403).json({ error: "Phone number does not match this order" });
+    // One answer for "no such order" and "wrong phone" alike. Telling them
+    // apart confirms which order numbers exist, which is the first half of
+    // guessing your way into somebody else's order.
+    if (!order || normalizePhone(order.customerPhone) !== normalizePhone(phone)) {
+      return res.status(404).json({ error: "No order found with that number and phone." });
     }
 
     res.json({
@@ -376,7 +376,7 @@ router.get("/orders/:id/track", async (req, res) => {
   }
 });
 
-router.get("/customer-portal/profile", async (req, res) => {
+router.get("/customer-portal/profile", customerLookupLimiter, async (req, res) => {
   const customerCode = typeof req.query.customerCode === "string" ? req.query.customerCode.trim() : "";
   const phone = typeof req.query.phone === "string" ? req.query.phone.trim() : "";
 

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { categoriesTable, productsTable, stockLedgerTable } from "@workspace/db/schema";
-import { eq, ilike, and, type SQL, desc } from "drizzle-orm";
+import { categoriesTable, productsTable } from "@workspace/db/schema";
+import { eq, ilike, and, type SQL } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -108,34 +108,4 @@ router.get("/products/:id", async (req, res) => {
 });
 
 // Get stock history for a product
-router.get("/products/:id/stock-history", async (req, res) => {
-  const id = Number(req.params.id);
-  if (isNaN(id) || id <= 0) {
-    return res.status(400).json({ error: "Invalid product ID" });
-  }
-
-  try {
-    const history = await db
-      .select({
-        id: stockLedgerTable.id,
-        date: stockLedgerTable.createdAt,
-        quantity: stockLedgerTable.balanceAfter,
-        change: stockLedgerTable.quantity,
-        reason: stockLedgerTable.reason,
-        transactionType: stockLedgerTable.transactionType,
-        linkedEntityType: stockLedgerTable.linkedEntityType,
-        linkedEntityId: stockLedgerTable.linkedEntityId,
-      })
-      .from(stockLedgerTable)
-      .where(eq(stockLedgerTable.productId, id))
-      .orderBy(desc(stockLedgerTable.createdAt))
-      .limit(50);
-
-    res.json({ history });
-  } catch (err) {
-    console.error("Failed to get stock history:", err);
-    res.status(500).json({ error: "Failed to get stock history" });
-  }
-});
-
 export default router;
