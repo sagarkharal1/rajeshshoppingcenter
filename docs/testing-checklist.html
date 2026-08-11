@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ne">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>राजेश सिपिङ् सेन्टर — व्यवसायमा प्रयोग गर्नुअघिको जाँच</title>
+<style>
+  /* Print-first, like the handover sheet: this is meant to be printed, ticked
+     with a pen at the counter, and kept until every box is done. */
+  @page { size: A4; margin: 14mm 13mm; }
+
+  :root {
+    --ink: #101828;
+    --muted: #475467;
+    --line: #d0d5dd;
+    --navy: #1a3a6b;
+    --gold: #a87800;
+    --danger: #a4262c;
+    --ok: #0a6c4a;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #f4f4f5;
+    color: var(--ink);
+    font-family: "Nirmala UI", "Noto Sans Devanagari", "Mangal", "Segoe UI", system-ui, sans-serif;
+    font-size: 12pt;
+    line-height: 1.55;
+  }
+
+  .sheet {
+    max-width: 200mm;
+    margin: 0 auto;
+    background: #fff;
+    padding: 16mm 15mm;
+    box-shadow: 0 2px 18px rgba(16, 24, 40, 0.14);
+  }
+
+  header { border-bottom: 3px solid var(--navy); padding-bottom: 10px; margin-bottom: 6px; }
+  h1 { margin: 0; font-size: 19pt; color: var(--navy); line-height: 1.25; }
+  .sub { margin: 4px 0 0; color: var(--muted); font-size: 10.5pt; }
+
+  .intro {
+    margin: 14px 0 18px;
+    padding: 11px 14px;
+    background: #fdf6e7;
+    border-left: 4px solid var(--gold);
+    font-size: 11pt;
+  }
+
+  h2 {
+    margin: 20px 0 8px;
+    font-size: 13.5pt;
+    color: var(--navy);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 4px;
+    page-break-after: avoid;
+  }
+
+  .step { display: flex; gap: 11px; margin: 9px 0; page-break-inside: avoid; }
+  .box {
+    flex: none;
+    width: 15px; height: 15px;
+    margin-top: 3px;
+    border: 1.6px solid var(--navy);
+    border-radius: 3px;
+  }
+  .what { margin: 0; font-weight: 600; }
+  .why { margin: 2px 0 0; color: var(--muted); font-size: 10.5pt; }
+  .expect { margin: 3px 0 0; font-size: 10.5pt; color: var(--ok); }
+  .expect b { color: var(--ok); }
+
+  .stop {
+    margin: 16px 0;
+    padding: 11px 14px;
+    border: 2px solid var(--danger);
+    background: #fdf2f2;
+    page-break-inside: avoid;
+  }
+  .stop p { margin: 0; }
+  .stop .title { font-weight: 700; color: var(--danger); }
+
+  .note { color: var(--muted); font-size: 10.5pt; }
+
+  footer {
+    margin-top: 22px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 10pt;
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; font-size: 11.5pt; }
+    .sheet { box-shadow: none; padding: 0; max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <h1>व्यवसायमा प्रयोग गर्नुअघिको जाँच<br><span style="font-size:13pt;color:var(--muted)">Checks before using this for real business</span></h1>
+    <p class="sub">राजेश सिपिङ् सेन्टर · मुसिकोट–५, आपचौर, गुल्मी</p>
+  </header>
+
+  <div class="intro">
+    <b>किन?</b> अहिले पसलको साँचो हिसाब यसमा छैन — त्यसैले गल्ती भेट्न यही राम्रो समय हो।
+    हरेक कुरा आफैं गरेर हेर्नुहोस्। नम्बर तपाईंले सोचेजस्तै आयो कि आएन, त्यही मात्र हेर्ने हो।<br>
+    <span class="note">Nothing here needs a computer person. If a number looks wrong, it probably is — write it down and stop.</span>
+  </div>
+
+  <h2>१. सुरक्षा — पहिले यही (Security first)</h2>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">गलत पासवर्ड ११ पटक हाल्नुहोस् · Type the wrong password 11 times</p>
+      <p class="why">कसैले पासवर्ड अनुमान गरेर छिर्न नसकोस् भन्नका लागि।</p>
+      <p class="expect">हुनुपर्ने: <b>“Too many login attempts. Please wait 15 minutes.”</b> — यो नआए तुरुन्तै भन्नुहोस्।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">पासवर्ड फेर्नुहोस् · Change the password</p>
+      <p class="why">सेटिङ → मालिक सुरक्षा। पुरानो पासवर्ड अरूलाई थाहा हुन सक्छ।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">Google Authenticator चालु गर्नुहोस् · Turn on Google Authenticator</p>
+      <p class="why">सेटिङ → दुई-चरण सुरक्षा। यसपछि पासवर्ड मात्र थाहा भएर पुग्दैन — फोन पनि चाहिन्छ।</p>
+      <p class="expect">QR को फोटो खिचेर सुरक्षित राख्नुहोस्।</p>
+    </div>
+  </div>
+
+  <h2>२. पैसाको हिसाब (The money)</h2>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">उधारोमा एउटा बिक्री गर्नुहोस् · Sell something on udharo</p>
+      <p class="expect">ग्राहकको बाँकी ठ्याक्कै त्यति नै बढ्नुपर्छ।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">आंशिक भुक्तानी लिनुहोस् · Take a part payment</p>
+      <p class="why">जस्तै रु १,००० को बाँकीमा रु ४०० लिनुहोस्।</p>
+      <p class="expect">बाँकी <b>रु ६००</b> हुनुपर्छ। रसिद छापेर हेर्नुहोस्।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">गल्ती बिल रद्द गर्नुहोस् · Void a bill on purpose</p>
+      <p class="expect">सामान स्टकमा फर्किनुपर्छ, बाँकी घट्नुपर्छ, अंक पनि फिर्ता हुनुपर्छ।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">ग्राहकको पूरा विवरण खोल्नुहोस् · Open a customer's full details</p>
+      <p class="expect">तीनवटै बाकसमा एउटै रकम देखिनुपर्छ — फरक भए भन्नुहोस्।</p>
+    </div>
+  </div>
+
+  <h2>३. सामान र डिलर (Stock and dealers)</h2>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">एउटा नयाँ सामान थप्नुहोस् · Add a product</p>
+      <p class="expect">“प्रति एकाइ नाफा” तपाईंको हिसाबसँग मिल्नुपर्छ।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">डिलरको बिल राख्नुहोस् · Record a dealer bill</p>
+      <p class="why">नाम, बिल नम्बर, कुल रकम, तिरेको, र बिलको फोटो।</p>
+      <p class="expect">डिलरको “तिर्न बाँकी” कागजसँग ठ्याक्कै मिल्नुपर्छ।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">स्टकभन्दा बढी बेच्न खोज्नुहोस् · Try to sell more than you have</p>
+      <p class="expect">एप्लीकेसनले रोक्नुपर्छ र कति छ भन्नुपर्छ।</p>
+    </div>
+  </div>
+
+  <h2>४. कागज (On paper)</h2>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">एउटा बिल छाप्नुहोस् · Print one bill</p>
+      <p class="expect">तल दस्तखत गर्ने लाइन र छाप लगाउने ठाउँ हुनुपर्छ। नभए भन्नुहोस्।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">ब्याकअप लिनुहोस्, अनि फर्काउनुहोस् · Take a backup, then restore it</p>
+      <p class="why">सेटिङ → ब्याकअप र फिर्ता। यो सबैभन्दा महत्त्वपूर्ण जाँच हो।</p>
+      <p class="expect">फर्काएपछि सबै हिसाब जस्ताको तस्तै हुनुपर्छ।</p>
+    </div>
+  </div>
+
+  <div class="stop">
+    <p class="title">यदि कुनै नम्बर फरक आयो भने — रोक्नुहोस्</p>
+    <p>के गर्दा फरक आयो र के देखियो, त्यो लेखेर राख्नुहोस्। साँचो व्यवसाय सुरु नगर्नुहोस्।<br>
+    <span class="note">If any number looks wrong, write down what you did and what you saw, and do not start real business yet.</span></p>
+  </div>
+
+  <h2>५. सबै ठीक भए (When every box is ticked)</h2>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">सबै डाटा मेटाउनुहोस् · Erase all the test data</p>
+      <p class="why">सेटिङ → खतरा क्षेत्र। यसपछि फर्काउन मिल्दैन।</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">साँचो सामान र स्टक हाल्नुहोस् · Enter the real stock</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="box"></div>
+    <div>
+      <p class="what">पहिलो हप्ता कापी पनि चलाउनुहोस् · Keep the paper khata for the first week</p>
+      <p class="why">दुवै मिल्यो भने ढुक्क। नमिले एक दिनमै थाहा हुन्छ, महिनौं पछि होइन।</p>
+    </div>
+  </div>
+
+  <footer>
+    छापेर काउन्टरमा राख्नुहोस्। हरेक बाकसमा चिन्ह लगाएपछि मात्र व्यवसाय सुरु गर्नुहोस्।<br>
+    Print this, keep it at the counter, and start real business only when every box is ticked.
+  </footer>
+
+</div>
+</body>
+</html>
