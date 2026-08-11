@@ -1008,7 +1008,6 @@ export function OwnerWorkspaceModern(props: any) {
   const [addingCategory, setAddingCategory] = useState(false);
   const [assigningCodes, setAssigningCodes] = useState(false);
   const [productSearch, setProductSearch] = useState("");
-  const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [customerBillScan, setCustomerBillScan] = useState<BillScanState>(createBillScanState);
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -2758,25 +2757,6 @@ export function OwnerWorkspaceModern(props: any) {
                           )} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700">{text.delete}</button>
                         </div>
                       </div>
-                      {expandedProductId === product.id ? (
-                        <div className="mt-4 space-y-3 text-sm">
-                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Buying</p><strong className="mt-2 block">{money(num(product.buyingPrice))}</strong></div>
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Transport</p><strong className="mt-2 block">{money(num(product.transportationCost))}</strong></div>
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Selling</p><strong className="mt-2 block">{money(num(product.price))}</strong></div>
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Profit</p><strong className="mt-2 block text-emerald-700">{money(num(product.price) - cost)}</strong></div>
-                          </div>
-                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Stock quantity</p><strong className="mt-2 block">{product.stockQuantity || 0}</strong></div>
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Reorder level</p><strong className="mt-2 block">{product.reorderLevel || 0}</strong></div>
-                            <div className="rounded-2xl bg-white px-4 py-3"><p className="text-xs uppercase tracking-[0.2em] text-slate-500">Unit</p><strong className="mt-2 block">{product.unit || "-"}</strong></div>
-                          </div>
-                          <div className="rounded-2xl bg-white px-4 py-3">
-                            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Description</p>
-                            <p className="mt-2 text-sm leading-6 text-slate-700">{product.description || "-"}</p>
-                          </div>
-                        </div>
-                      ) : null}
                     </article>
                   );
                 })}

@@ -191,7 +191,7 @@ export function EditBookingModal({
 
               {/* Booking Info */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Booking ID</p>
+                <p className="text-sm text-gray-600 mb-1">{lang === "ne" ? "बुकिङ नम्बर" : "Booking ID"}</p>
                 <p className="text-lg font-semibold text-gray-900">#{booking.id}</p>
                 <p className="text-xs text-gray-500 mt-2">
                   {new Date(booking.createdAt).toLocaleString()}

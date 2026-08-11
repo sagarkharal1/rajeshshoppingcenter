@@ -185,7 +185,7 @@ export function EditOrderModal({
 
               {/* Order Info */}
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-1">Order ID</p>
+                <p className="text-sm text-gray-600 mb-1">{lang === "ne" ? "अर्डर नम्बर" : "Order ID"}</p>
                 <p className="text-lg font-semibold text-gray-900">#{order.id}</p>
                 <p className="text-xs text-gray-500 mt-2">
                   {new Date(order.createdAt).toLocaleString()}
