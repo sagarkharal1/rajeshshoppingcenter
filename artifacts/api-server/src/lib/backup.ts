@@ -12,6 +12,7 @@ import {
   rewardTransactionsTable,
   auditLogsTable,
   stockLedgerTable,
+  dealerTransactionsTable,
   settingsTable,
   telegramQueueTable,
 } from "@workspace/db/schema";
@@ -55,6 +56,7 @@ async function getAllData() {
     rewardTransactions,
     auditLogs,
     stockLedger,
+    dealerTransactions,
     settings,
     telegramQueue,
   ] = await Promise.all([
@@ -70,6 +72,7 @@ async function getAllData() {
     db.select().from(rewardTransactionsTable),
     db.select().from(auditLogsTable),
     db.select().from(stockLedgerTable),
+    db.select().from(dealerTransactionsTable),
     db.select().from(settingsTable),
     db.select().from(telegramQueueTable),
   ]);
@@ -92,6 +95,7 @@ async function getAllData() {
       rewardTransactions,
       auditLogs,
       stockLedger,
+      dealerTransactions,
       settings,
       telegramQueue,
     },
@@ -270,6 +274,7 @@ const RESTORE_ORDER: Array<{ key: string; table: any; name: string; hasSerialId:
   { key: "ledger", table: customerLedgerTable, name: "customer_ledger", hasSerialId: true },
   { key: "rewardTransactions", table: rewardTransactionsTable, name: "reward_transactions", hasSerialId: true },
   { key: "stockLedger", table: stockLedgerTable, name: "stock_ledger", hasSerialId: true },
+  { key: "dealerTransactions", table: dealerTransactionsTable, name: "dealer_transactions", hasSerialId: true },
   { key: "auditLogs", table: auditLogsTable, name: "audit_logs", hasSerialId: true },
   { key: "telegramQueue", table: telegramQueueTable, name: "telegram_queue", hasSerialId: true },
   { key: "settings", table: settingsTable, name: "settings", hasSerialId: true },

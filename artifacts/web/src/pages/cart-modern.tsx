@@ -4,6 +4,7 @@ import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { formatQuantity, getQuantityStep, normalizeQuantity } from "@/lib/quantity";
 import { formatNPR, getImageUrl } from "@/lib/utils";
+import { salePriceInfo } from "@/lib/sale-price";
 
 export default function CartModern() {
   const { items, updateQuantity, removeFromCart, totalPrice, clearCart } = useCart();
@@ -53,6 +54,10 @@ export default function CartModern() {
             const available = Number((item.product as any).stockQuantity ?? 0);
             const capped = (value: number) => (available > 0 ? Math.min(value, available) : value);
             const atLimit = available > 0 && item.quantity >= available;
+            // The price the customer was shown on the product page, not the
+            // undiscounted one — otherwise the cart quietly adds the discount
+            // back on and the total is higher than the shelf said.
+            const sale = salePriceInfo(item.product as any);
             return (
               <div key={item.product.id} className="rounded-[1.5rem] border border-border bg-card p-4 shadow-sm">
                 <div className="flex gap-4">
@@ -69,7 +74,14 @@ export default function CartModern() {
                       {item.product.name}
                     </Link>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {formatNPR(item.product.price)} / {item.product.unit}
+                      {formatNPR(sale.price)} / {item.product.unit}
+                      {sale.onSale ? (
+                        <>
+                          {" "}
+                          <span className="text-muted-foreground line-through">{formatNPR(sale.normalPrice)}</span>{" "}
+                          <span className="font-semibold text-destructive">−{sale.savingPercent}%</span>
+                        </>
+                      ) : null}
                     </p>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center overflow-hidden rounded-2xl border border-border">
@@ -108,7 +120,7 @@ export default function CartModern() {
                         </p>
                       ) : null}
                       <div className="text-right">
-                        <p className="text-lg font-bold text-primary">{formatNPR(item.product.price * item.quantity)}</p>
+                        <p className="text-lg font-bold text-primary">{formatNPR(sale.price * item.quantity)}</p>
                       </div>
                       <button onClick={() => removeFromCart(item.product.id)} className="rounded-xl p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
                         <Trash2 className="h-5 w-5" />

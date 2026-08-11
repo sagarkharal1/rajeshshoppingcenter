@@ -7,20 +7,27 @@ import {
   bookingsTable,
   invoicesTable,
   customersTable,
+  dealerTransactionsTable,
+  stockLedgerTable,
 } from "@workspace/db/schema";
 import { ilike, or, sql } from "drizzle-orm";
+import { authMiddleware } from "../lib/auth.js";
 
 const router: IRouter = Router();
 
 interface SearchResult {
-  type: "product" | "customer" | "order" | "booking" | "invoice";
+  type: "product" | "customer" | "order" | "booking" | "invoice" | "dealer";
   id: string | number;
   label: string;
   preview?: string;
   category?: string;
 }
 
-router.get("/", async (req: Request, res: Response) => {
+// Owner-only. This returns customer names, phone numbers and what they have
+// bought; served without a login it handed the shop's customer list to anyone
+// who guessed the URL. The search box lives in the owner workspace and nowhere
+// else, so requiring the token costs the storefront nothing.
+router.get("/", authMiddleware, async (req: Request, res: Response) => {
   try {
     const query = String(req.query.q || "").trim();
     if (!query || query.length < 2) {
@@ -117,6 +124,44 @@ router.get("/", async (req: Request, res: Response) => {
         label: b.customerName,
         preview: phone,
         category: "Transport Customer",
+      });
+    }
+
+    // Search dealers, by name or phone. They live in two places: their own
+    // table, and older records still carried in stock-ledger metadata.
+    const dealerRows = await db
+      .select({ name: dealerTransactionsTable.dealerName, phone: dealerTransactionsTable.dealerPhone })
+      .from(dealerTransactionsTable)
+      .where(
+        or(
+          ilike(dealerTransactionsTable.dealerName, searchPattern),
+          ilike(dealerTransactionsTable.dealerPhone, searchPattern)
+        )
+      )
+      .limit(30);
+
+    const legacyDealers = await db
+      .select({
+        name: sql<string>`${stockLedgerTable.metadata}->>'dealerName'`,
+        phone: sql<string>`${stockLedgerTable.metadata}->>'dealerPhone'`,
+      })
+      .from(stockLedgerTable)
+      .where(sql`${stockLedgerTable.metadata}->>'dealerName' ilike ${searchPattern}`)
+      .limit(30);
+
+    const seenDealers = new Set<string>();
+    for (const dealer of [...dealerRows, ...legacyDealers]) {
+      const name = String(dealer.name || "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seenDealers.has(key)) continue;
+      seenDealers.add(key);
+      results.push({
+        type: "dealer" as const,
+        id: name,
+        label: name,
+        preview: dealer.phone || undefined,
+        category: "Dealer",
       });
     }
 

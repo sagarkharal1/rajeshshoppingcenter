@@ -3,6 +3,7 @@ import { useGetCategories, useGetProducts, useGetSettings } from "@workspace/api
 import { getImageUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language";
 import { ProductCard } from "@/components/product-card";
+import { salePriceInfo } from "@/lib/sale-price";
 import { CategoryIcon } from "@/components/category-icon";
 import { ArrowRight, Megaphone, MessageCircle, Phone, ShoppingBag, Star, Truck } from "lucide-react";
 
@@ -13,6 +14,9 @@ export default function HomeModern() {
   const { data: settings, isLoading: loadingSettings } = useGetSettings();
   const { data: categories, isLoading: loadingCategories } = useGetCategories();
   const { data: featuredProducts, isLoading: loadingProducts } = useGetProducts({ featured: true });
+  // Same query the catalog uses, so React Query serves it from cache rather
+  // than fetching the list twice.
+  const { data: allProducts } = useGetProducts();
 
   if (loadingSettings || loadingCategories || loadingProducts) {
     return (
@@ -31,6 +35,15 @@ export default function HomeModern() {
   const featuredToShow = (featuredProducts ?? [])
     .filter((product) => !hiddenCustomerCategories.has((product.categoryName || "").trim().toLowerCase()))
     .slice(0, 4);
+  // Anything discounted right now, biggest saving first. A shop runs a sale to
+  // be noticed, so this goes above the popular items rather than leaving the
+  // customer to find the discounts by opening products one at a time.
+  const onSaleToShow = (allProducts ?? [])
+    .filter((product) => !hiddenCustomerCategories.has((product.categoryName || "").trim().toLowerCase()))
+    .filter((product) => salePriceInfo(product as any).onSale && (product as any).inStock !== false)
+    .sort((a, b) => salePriceInfo(b as any).savingPercent - salePriceInfo(a as any).savingPercent)
+    .slice(0, 8);
+
   const notices = Array.isArray((settings as any)?.announcements) ? (settings as any).announcements.slice(0, 3) : [];
 
   // Mirrors activeRewardBonus() on the server: an offer counts only while its
@@ -152,6 +165,34 @@ export default function HomeModern() {
           </div>
         </div>
       </section>
+
+      {onSaleToShow.length > 0 ? (
+        <section className="mx-auto mt-5 max-w-6xl px-4 sm:px-6">
+          <div className="rounded-[2rem] border-2 border-destructive/25 bg-destructive/[0.04] p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="flex items-center gap-2 text-2xl font-bold text-foreground">
+                  <span aria-hidden>🏷️</span>
+                  {lang === "ne" ? "आजको छुट" : "Today's offers"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {lang === "ne"
+                    ? "घटेको मूल्यमा — सकिनुअघि लिनुहोस्"
+                    : "Reduced prices — while stocks last"}
+                </p>
+              </div>
+              <span className="rounded-full bg-destructive px-3 py-1.5 text-sm font-bold text-destructive-foreground">
+                {onSaleToShow.length} {lang === "ne" ? "सामानमा छुट" : onSaleToShow.length === 1 ? "item" : "items"}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {onSaleToShow.map((product) => (
+                <ProductCard key={`sale-${product.id}`} product={product} />
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {featuredToShow.length > 0 ? (
         <section className="mx-auto mt-5 max-w-6xl px-4 sm:px-6">

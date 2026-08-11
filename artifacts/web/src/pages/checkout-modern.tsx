@@ -5,6 +5,7 @@ import { ArrowLeft, Building2, CheckCircle2, ChevronRight, Home, MessageCircle, 
 import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { formatNPR, getImageUrl } from "@/lib/utils";
+import { salePriceInfo } from "@/lib/sale-price";
 import { useGetSettings } from "@workspace/api-client-react";
 import { FlashNotice } from "@/components/flash-notice";
 
@@ -177,7 +178,9 @@ export default function CheckoutModern() {
       .map((item) => ({
         productId: Number(item.product.id),
         productName: item.product.name,
-        price: Number(item.product.price),
+        // Echoed for display only — the server re-reads the real price from the
+        // database before totalling, so this can never buy a discount.
+        price: salePriceInfo(item.product as any).price,
         quantity: Number(item.quantity),
         unit: item.product.unit,
       }));
@@ -227,7 +230,10 @@ export default function CheckoutModern() {
         throw failure;
       }
       setPlacedItems(items);
-      setPlacedTotal(totalPrice);
+      // The server re-prices from the database, so its total is the one the
+      // shop will actually collect. Showing the browser's figure meant a
+      // confirmation could quote a number the order never had.
+      setPlacedTotal(Number((order as any)?.totalAmount ?? totalPrice));
       setOrderId(order.id);
       setCustomerCode((order as any).customerCode || (order as any).customer?.customerCode || "");
       localStorage.setItem(
@@ -417,7 +423,7 @@ export default function CheckoutModern() {
                   <div key={`print-${item.product.id}`} className="grid grid-cols-[1.4fr_0.5fr_0.7fr] px-4 py-3 text-sm">
                     <span>{item.product.name}</span>
                     <span>{item.quantity}</span>
-                    <span className="text-right font-semibold">{formatNPR(item.product.price * item.quantity)}</span>
+                    <span className="text-right font-semibold">{formatNPR(salePriceInfo(item.product as any).price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
@@ -638,7 +644,7 @@ export default function CheckoutModern() {
                       <p className="text-muted-foreground text-xs">{t.checkout.qty} {item.quantity}</p>
                     </div>
                   </div>
-                  <div className="font-bold shrink-0">{formatNPR(item.product.price * item.quantity)}</div>
+                  <div className="font-bold shrink-0">{formatNPR(salePriceInfo(item.product as any).price * item.quantity)}</div>
                 </div>
               ))}
             </div>

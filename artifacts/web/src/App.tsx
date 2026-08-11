@@ -288,7 +288,7 @@ function OwnerApp() {
     featuredMedia: [],
   });
 const [settingsBusy, setSettingsBusy] = useState(false);
-const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "", totp: "" });
 const [passwordBusy, setPasswordBusy] = useState(false);
 const [loginOtpInfo, setLoginOtpInfo] = useState<any>(null);
 const [totpStep, setTotpStep] = useState(false);
@@ -368,7 +368,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         billing: "बिलिङ",
         customers: "ग्राहक",
         products: "उत्पादन",
-        branding: "मिडिया र सूचना",
+        branding: "सेटिङ",
         ownerOnlyNote: "यो केवल मालिकका लागि निजी भाग हो। यहाँ स्टक, ग्राहक उधारो, बिलिङ र व्यवसाय रेकर्ड राखिन्छ।",
         ownerHero: "बिलिङ, स्टक, ग्राहक हिसाब, QR पछ्याइ र दैनिक व्यवसाय नियन्त्रणका लागि निजी ड्यासबोर्ड।",
         stockIntelligence: "स्टक जानकारी",
@@ -481,7 +481,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         billing: "Billing",
         customers: "Customers",
         products: "Products",
-        branding: "Media & updates",
+        branding: "Settings",
         ownerOnlyNote: "Private Rajesh Shopping Center owner panel for stock cost, customer credit, billing, delivery tracking, and business records.",
         ownerHero: "Private dashboard for Rajesh Shopping Center owner operations, billing, credit control, QR payment follow-up, and profit visibility.",
         stockIntelligence: "Stock Intelligence",
@@ -926,9 +926,12 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         body: JSON.stringify({
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
+          // Sent only when the owner has turned the Authenticator on; the
+          // server decides whether it is needed.
+          totp: passwordForm.totp?.trim() || undefined,
         }),
       });
-      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "", totp: "" });
       showOwnerFeedback("success", lang === "ne" ? "पासवर्ड परिवर्तन भयो।" : "Password changed.");
     } catch (err) {
       showOwnerFeedback("error", err instanceof Error ? err.message : "Password change failed");

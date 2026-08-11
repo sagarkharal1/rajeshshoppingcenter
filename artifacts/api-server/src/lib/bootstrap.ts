@@ -68,6 +68,23 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS stamp_path TEXT`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_path TEXT`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_name TEXT`,
+    // 2026-08: Dealer bills and payments in their own right. They lived on the
+    // stock ledger, which forced every entry to name a product; a supplier's
+    // bill is a debt, and stock arrives through the product screen instead.
+    `CREATE TABLE IF NOT EXISTS dealer_transactions (
+       id serial PRIMARY KEY,
+       entry_type text NOT NULL DEFAULT 'purchase',
+       dealer_name text NOT NULL,
+       dealer_phone text,
+       bill_number text,
+       bill_amount numeric(12,2) NOT NULL DEFAULT 0,
+       paid_amount numeric(12,2) NOT NULL DEFAULT 0,
+       proof_path text,
+       note text,
+       voided_at timestamp,
+       void_reason text,
+       created_at timestamp NOT NULL DEFAULT now()
+     )`,
   ];
   const client = await pool.connect();
   try {

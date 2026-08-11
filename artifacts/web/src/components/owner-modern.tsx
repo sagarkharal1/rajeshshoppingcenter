@@ -17,7 +17,6 @@ import { PaymentDashboard } from "@/components/payment-dashboard";
 import { CreditManager } from "@/components/credit-manager";
 import { BusinessSummary } from "@/components/business-summary";
 import { DealerRecords } from "@/components/dealer-records";
-import { ProofRegister } from "@/components/proof-register";
 import { BackupExportPanel } from "@/components/backup-export-panel";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
@@ -675,7 +674,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
 }
 
 // ── ReportsTab: daily / monthly / yearly analytics ───────────────────────────
-function ReportsTab({ lang, api, token, onRestored }: { lang: string; api: (url: string, opts?: any) => Promise<any>; token?: string; onRestored?: () => Promise<void> | void }) {
+function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any) => Promise<any> }) {
   const [period, setPeriod] = useState<"day" | "month" | "year">("day");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [data, setData] = useState<any>(null);
@@ -954,23 +953,6 @@ function ReportsTab({ lang, api, token, onRestored }: { lang: string; api: (url:
       </CollapsibleSection>
 
       <CollapsibleSection
-        title={lang === "ne" ? "ब्याकअप र डाउनलोड" : "Backup & export"}
-        description={lang === "ne" ? "सबै डाटाको प्रतिलिपि राख्नुहोस् वा फर्काउनुहोस्" : "Keep a copy of everything, or restore one"}
-        icon={Save}
-        tone="emerald"
-      >
-        <BackupExportPanel lang={lang as "en" | "ne"} api={api} token={token} onRestored={onRestored} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title={lang === "ne" ? "प्रमाणहरू" : "Proof register"}
-        description={lang === "ne" ? "भुक्तानीका फोटो र बिलका प्रमाण एकै ठाउँमा" : "Every payment screenshot and bill photo in one place"}
-        icon={ReceiptText}
-      >
-        <ProofRegister lang={lang as "en" | "ne"} api={api} />
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title={lang === "ne" ? "भुक्तानीका माध्यम" : "Payment methods"}
         description={lang === "ne" ? "नगद, eSewa, Khalti र बैंकबाट कति आयो" : "How much came in by cash, eSewa, Khalti and bank"}
         icon={CreditCard}
@@ -1008,7 +990,7 @@ export function OwnerWorkspaceModern(props: any) {
   const todayDue = todayInvoices.reduce((sum: number, invoice: any) => sum + num(invoice.dueAmount), 0);
   const [customerSearch, setCustomerSearch] = useState("");
   const [walkInBusy, setWalkInBusy] = useState(false);
-  const [resetForm, setResetForm] = useState({ confirmText: "", password: "" });
+  const [resetForm, setResetForm] = useState({ confirmText: "", password: "", totp: "" });
   const [resetBusy, setResetBusy] = useState(false);
   const [totpEnabled, setTotpEnabled] = useState(false);
   const [totpSetup, setTotpSetup] = useState<{ secret: string; uri: string; qrDataUrl: string } | null>(null);
@@ -1017,10 +999,14 @@ export function OwnerWorkspaceModern(props: any) {
   // Which field a scan should fill: the product's SKU, or the billing search.
   const [scanTarget, setScanTarget] = useState<null | "sku" | "search">(null);
   const [labelsOpen, setLabelsOpen] = useState(false);
+  // Adding a category needed a developer before this: the picker listed what
+  // already existed and offered no way to start a new one.
+  const [focusDealer, setFocusDealer] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
   const [assigningCodes, setAssigningCodes] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
-  const [purchaseBillScan, setPurchaseBillScan] = useState<BillScanState>(createBillScanState);
   const [customerBillScan, setCustomerBillScan] = useState<BillScanState>(createBillScanState);
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -1171,9 +1157,10 @@ export function OwnerWorkspaceModern(props: any) {
         body: JSON.stringify({
           confirmation: resetForm.confirmText.trim(),
           password: resetForm.password,
+          totp: resetForm.totp.trim() || undefined,
         }),
       });
-      setResetForm({ confirmText: "", password: "" });
+      setResetForm({ confirmText: "", password: "", totp: "" });
       await props.reloadOwnerData?.();
       showFeedback(
         "success",
@@ -1263,9 +1250,12 @@ export function OwnerWorkspaceModern(props: any) {
     });
   };
 
-  const runBillScan = async (kind: "purchase" | "customer") => {
-    const current = kind === "purchase" ? purchaseBillScan : customerBillScan;
-    const setter = kind === "purchase" ? setPurchaseBillScan : setCustomerBillScan;
+  // Only the customer-payment slip is read this way now; the supplier-bill
+  // reader fed an upload box that saved nothing, and dealer bills are kept
+  // whole against the dealer instead.
+  const runBillScan = async (_kind: "customer" = "customer") => {
+    const current = customerBillScan;
+    const setter = setCustomerBillScan;
     if (!current.image) return;
     setter((state) => ({ ...state, loading: true, error: "" }));
     try {
@@ -1297,16 +1287,30 @@ export function OwnerWorkspaceModern(props: any) {
     }));
   };
 
-  const applyPurchaseBillScan = () => {
-    const suggestion = purchaseBillScan.suggestion;
-    setProductForm((current: any) => ({
-      ...current,
-      sku: current.sku || suggestion.invoiceNumber || "",
-      buyingPrice: suggestion.buyingPrice || current.buyingPrice,
-      transportationCost: suggestion.transportCost || current.transportationCost,
-      stockQuantity: suggestion.quantity || current.stockQuantity,
-      description: current.description || shortScanText(purchaseBillScan.text),
-    }));
+  const createCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategory(true);
+    try {
+      // icon is required by the server; "grocery" is the neutral default and
+      // the shopkeeper should not have to know what an icon slug is.
+      const created = await props.api("/admin/categories", {
+        method: "POST",
+        body: JSON.stringify({ name, icon: "grocery", sortOrder: 0 }),
+      });
+      await props.reloadOwnerData?.();
+      const id = created?.id ?? created?.category?.id;
+      if (id) setProductForm((current: any) => ({ ...current, categoryId: String(id) }));
+      setNewCategoryName("");
+      showFeedback("success", lang === "ne" ? `"${name}" श्रेणी थपियो।` : `Category "${name}" added.`);
+    } catch (error) {
+      showFeedback(
+        "error",
+        error instanceof Error ? error.message : lang === "ne" ? "श्रेणी थप्न सकिएन।" : "Could not add the category.",
+      );
+    } finally {
+      setAddingCategory(false);
+    }
   };
 
   const nav = [
@@ -1339,10 +1343,15 @@ export function OwnerWorkspaceModern(props: any) {
             <div className="w-full max-w-sm">
               <GlobalSearch
                 lang={lang as "en" | "ne"}
+                api={props.api}
                 onResultClick={(result: any) => {
                   if (result.type === "product") {
                     setTab("products");
                     setProductSearch(result.label);
+                  } else if (result.type === "dealer") {
+                    // Dealers live under Products; land on that supplier open.
+                    setTab("products");
+                    setFocusDealer(String(result.id));
                   } else if (result.type === "customer") {
                     setTab("customers");
                     setCustomerSearch(result.label);
@@ -2626,51 +2635,6 @@ export function OwnerWorkspaceModern(props: any) {
               </div>
             </CollapsibleSection>
 
-            <CollapsibleSection
-              title={text.recordPayment}
-              description={lang === "ne" ? "ग्राहकले उधारो तिरेको रकम लेख्नुहोस्" : "Record money a customer has paid against their udharo"}
-              icon={CreditCard}
-              tone="emerald"
-            >
-              <form onSubmit={recordPayment} className="grid gap-4">
-                  <select className={shellInput()} value={paymentForm.customerId} onChange={(e) => setPaymentForm((v: any) => ({ ...v, customerId: Number(e.target.value) }))}>
-                    <option value={0}>{lang === "ne" ? "ग्राहक छनोट गर्नुहोस्" : "Select customer"}</option>
-                    {customers.map((customer: any) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-                  </select>
-                  <input type="number" min={0} className={shellInput()} value={paymentForm.amount} onChange={(e) => setPaymentForm((v: any) => ({ ...v, amount: e.target.value }))} placeholder={text.amount} />
-                  <select className={shellInput()} value={paymentForm.paymentMethod} onChange={(e) => setPaymentForm((v: any) => ({ ...v, paymentMethod: e.target.value }))}>
-                    {["cash", "esewa", "khalti", "bank"].map((method) => <option key={method} value={method}>{methodDisplayName(method, lang)}</option>)}
-                  </select>
-                  <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
-                    {lang === "ne" ? "भुक्तानी रसिद/बिलको फोटो" : "Payment receipt/bill photo"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="mt-3 block w-full text-sm"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const dataUrl = await readFileAsDataUrl(file);
-                        setCustomerBillScan({
-                          image: dataUrl,
-                          text: "",
-                          summary: [],
-                          loading: false,
-                          error: "",
-                          suggestion: {},
-                        });
-                        setPaymentForm((current: any) => ({ ...current, proofPath: dataUrl }));
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {customerBillScan.image ? <img src={customerBillScan.image} alt="Payment bill" className="h-48 w-full rounded-2xl border border-slate-200 object-contain bg-slate-50 p-2" /> : null}
-                  <textarea className={`${shellInput()} min-h-24`} value={paymentForm.referenceNote} onChange={(e) => setPaymentForm((v: any) => ({ ...v, referenceNote: e.target.value }))} placeholder={text.note} />
-                  <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{text.saveRepayment}</button>
-              </form>
-            </CollapsibleSection>
-
             {/* Remounted when an edit begins so the panel opens by itself,
                 rather than filling a form that is still shut. */}
             <CollapsibleSection
@@ -2726,7 +2690,7 @@ export function OwnerWorkspaceModern(props: any) {
               icon={Truck}
               tone="amber"
             >
-              <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} />
+              <DealerRecords products={products} lang={lang as "en" | "ne"} api={props.api} onRefresh={props.reloadOwnerData} focusDealer={focusDealer} />
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -2825,103 +2789,197 @@ export function OwnerWorkspaceModern(props: any) {
               icon={PackagePlus}
               defaultOpen={Boolean(editingProductId)}
             >
-              <form onSubmit={createProduct} className="grid gap-4">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "कुन श्रेणीमा राख्ने?" : "Which category?"}</span>
-                  <select
-                    className={shellInput()}
-                    value={(productForm as any).categoryId || ""}
-                    onChange={(e) => setProductForm((v: any) => ({ ...v, categoryId: e.target.value }))}
-                  >
-                    <option value="">{lang === "ne" ? "श्रेणी छान्नुहोस्" : "Select a category"}</option>
-                    {(categories || []).map((category: any) => (
-                      <option key={category.id} value={String(category.id)}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {[
-                  { key: "name", label: lang === "ne" ? "सामानको नाम" : "Product name" },
-                  { key: "sku", label: lang === "ne" ? "कोड / SKU" : "SKU / code" },
-                  { key: "description", label: lang === "ne" ? "विवरण" : "Description" },
-                  { key: "price", label: lang === "ne" ? "बिक्री मूल्य" : "Selling price" },
-                  { key: "buyingPrice", label: lang === "ne" ? "खरिद मूल्य" : "Buying price" },
-                  { key: "transportationCost", label: lang === "ne" ? "ढुवानी खर्च" : "Transport cost" },
-                  { key: "extraCost", label: lang === "ne" ? "अन्य खर्च" : "Extra cost" },
-                  { key: "stockQuantity", label: lang === "ne" ? "स्टक परिमाण" : "Stock quantity" },
-                  { key: "reorderLevel", label: lang === "ne" ? "कम भएको चेतावनी तह" : "Reorder level" },
-                  { key: "unit", label: lang === "ne" ? "एकाइ (केजी/गोटा/बोरा)" : "Unit" },
-                ].map((field) =>
-                  field.key === "description" ? (
-                    <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
-                      <span>{field.label}</span>
-                      <textarea
-                        className={`${shellInput()} min-h-28`}
-                        value={(productForm as any)[field.key]}
-                        onChange={(e) => setProductForm((v: any) => ({ ...v, [field.key]: e.target.value }))}
-                        placeholder={field.label}
-                      />
-                    </label>
-                  ) : field.key === "sku" ? (
-                    // The SKU is where a packet's barcode belongs, so scanning
-                    // fills it directly instead of being copied by hand.
-                    <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
-                      <span>{field.label}</span>
-                      <div className="flex gap-2">
-                        <input
-                          className={shellInput()}
-                          value={(productForm as any).sku}
-                          onChange={(e) => setProductForm((v: any) => ({ ...v, sku: e.target.value }))}
-                          placeholder={lang === "ne" ? "बारकोड वा आफ्नै कोड" : "Barcode or your own code"}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setScanTarget("sku")}
-                          className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
-                          title={lang === "ne" ? "बारकोड स्क्यान" : "Scan barcode"}
-                        >
-                          📷
-                        </button>
-                      </div>
-                    </label>
-                  ) : (
-                    <label key={field.key} className="grid gap-2 text-sm font-medium text-slate-700">
-                      <span>{field.label}</span>
+              {/* Grouped into the questions a shopkeeper actually asks, in the
+                  order they ask them. It had grown a duplicate expiry field, a
+                  duplicate offer block, three ways to attach a photo, and an
+                  upload for the supplier's bill that was never saved anywhere —
+                  the bill belongs with the dealer, not the product. */}
+              <form onSubmit={createProduct} className="grid gap-5">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-900">{lang === "ne" ? "१. के हो?" : "1. What is it?"}</p>
+                  <div className="mt-3 grid gap-3">
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "सामानको नाम" : "Product name"}</span>
                       <input
                         className={shellInput()}
-                        value={(productForm as any)[field.key]}
-                        onChange={(e) => setProductForm((v: any) => ({ ...v, [field.key]: e.target.value }))}
-                        placeholder={field.label}
+                        value={(productForm as any).name}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, name: e.target.value }))}
+                        placeholder={lang === "ne" ? "जस्तै: मुसुरो दाल (१ केजी)" : "e.g. Musuro dal (1 kg)"}
                       />
                     </label>
-                  )
-                )}
-                {/* Expiry date — the shelf date for what is in stock now. */}
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "म्याद सकिने मिति (भए मात्र)" : "Expiry date (if it has one)"}</span>
-                  <input
-                    type="date"
-                    className={shellInput()}
-                    value={(productForm as any).expiryDate || ""}
-                    onChange={(e) => setProductForm((v: any) => ({ ...v, expiryDate: e.target.value }))}
-                  />
-                  <span className="text-xs font-normal text-slate-500">
-                    {lang === "ne"
-                      ? "राखेपछि म्याद सकिन लागेको सामान ड्यासबोर्डमा देखिन्छ।"
-                      : "Once set, items nearing their date show on the dashboard."}
-                  </span>
-                </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                        <span>{lang === "ne" ? "श्रेणी" : "Category"}</span>
+                        <select
+                          className={shellInput()}
+                          value={(productForm as any).categoryId || ""}
+                          onChange={(e) => setProductForm((v: any) => ({ ...v, categoryId: e.target.value }))}
+                        >
+                          <option value="">{lang === "ne" ? "छान्नुहोस्" : "Select"}</option>
+                          {(categories || []).map((category: any) => (
+                            <option key={category.id} value={String(category.id)}>{category.name}</option>
+                          ))}
+                        </select>
+                        <span className="flex gap-2">
+                          <input
+                            className={shellInput()}
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            onKeyDown={(e) => {
+                              // Enter inside a form would submit the product; this
+                              // field only ever means "make the category".
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                createCategory();
+                              }
+                            }}
+                            placeholder={lang === "ne" ? "वा नयाँ श्रेणी लेख्नुहोस्" : "or type a new category"}
+                          />
+                          <button
+                            type="button"
+                            onClick={createCategory}
+                            disabled={addingCategory || !newCategoryName.trim()}
+                            className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 disabled:opacity-40"
+                          >
+                            {addingCategory ? "…" : "＋"}
+                          </button>
+                        </span>
+                      </label>
+                      <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                        <span>{lang === "ne" ? "एकाइ" : "Sold by"}</span>
+                        <input
+                          className={shellInput()}
+                          value={(productForm as any).unit}
+                          onChange={(e) => setProductForm((v: any) => ({ ...v, unit: e.target.value }))}
+                          placeholder={lang === "ne" ? "केजी / गोटा / बोरा" : "kg / piece / bora"}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
 
-                {/* Temporary sale price. Applied by the server only while the
-                    window is open, so an old sale cannot keep discounting. */}
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-900">{lang === "ne" ? "२. मूल्य" : "2. Prices"}</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "बेच्ने मूल्य" : "Selling price"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).price}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, price: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "किन्दाको भाउ" : "Buying price"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).buyingPrice}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, buyingPrice: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "ढुवानी खर्च (भए)" : "Transport cost (if any)"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).transportationCost}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, transportationCost: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "अन्य खर्च (भए)" : "Other cost (if any)"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).extraCost}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, extraCost: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  {/* The number the shopkeeper is really deciding on, worked out
+                      so it does not have to be done in the head at the counter. */}
+                  {num((productForm as any).price) > 0 && num((productForm as any).buyingPrice) > 0 ? (
+                    (() => {
+                      const cost = num((productForm as any).buyingPrice) + num((productForm as any).transportationCost) + num((productForm as any).extraCost);
+                      const profit = num((productForm as any).price) - cost;
+                      return (
+                        <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${profit > 0 ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+                          {profit > 0
+                            ? (lang === "ne" ? `प्रति ${(productForm as any).unit || "गोटा"} नाफा: ${money(profit)}` : `Profit per ${(productForm as any).unit || "unit"}: ${money(profit)}`)
+                            : (lang === "ne" ? `घाटा: ${money(Math.abs(profit))} — बेच्ने मूल्य बढाउनुहोस्।` : `Loss of ${money(Math.abs(profit))} — raise the selling price.`)}
+                        </p>
+                      );
+                    })()
+                  ) : null}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-900">{lang === "ne" ? "३. स्टक" : "3. Stock"}</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "अहिले कति छ" : "How many in stock"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).stockQuantity}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, stockQuantity: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                      <span>{lang === "ne" ? "कति भएपछि चेतावनी" : "Warn me below"}</span>
+                      <input
+                        type="number" min={0} className={shellInput()}
+                        value={(productForm as any).reorderLevel}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, reorderLevel: e.target.value }))}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2">
+                      <span>{lang === "ne" ? "म्याद सकिने मिति (भए मात्र)" : "Expiry date (only if it has one)"}</span>
+                      <input
+                        type="date"
+                        className={shellInput()}
+                        value={(productForm as any).expiryDate || ""}
+                        onChange={(e) => setProductForm((v: any) => ({ ...v, expiryDate: e.target.value }))}
+                      />
+                      <span className="text-xs font-normal text-slate-500">
+                        {lang === "ne" ? "राखेमा म्याद नजिकिँदा ओभरभ्यूमा चेतावनी देखिन्छ।" : "If set, a warning appears on the Overview as the date nears."}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-900">{lang === "ne" ? "४. बारकोड" : "4. Barcode"}</p>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      className={shellInput()}
+                      value={(productForm as any).sku}
+                      onChange={(e) => setProductForm((v: any) => ({ ...v, sku: e.target.value }))}
+                      placeholder={lang === "ne" ? "खाली छोड्नुहोस् — आफैं बन्छ" : "Leave blank — one is made for you"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setScanTarget("sku")}
+                      className="shrink-0 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                      title={lang === "ne" ? "बारकोड स्क्यान" : "Scan barcode"}
+                    >
+                      📷
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {lang === "ne"
+                      ? "प्याकेटमा बारकोड भए स्क्यान गर्नुहोस्। नभए खाली छोड्नुहोस् — RSC कोड आफैं बन्छ र स्टिकर छाप्न मिल्छ।"
+                      : "Scan the packet's barcode if it has one. If not, leave it blank — an RSC code is made automatically and you can print a sticker."}
+                  </p>
+                </div>
+
                 <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                  <p className="text-sm font-bold text-amber-900">
-                    {lang === "ne" ? "विशेष छुट मूल्य (चाहिएमा)" : "Special offer price (optional)"}
+                  <p className="text-sm font-bold text-amber-900">{lang === "ne" ? "५. छुट (चाहिएमा मात्र)" : "5. Offer (only if you want one)"}</p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    {lang === "ne"
+                      ? "बेच्ने मूल्यभन्दा कम राख्नुहोस्। मिति नराखे तुरुन्तै सुरु हुन्छ र हटाउँदासम्म चल्छ।"
+                      : "Must be lower than the selling price. With no dates it starts at once and runs until you remove it."}
                   </p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
-                      <span>{lang === "ne" ? "छुट मूल्य" : "Sale price"}</span>
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
+                      <span>{lang === "ne" ? "छुट मूल्य" : "Offer price"}</span>
                       <input
                         type="number" min={0} className={shellInput()}
                         value={(productForm as any).salePrice || ""}
@@ -2929,7 +2987,7 @@ export function OwnerWorkspaceModern(props: any) {
                         placeholder={lang === "ne" ? "खाली = छुट छैन" : "blank = no offer"}
                       />
                     </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
                       <span>{lang === "ne" ? "कहिलेदेखि" : "From"}</span>
                       <input
                         type="date" className={shellInput()}
@@ -2937,7 +2995,7 @@ export function OwnerWorkspaceModern(props: any) {
                         onChange={(e) => setProductForm((v: any) => ({ ...v, saleStartsAt: e.target.value }))}
                       />
                     </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
                       <span>{lang === "ne" ? "कहिलेसम्म" : "Until"}</span>
                       <input
                         type="date" className={shellInput()}
@@ -2954,170 +3012,72 @@ export function OwnerWorkspaceModern(props: any) {
                           : `Customers save ${money(num((productForm as any).price) - num((productForm as any).salePrice))}.`}
                       </p>
                     ) : (
-                      <p className="mt-2 text-xs font-semibold text-rose-700">
+                      <p className="mt-2 rounded-lg bg-rose-100 px-3 py-2 text-xs font-bold text-rose-800">
                         {lang === "ne"
-                          ? "छुट मूल्य सामान्य मूल्यभन्दा कम हुनुपर्छ — नत्र लागू हुँदैन।"
-                          : "The sale price must be lower than the normal price, or it will be ignored."}
+                          ? "⚠️ छुट मूल्य बेच्ने मूल्यभन्दा कम हुनुपर्छ — नत्र लागू हुँदैन।"
+                          : "⚠️ The offer price must be lower than the selling price, or it will be ignored."}
                       </p>
                     )
                   ) : null}
                 </div>
 
-                {/* Expiry and temporary sale price. Both optional — most
-                    loose goods need neither. */}
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "म्याद सकिने मिति (भए मात्र)" : "Expiry date (if any)"}</span>
-                  <input
-                    type="date"
-                    className={shellInput()}
-                    value={(productForm as any).expiryDate || ""}
-                    onChange={(e) => setProductForm((v: any) => ({ ...v, expiryDate: e.target.value }))}
-                  />
-                  <span className="text-xs font-normal text-slate-500">
-                    {lang === "ne"
-                      ? "राखेमा म्याद नजिकिँदा ओभरभ्यूमा चेतावनी देखिन्छ।"
-                      : "If set, a warning appears on the Overview as the date approaches."}
-                  </span>
-                </label>
-
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-                  <p className="text-sm font-bold text-amber-900">
-                    {lang === "ne" ? "अफर मूल्य (सेल)" : "Sale price (special offer)"}
-                  </p>
-                  <p className="mt-1 text-xs text-amber-800">
-                    {lang === "ne"
-                      ? "साधारण मूल्यभन्दा कम राख्नुहोस्। मिति नराखे तुरुन्तै सुरु हुन्छ र नरोकिने हुन्छ।"
-                      : "Must be lower than the normal price. With no dates it starts at once and runs until removed."}
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
-                      <span>{lang === "ne" ? "अफर मूल्य" : "Sale price"}</span>
-                      <input
-                        type="number" min={0} className={shellInput()}
-                        value={(productForm as any).salePrice || ""}
-                        onChange={(e) => setProductForm((v: any) => ({ ...v, salePrice: e.target.value }))}
-                        placeholder={lang === "ne" ? "खाली = अफर छैन" : "blank = no offer"}
-                      />
-                    </label>
-                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
-                      <span>{lang === "ne" ? "कहिलेदेखि" : "From"}</span>
-                      <input
-                        type="date" className={shellInput()}
-                        value={(productForm as any).saleStartsAt || ""}
-                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleStartsAt: e.target.value }))}
-                      />
-                    </label>
-                    <label className="grid gap-1 text-xs font-semibold text-amber-900">
-                      <span>{lang === "ne" ? "कहिलेसम्म" : "Until"}</span>
-                      <input
-                        type="date" className={shellInput()}
-                        value={(productForm as any).saleEndsAt || ""}
-                        onChange={(e) => setProductForm((v: any) => ({ ...v, saleEndsAt: e.target.value }))}
-                      />
-                    </label>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-900">{lang === "ne" ? "६. फोटो र विवरण (वैकल्पिक)" : "6. Photo and description (optional)"}</p>
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
+                        <span className="flex items-center gap-2"><Upload className="h-4 w-4" />{lang === "ne" ? "ग्यालरीबाट" : "From gallery"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="mt-2 block w-full text-sm"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const dataUrl = await readFileAsDataUrl(file);
+                            setProductForm((v: any) => ({ ...v, imageUrl: dataUrl }));
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
+                        <span className="flex items-center gap-2"><Upload className="h-4 w-4" />{lang === "ne" ? "क्यामेराबाट" : "Take a photo"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="mt-2 block w-full text-sm"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const dataUrl = await readFileAsDataUrl(file);
+                            setProductForm((v: any) => ({ ...v, imageUrl: dataUrl }));
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {(productForm as any).imageUrl ? (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <img src={(productForm as any).imageUrl} alt="Product preview" className="h-40 w-full rounded-2xl bg-white object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setProductForm((v: any) => ({ ...v, imageUrl: "" }))}
+                          className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700"
+                        >
+                          {lang === "ne" ? "फोटो हटाउनुहोस्" : "Remove photo"}
+                        </button>
+                      </div>
+                    ) : null}
+                    <textarea
+                      className={`${shellInput()} min-h-20`}
+                      value={(productForm as any).description}
+                      onChange={(e) => setProductForm((v: any) => ({ ...v, description: e.target.value }))}
+                      placeholder={lang === "ne" ? "छोटो विवरण" : "Short description"}
+                    />
                   </div>
-                  {(productForm as any).salePrice && num((productForm as any).salePrice) >= num((productForm as any).price) ? (
-                    <p className="mt-2 rounded-lg bg-rose-100 px-3 py-2 text-xs font-bold text-rose-800">
-                      {lang === "ne"
-                        ? "⚠️ अफर मूल्य साधारण मूल्यभन्दा कम हुनुपर्छ — नत्र लागू हुँदैन।"
-                        : "⚠️ The sale price must be lower than the normal price, or it will be ignored."}
-                    </p>
-                  ) : null}
                 </div>
 
-                <input
-                  className={shellInput()}
-                  value={(productForm as any).imageUrl || ""}
-                  onChange={(e) => setProductForm((v: any) => ({ ...v, imageUrl: e.target.value }))}
-                  placeholder={lang === "ne" ? "उत्पादन फोटो लिंक वा data url" : "Product image URL or data URL"}
-                />
-                <label className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/50 px-4 py-4 text-sm text-amber-900">
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "खरिद बिल / सप्लायर बिलको फोटो" : "Purchase bill / supplier bill photo"}</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="mt-3 block w-full text-sm"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const dataUrl = await readFileAsDataUrl(file);
-                      setPurchaseBillScan({
-                        image: dataUrl,
-                        text: "",
-                        summary: [],
-                        loading: false,
-                        error: "",
-                        suggestion: {},
-                      });
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                {purchaseBillScan.image ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <img src={purchaseBillScan.image} alt="Purchase bill" className="h-56 w-full rounded-2xl bg-white object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => setPurchaseBillScan(createBillScanState())}
-                      className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-                    >
-                      {lang === "ne" ? "बिल फोटो हटाउनुहोस्" : "Remove bill photo"}
-                    </button>
-                  </div>
-                ) : null}
-                <label className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "उपकरणबाट उत्पादन फोटो अपलोड गर्नुहोस्" : "Upload product photo from device"}</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="mt-3 block w-full text-sm"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const dataUrl = await readFileAsDataUrl(file);
-                      setProductForm((v: any) => ({ ...v, imageUrl: dataUrl }));
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                <label className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-4 text-sm text-amber-900">
-                  <div className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    <span>{lang === "ne" ? "क्यामेरा प्रयोग गरेर उत्पादन फोटो खिच्नुहोस्" : "Use camera for product photo"}</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="mt-3 block w-full text-sm"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const dataUrl = await readFileAsDataUrl(file);
-                      setProductForm((v: any) => ({ ...v, imageUrl: dataUrl }));
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                {(productForm as any).imageUrl ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <img src={(productForm as any).imageUrl} alt="Product preview" className="h-48 w-full rounded-2xl bg-white object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setProductForm((v: any) => ({ ...v, imageUrl: "" }))}
-                      className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700"
-                    >
-                      {lang === "ne" ? "फोटो हटाउनुहोस्" : "Remove photo"}
-                    </button>
-                  </div>
-                ) : null}
                 <button className="rounded-2xl bg-accent px-4 py-4 font-semibold text-accent-foreground">{editingProductId ? text.updateProduct : text.saveProduct}</button>
               </form>
             </CollapsibleSection>
@@ -3125,7 +3085,7 @@ export function OwnerWorkspaceModern(props: any) {
         ) : null}
 
         {tab === "reports" ? (
-          <ReportsTab lang={lang} api={props.api} token={token} onRestored={props.reloadOwnerData} />
+          <ReportsTab lang={lang} api={props.api} />
         ) : null}
 
         {tab === "branding" ? (
@@ -3173,6 +3133,22 @@ export function OwnerWorkspaceModern(props: any) {
                   <span>{lang === "ne" ? "नयाँ पासवर्ड पुनः लेख्नुहोस्" : "Confirm new password"}</span>
                   <input type="password" className={shellInput()} value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm((current: any) => ({ ...current, confirmPassword: e.target.value }))} />
                 </label>
+                {/* Taking the shop's password is worth a second factor once the
+                    owner has one, not just an unlocked session. */}
+                {totpEnabled ? (
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    <span>{lang === "ne" ? "Google Authenticator को ६ अंकको कोड" : "6-digit code from Google Authenticator"}</span>
+                    <input
+                      className={shellInput()}
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={passwordForm.totp || ""}
+                      onChange={(e) => setPasswordForm((current: any) => ({ ...current, totp: e.target.value.replace(/\D/g, "") }))}
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                    />
+                  </label>
+                ) : null}
                 <button disabled={passwordBusy} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">
                   <ShieldCheck className="h-4 w-4" />
                   {passwordBusy ? (lang === "ne" ? "परिवर्तन हुँदैछ..." : "Updating...") : (lang === "ne" ? "पासवर्ड परिवर्तन गर्नुहोस्" : "Change password")}
@@ -3416,6 +3392,15 @@ export function OwnerWorkspaceModern(props: any) {
                 Deliberately placed last, behind a typed phrase and the admin
                 password, because it cannot be undone from inside the app. */}
             <CollapsibleSection
+              title={lang === "ne" ? "ब्याकअप र फिर्ता" : "Backup & recover"}
+              description={lang === "ne" ? "सबै डाटाको प्रतिलिपि राख्नुहोस्, वा पुरानो प्रतिलिपिबाट फर्काउनुहोस्" : "Keep a copy of everything, or restore the shop from an older copy"}
+              icon={Save}
+              tone="emerald"
+            >
+              <BackupExportPanel lang={lang as "en" | "ne"} api={props.api} token={token} onRestored={props.reloadOwnerData} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
               title={lang === "ne" ? "खतरा क्षेत्र — सबै डाटा मेटाउने" : "Danger zone — erase all data"}
               description={lang === "ne" ? "पसलका सबै बिल, ग्राहक र सामान मेटाउँछ। फर्काउन मिल्दैन।" : "Erases every bill, customer and product. Cannot be undone."}
               icon={ShieldAlert}
@@ -3460,6 +3445,23 @@ export function OwnerWorkspaceModern(props: any) {
                     autoComplete="new-password"
                   />
                 </label>
+                {/* A stolen unlocked session should not be able to erase the
+                    shop, so once the Authenticator is on the code is required
+                    here too. */}
+                {totpEnabled ? (
+                  <label className="grid gap-2 text-sm font-medium text-rose-900">
+                    <span>{lang === "ne" ? "Google Authenticator को ६ अंकको कोड" : "6-digit code from Google Authenticator"}</span>
+                    <input
+                      className={shellInput()}
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={resetForm.totp}
+                      onChange={(e) => setResetForm((v) => ({ ...v, totp: e.target.value.replace(/\D/g, "") }))}
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                    />
+                  </label>
+                ) : null}
                 <button
                   type="button"
                   onClick={requestFactoryReset}
@@ -3562,63 +3564,6 @@ export function OwnerWorkspaceModern(props: any) {
                     {lang === "ne" ? "अहिलेसम्म कुनै सूचना राखिएको छैन।" : "No notices added yet."}
                   </div>
                 )}
-              </div>
-            </CollapsibleSection>
-
-            {/* Optional. Every printed bill already leaves a ruled line and a
-                dashed box to sign and stamp by hand; uploading images only
-                means reprints and emailed copies carry the marks too. */}
-            <CollapsibleSection
-              title={lang === "ne" ? "छाप र हस्ताक्षर" : "Stamp & signature"}
-              description={lang === "ne" ? "बिलमा आफैं छापिने छाप र हस्ताक्षर (नराखे पनि हुन्छ — हातले गर्ने ठाउँ सधैं छापिन्छ)" : "Printed onto bills automatically. Optional — every bill always leaves room to sign and stamp by hand."}
-              icon={ShieldCheck}
-              status={settingsForm?.stampPath || settingsForm?.signaturePath ? (lang === "ne" ? "✓ राखिएको" : "✓ Set") : (lang === "ne" ? "हातले" : "By hand")}
-            >
-              <div className="grid gap-5">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  <span>{lang === "ne" ? "हस्ताक्षरमुनि लेखिने नाम" : "Name printed under the signature"}</span>
-                  <input
-                    className={shellInput()}
-                    value={settingsForm.signatureName || ""}
-                    onChange={(e) => setSettingsForm((current: any) => ({ ...current, signatureName: e.target.value }))}
-                    placeholder={lang === "ne" ? "जस्तै: राजेश सिपिङ् सेन्टर" : "e.g. Rajesh Shopping Center"}
-                  />
-                </label>
-                {[
-                  ["stampPath", lang === "ne" ? "पसलको छाप" : "Shop stamp", lang === "ne" ? "छापलाई सेतो कागजमा थिचेर फोटो खिच्नुहोस्।" : "Press the rubber stamp on white paper and photograph it."],
-                  ["signaturePath", lang === "ne" ? "हस्ताक्षर" : "Signature", lang === "ne" ? "सेतो कागजमा हस्ताक्षर गरेर फोटो खिच्नुहोस्।" : "Sign on white paper and photograph it."],
-                ].map(([field, label, hint]) => (
-                  <div key={field} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <h4 className="text-base font-bold text-slate-950">{label}</h4>
-                    <p className="mt-1 text-xs text-slate-500">{hint}</p>
-                    <label className="mt-3 flex items-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
-                      <Upload className="h-4 w-4" />
-                      {text.uploadImage}
-                      <input type="file" accept="image/*" className="mt-3 block w-full text-sm" onChange={(e) => handleSettingsMediaUpload(e, field as any)} />
-                    </label>
-                    {settingsForm[field] ? (
-                      <div className="mt-3 flex items-center gap-3">
-                        <img src={settingsForm[field]} alt={String(label)} className="h-20 rounded-xl border border-slate-200 bg-slate-50 object-contain p-2" />
-                        <button
-                          type="button"
-                          onClick={() => setSettingsForm((current: any) => ({ ...current, [field]: "" }))}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
-                        >
-                          {lang === "ne" ? "हटाउनुहोस्" : "Remove"}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => saveMediaSettings()}
-                  disabled={settingsBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-3 font-semibold text-accent-foreground disabled:opacity-60"
-                >
-                  <Save className="h-4 w-4" />
-                  {settingsBusy ? (lang === "ne" ? "सेभ हुँदैछ..." : "Saving...") : (lang === "ne" ? "सेभ गर्नुहोस्" : "Save")}
-                </button>
               </div>
             </CollapsibleSection>
 

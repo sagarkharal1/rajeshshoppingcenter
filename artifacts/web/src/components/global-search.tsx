@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "./ui/input";
 
 interface SearchResult {
-  type: "product" | "customer" | "order" | "booking" | "invoice";
+  type: "product" | "customer" | "order" | "booking" | "invoice" | "dealer";
   id: string | number;
   label: string;
   preview?: string;
@@ -13,6 +13,9 @@ interface SearchResult {
 }
 
 interface GlobalSearchProps {
+  /** The owner's authenticated fetch. Search is owner-only, so a bare fetch
+      here would now be rejected — and used to expose customers to everyone. */
+  api?: (url: string, opts?: any) => Promise<any>;
   onResultClick: (result: SearchResult) => void;
   lang?: "en" | "ne";
 }
@@ -23,9 +26,10 @@ const ICONS: Record<SearchResult["type"], string> = {
   order: "📋",
   booking: "🚗",
   invoice: "🧾",
+  dealer: "🚚",
 };
 
-export function GlobalSearch({ onResultClick, lang = "en" }: GlobalSearchProps) {
+export function GlobalSearch({ onResultClick, lang = "en", api }: GlobalSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -54,11 +58,10 @@ export function GlobalSearch({ onResultClick, lang = "en" }: GlobalSearchProps) 
 
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `/api/search?q=${encodeURIComponent(searchQuery)}`
-      );
-      const data = await response.json();
-      setResults(data.results || []);
+      const data = api
+        ? await api(`/search?q=${encodeURIComponent(searchQuery)}`)
+        : await (await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`)).json();
+      setResults(data?.results || []);
       setSelectedIndex(-1);
     } catch (err) {
       console.error("Search failed:", err);
@@ -66,7 +69,7 @@ export function GlobalSearch({ onResultClick, lang = "en" }: GlobalSearchProps) 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [api]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);

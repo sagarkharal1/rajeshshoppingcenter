@@ -16,6 +16,7 @@ import {
   rewardTransactionsTable,
   auditLogsTable,
   stockLedgerTable,
+  dealerTransactionsTable,
   telegramQueueTable,
 } from "@workspace/db/schema";
 import { eq, sql, and, desc, ilike, inArray, or } from "drizzle-orm";
@@ -29,7 +30,6 @@ import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
 import { JWT_SECRET, authMiddleware } from "../lib/auth.js";
-import { allocateDealerBill, round2 } from "../lib/dealer-bill.js";
 import {
   createJsonBackup,
   createSqlBackup,
@@ -457,6 +457,22 @@ router.post("/admin/totp-disable", authMiddleware, async (req, res) => {
   res.json({ message: "Google Authenticator disabled" });
 });
 
+/**
+ * The two actions someone who grabbed an unlocked phone could do real harm
+ * with: take the shop's password, or erase everything. Once Google
+ * Authenticator is on, both ask for the code as well — a logged-in session is
+ * no longer enough on its own.
+ */
+function requireSecondFactor(settings: any, token: unknown): string | null {
+  if (!settings?.totpSecret) return null;
+  const code = typeof token === "string" ? token.trim() : "";
+  if (!code) return "Enter the 6-digit code from Google Authenticator.";
+  if (!verifyTotp(code, settings.totpSecret)) {
+    return "That code is not right. Check your phone and try again.";
+  }
+  return null;
+}
+
 router.post("/admin/change-password", authMiddleware, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
@@ -466,6 +482,10 @@ router.post("/admin/change-password", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: "New password must be at least 6 characters" });
   }
   const settings = await getSettings();
+  const secondFactorError = requireSecondFactor(settings, req.body?.totp);
+  if (secondFactorError) {
+    return res.status(401).json({ error: secondFactorError, totpRequired: true });
+  }
   const storedHash = settings?.adminPasswordHash ?? null;
   let valid = false;
   if (storedHash) {
@@ -1963,139 +1983,6 @@ router.get("/admin/audit-logs", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * One dealer bill covering several products.
- *
- * A supplier's bill lists many items on one piece of paper, but stock could
- * only be recorded a product at a time — and because dealer totals are summed
- * from each ledger row's billAmount, entering a Rs 10,000 bill as five rows of
- * Rs 10,000 made the shop look Rs 40,000 further in debt than it was. So the
- * bill total is split across the lines here, and the whole bill is written in
- * one transaction: either every line lands or none does.
- */
-const dealerPurchaseSchema = z.object({
-  dealerName: z.string().min(1, "Dealer name is required").max(200).transform((v) => v.trim()),
-  dealerPhone: z.string().max(40).optional(),
-  billNumber: z.string().max(100).optional(),
-  // Optional: when given it is the authority and any lines left blank share
-  // out what is unaccounted for. When absent the lines add up to the bill.
-  billAmount: z.number().nonnegative().optional(),
-  paidAmount: z.number().nonnegative().default(0),
-  proofPath: z.string().max(500000).optional(),
-  reason: z.string().max(300).optional(),
-  // Carried over from the single-product form so goods sent back or arriving
-  // broken are still recorded as such rather than as a plain purchase.
-  returnStatus: z.string().max(300).optional(),
-  damagedReason: z.string().max(300).optional(),
-  items: z
-    .array(
-      z.object({
-        productId: z.number().int().positive(),
-        quantity: z.number().int().positive().max(100000),
-        amount: z.number().nonnegative().optional(),
-      }),
-    )
-    .min(1, "At least one product is required")
-    .max(60),
-});
-
-router.post("/admin/dealer-purchases", authMiddleware, async (req, res) => {
-  const parsed = dealerPurchaseSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: "Invalid dealer bill",
-      details: parsed.error.issues.map((issue) => issue.message),
-    });
-  }
-
-  const { dealerName, dealerPhone, billNumber, paidAmount, proofPath, reason, items, returnStatus, damagedReason } =
-    parsed.data;
-  const ledgerType = damagedReason?.trim() ? "damaged" : returnStatus?.trim() ? "return" : "purchase";
-
-  // A product must not appear twice, or the second line would overwrite the
-  // first one's view of the stock it started from.
-  const seen = new Set<number>();
-  for (const item of items) {
-    if (seen.has(item.productId)) {
-      return res.status(400).json({ error: "The same product is listed twice. Combine those lines." });
-    }
-    seen.add(item.productId);
-  }
-
-  try {
-    const { lines: priced, billTotal } = allocateDealerBill(items, parsed.data.billAmount, paidAmount);
-
-    // Ties the lines together so they can be recognised as one piece of paper.
-    const billGroupId = `BILL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    const written = await db.transaction(async (tx) => {
-      const rows: Array<{ productId: number; productName: string; balanceAfter: number }> = [];
-      for (const line of priced) {
-        const [product] = await tx
-          .select({ name: productsTable.name, stockQuantity: productsTable.stockQuantity })
-          .from(productsTable)
-          .where(eq(productsTable.id, line.productId))
-          .for("update");
-
-        if (!product) throw new Error(`PRODUCT_MISSING:${line.productId}`);
-
-        const balanceBefore = product.stockQuantity || 0;
-        const balanceAfter = balanceBefore + line.quantity;
-
-        await tx
-          .update(productsTable)
-          .set({ stockQuantity: balanceAfter, inStock: balanceAfter > 0 })
-          .where(eq(productsTable.id, line.productId));
-
-        await tx.insert(stockLedgerTable).values({
-          productId: line.productId,
-          transactionType: ledgerType,
-          quantity: line.quantity,
-          reason: (reason || "Product purchase from dealer").trim(),
-          balanceBefore,
-          balanceAfter,
-          metadata: {
-            adjustmentType: "stock-in",
-            requestedQuantity: line.quantity,
-            dealerName,
-            dealerPhone: dealerPhone?.trim() || null,
-            billNumber: billNumber?.trim() || null,
-            billGroupId,
-            billLineCount: priced.length,
-            billTotalAmount: billTotal,
-            billAmount: line.amount,
-            paidAmount: line.paid,
-            dealerDue: Math.max(0, round2(line.amount - line.paid)),
-            proofPath: proofPath?.trim() || null,
-            returnStatus: returnStatus?.trim() || null,
-            damagedReason: damagedReason?.trim() || null,
-          },
-        });
-
-        rows.push({ productId: line.productId, productName: product.name, balanceAfter });
-      }
-      return rows;
-    });
-
-    res.status(201).json({
-      success: true,
-      billGroupId,
-      billAmount: billTotal,
-      paidAmount,
-      dealerDue: Math.max(0, round2(billTotal - paidAmount)),
-      lines: written,
-      message: `Saved ${written.length} product${written.length === 1 ? "" : "s"} on this dealer bill.`,
-    });
-  } catch (err) {
-    const message = (err as any)?.message || String(err);
-    if (message.startsWith("PRODUCT_MISSING:")) {
-      return res.status(400).json({ error: "One of the products no longer exists. Refresh and try again." });
-    }
-    console.error("Dealer purchase error:", err);
-    res.status(500).json({ error: "Failed to save the dealer bill" });
-  }
-});
-
 router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) => {
   try {
     const productId = Number(req.params.id);
@@ -2218,6 +2105,10 @@ router.post("/admin/factory-reset", authMiddleware, async (req, res) => {
     }
 
     const settings = await getSettings();
+    const secondFactorError = requireSecondFactor(settings, req.body?.totp);
+    if (secondFactorError) {
+      return res.status(401).json({ error: secondFactorError, totpRequired: true });
+    }
     const storedHash = settings?.adminPasswordHash ?? null;
     const validPassword = await isOwnerPasswordValid(password, storedHash);
     if (!validPassword) {
@@ -2440,9 +2331,83 @@ router.get("/admin/backup/:filename/download", authMiddleware, async (req, res) 
   }
 });
 
+/**
+ * Every dealer, built from two places.
+ *
+ * New records live in dealer_transactions, where a bill is just a bill. Older
+ * ones were written onto the stock ledger and carried a product they never
+ * really belonged to; those are still read here so the shop's history does not
+ * vanish, but nothing new is written that way.
+ */
 router.get("/admin/dealers", authMiddleware, async (_req, res) => {
   try {
-    const entries = await db
+    const dealerMap = new Map<string, any>();
+
+    const dealerFor = (name: string, phone: string, date: any) => {
+      const key = `${name.toLowerCase()}|${phone}`;
+      const existing = dealerMap.get(key);
+      if (existing) return existing;
+      const fresh = {
+        name,
+        phone,
+        totalBilled: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        purchaseCount: 0,
+        returnCount: 0,
+        damagedCount: 0,
+        lastActivity: date,
+        entries: [] as any[],
+      };
+      dealerMap.set(key, fresh);
+      return fresh;
+    };
+
+    const rows = await db
+      .select()
+      .from(dealerTransactionsTable)
+      .orderBy(desc(dealerTransactionsTable.createdAt))
+      .limit(500);
+
+    for (const row of rows) {
+      if (row.voidedAt) continue;
+      const name = String(row.dealerName || "").trim();
+      if (!name) continue;
+      const phone = String(row.dealerPhone || "").trim();
+      const dealer = dealerFor(name, phone, row.createdAt);
+
+      const billAmount = Number(row.billAmount || 0);
+      const paidAmount = Number(row.paidAmount || 0);
+      const isPayment = row.entryType === "payment";
+
+      dealer.totalBilled += isPayment ? 0 : billAmount;
+      dealer.totalPaid += paidAmount;
+      dealer.purchaseCount += isPayment ? 0 : 1;
+      if (row.createdAt > dealer.lastActivity) dealer.lastActivity = row.createdAt;
+
+      dealer.entries.push({
+        id: `dealer-${row.id}`,
+        entryId: row.id,
+        entryType: isPayment ? "payment" : "purchase",
+        transactionType: isPayment ? "dealer_payment" : "purchase",
+        date: row.createdAt,
+        billNumber: row.billNumber || null,
+        billAmount,
+        paidAmount,
+        dealerDue: isPayment ? 0 : Math.max(0, billAmount - paidAmount),
+        proofPath: row.proofPath || null,
+        note: row.note || null,
+        canVoid: true,
+        productName: null,
+        quantity: 0,
+        reason: row.note || null,
+        returnStatus: null,
+        damagedReason: null,
+      });
+    }
+
+    // Legacy rows, still on the stock ledger.
+    const legacy = await db
       .select({
         id: stockLedgerTable.id,
         productId: stockLedgerTable.productId,
@@ -2458,70 +2423,61 @@ router.get("/admin/dealers", authMiddleware, async (_req, res) => {
       .orderBy(desc(stockLedgerTable.createdAt))
       .limit(500);
 
-    const dealerMap = new Map<string, any>();
-
-    for (const entry of entries) {
+    for (const entry of legacy) {
       const metadata = (entry.metadata || {}) as Record<string, any>;
-      const dealerName = String(metadata.dealerName || "").trim();
-      if (!dealerName) continue;
+      const name = String(metadata.dealerName || "").trim();
+      if (!name) continue;
+      const phone = String(metadata.dealerPhone || "").trim();
+      const dealer = dealerFor(name, phone, entry.date);
 
-      const dealerPhone = String(metadata.dealerPhone || "").trim();
-      const key = `${dealerName.toLowerCase()}|${dealerPhone}`;
       const billAmount = Number(metadata.billAmount || 0);
       const paidAmount = Number(metadata.paidAmount || 0);
-      const dealerDue = Math.max(0, billAmount - paidAmount);
-      const isPayment = String(entry.transactionType || "").toLowerCase() === "dealer_payment";
-      const paymentAmount = isPayment ? paidAmount : 0;
-
-      const dealer = dealerMap.get(key) ?? {
-        name: dealerName,
-        phone: dealerPhone,
-        totalBilled: 0,
-        totalPaid: 0,
-        totalDue: 0,
-        purchaseCount: 0,
-        returnCount: 0,
-        damagedCount: 0,
-        lastActivity: entry.date,
-        entries: [],
-      };
+      const type = String(entry.transactionType || "").toLowerCase();
+      const isPayment = type === "dealer_payment";
 
       dealer.totalBilled += isPayment ? 0 : billAmount;
-      dealer.totalPaid += isPayment ? paymentAmount : paidAmount;
-      dealer.totalDue += isPayment ? -paymentAmount : dealerDue;
-      dealer.purchaseCount += String(entry.transactionType || "").toLowerCase() === "purchase" ? 1 : 0;
-      dealer.returnCount += String(entry.transactionType || "").toLowerCase().includes("return") ? 1 : 0;
-      dealer.damagedCount += String(entry.transactionType || "").toLowerCase().includes("damage") ? 1 : 0;
-      dealer.lastActivity = entry.date > dealer.lastActivity ? entry.date : dealer.lastActivity;
+      dealer.totalPaid += paidAmount;
+      dealer.purchaseCount += type === "purchase" ? 1 : 0;
+      dealer.returnCount += type.includes("return") ? 1 : 0;
+      dealer.damagedCount += type.includes("damage") ? 1 : 0;
+      if (entry.date > dealer.lastActivity) dealer.lastActivity = entry.date;
+
       dealer.entries.push({
-        id: entry.id,
-        productId: entry.productId,
-        productName: entry.productName,
+        id: `stock-${entry.id}`,
+        entryId: entry.id,
+        entryType: isPayment ? "payment" : "purchase",
         transactionType: entry.transactionType,
-        quantity: entry.quantity,
-        reason: entry.reason,
         date: entry.date,
         billNumber: metadata.billNumber || null,
         billAmount,
-        paidAmount: isPayment ? paymentAmount : paidAmount,
-        dealerDue: isPayment ? 0 : dealerDue,
+        paidAmount,
+        dealerDue: isPayment ? 0 : Math.max(0, billAmount - paidAmount),
+        proofPath: metadata.proofPath || null,
+        note: entry.reason || null,
+        canVoid: false,
+        productName: entry.productName,
+        quantity: entry.quantity,
+        reason: entry.reason,
         returnStatus: metadata.returnStatus || null,
         damagedReason: metadata.damagedReason || null,
-        // The photo of the supplier's own bill. It was being saved on the
-        // ledger row and then dropped here, so the shop could upload a bill
-        // and never see it again — which is the whole point of keeping it.
-        proofPath: metadata.proofPath || null,
       });
-
-      dealerMap.set(key, dealer);
     }
 
     const dealers = Array.from(dealerMap.values())
       .map((dealer) => ({
         ...dealer,
-        totalDue: Math.max(0, dealer.totalDue),
+        // Floored at zero: an overpayment is not the supplier owing the shop,
+        // it is a credit to settle with them directly.
+        totalDue: Math.max(0, dealer.totalBilled - dealer.totalPaid),
+        entries: dealer.entries.sort(
+          (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        ),
       }))
-      .sort((a, b) => b.totalDue - a.totalDue || new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+      .sort(
+        (a, b) =>
+          b.totalDue - a.totalDue ||
+          new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
+      );
 
     res.json({
       dealers,
@@ -2538,61 +2494,99 @@ router.get("/admin/dealers", authMiddleware, async (_req, res) => {
   }
 });
 
-router.post("/admin/dealer-payments", authMiddleware, async (req, res) => {
+/**
+ * A supplier's bill, or money handed to a supplier.
+ *
+ * Everything here is read straight off the paper in the shopkeeper's hand:
+ * whose bill it is, its number, the total, what was paid, and a photo. No
+ * product names, no quantities, no per-item prices — those belong against each
+ * product, where the real cost is entered, and a delivery rarely arrives at the
+ * same prices twice.
+ */
+const dealerEntrySchema = z.object({
+  entryType: z.enum(["purchase", "payment"]).default("purchase"),
+  dealerName: z.string().min(1, "Dealer name is required").max(200).transform((v) => v.trim()),
+  dealerPhone: z.string().max(40).optional(),
+  billNumber: z.string().max(120).optional(),
+  billAmount: z.number().nonnegative().max(100000000).default(0),
+  paidAmount: z.number().nonnegative().max(100000000).default(0),
+  proofPath: z.string().max(500000).optional(),
+  note: z.string().max(500).optional(),
+});
+
+router.post("/admin/dealer-entries", authMiddleware, async (req, res) => {
+  const parsed = dealerEntrySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid dealer record",
+      details: parsed.error.issues.map((issue) => issue.message),
+    });
+  }
+
+  const { entryType, dealerName, dealerPhone, billNumber, proofPath, note } = parsed.data;
+  const billAmount = entryType === "payment" ? 0 : parsed.data.billAmount;
+  const paidAmount = parsed.data.paidAmount;
+
+  if (entryType === "purchase" && billAmount <= 0) {
+    return res.status(400).json({ error: "Enter the bill total." });
+  }
+  if (entryType === "payment" && paidAmount <= 0) {
+    return res.status(400).json({ error: "Enter how much was paid." });
+  }
+  if (entryType === "purchase" && paidAmount > billAmount) {
+    return res.status(400).json({ error: "Paid cannot be more than the bill total." });
+  }
+
   try {
-    const productId = Number(req.body?.productId);
-    const amount = Number(req.body?.amount);
-    const dealerName = String(req.body?.dealerName || "").trim();
-    const dealerPhone = String(req.body?.dealerPhone || "").trim();
-    const note = String(req.body?.note || "Dealer payment").trim();
-    const proofPath = typeof req.body?.proofPath === "string" ? req.body.proofPath.trim() : "";
-
-    if (!Number.isInteger(productId) || productId <= 0) {
-      return res.status(400).json({ error: "Product is required for dealer payment record" });
-    }
-    if (!dealerName) {
-      return res.status(400).json({ error: "Dealer name is required" });
-    }
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Payment amount must be greater than zero" });
-    }
-
-    const [product] = await db
-      .select({ stockQuantity: productsTable.stockQuantity })
-      .from(productsTable)
-      .where(eq(productsTable.id, productId))
-      .limit(1);
-
-    if (!product) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-
     const [entry] = await db
-      .insert(stockLedgerTable)
+      .insert(dealerTransactionsTable)
       .values({
-        productId,
-        transactionType: "dealer_payment",
-        quantity: 0,
-        reason: note,
-        balanceBefore: product.stockQuantity || 0,
-        balanceAfter: product.stockQuantity || 0,
-        metadata: {
-          adjustmentType: "dealer-payment",
-          dealerName,
-          dealerPhone: dealerPhone || null,
-          billAmount: 0,
-          paidAmount: amount,
-          dealerDue: 0,
-          note,
-          proofPath: proofPath || null,
-        },
+        entryType,
+        dealerName,
+        dealerPhone: dealerPhone?.trim() || null,
+        billNumber: billNumber?.trim() || null,
+        billAmount: billAmount.toFixed(2),
+        paidAmount: paidAmount.toFixed(2),
+        proofPath: proofPath?.trim() || null,
+        note: note?.trim() || null,
       })
       .returning();
 
-    res.status(201).json({ success: true, entry });
+    res.status(201).json({
+      success: true,
+      entry,
+      message: entryType === "payment" ? "Dealer payment recorded." : "Dealer bill recorded.",
+    });
   } catch (err) {
-    console.error("Failed to record dealer payment:", err);
-    res.status(500).json({ error: "Failed to record dealer payment" });
+    console.error("Failed to record dealer entry:", err);
+    res.status(500).json({ error: "Failed to record the dealer entry" });
+  }
+});
+
+// Voided rather than deleted, so a mistyped bill leaves a trail like every
+// other money record in this shop.
+router.post("/admin/dealer-entries/:id/void", authMiddleware, async (req, res) => {
+  const id = Number(req.params.id);
+  const reason = String(req.body?.reason || "").trim();
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid entry id" });
+  }
+  if (!reason) {
+    return res.status(400).json({ error: "A reason is required" });
+  }
+
+  try {
+    const [updated] = await db
+      .update(dealerTransactionsTable)
+      .set({ voidedAt: new Date(), voidReason: reason })
+      .where(eq(dealerTransactionsTable.id, id))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "Entry not found" });
+    res.json({ success: true, message: "Voided. The dealer balance has been corrected." });
+  } catch (err) {
+    console.error("Failed to void dealer entry:", err);
+    res.status(500).json({ error: "Failed to void the entry" });
   }
 });
 
