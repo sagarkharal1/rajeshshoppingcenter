@@ -1002,6 +1002,12 @@ export function OwnerWorkspaceModern(props: any) {
   const [labelsOpen, setLabelsOpen] = useState(false);
   // Adding a category needed a developer before this: the picker listed what
   // already existed and offered no way to start a new one.
+  // Cancelling a wrong bill used to mean working out whose bill it was and
+  // opening that customer first. A mistake is noticed at the counter, seconds
+  // after it is made, so it has to be reachable from where the bill is listed.
+  const [voidBillTarget, setVoidBillTarget] = useState<any>(null);
+  const [voidBillReason, setVoidBillReason] = useState("");
+  const [voidBillBusy, setVoidBillBusy] = useState(false);
   const [focusDealer, setFocusDealer] = useState<string | null>(null);
   const [profileProductId, setProfileProductId] = useState<number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -1028,14 +1034,18 @@ export function OwnerWorkspaceModern(props: any) {
     }
   }, [invoiceForm?.proofPath, paymentForm?.proofPath]);
 
+  // With no search term these used to return nothing, so the customer list
+  // read "Search a customer to view details" over an empty screen — indis-
+  // tinguishable from having no customers, and useless to anyone who does not
+  // already know a name to type. Everyone is listed; typing narrows it.
   const filteredCustomers = customers.filter((customer: any) => {
     const query = customerSearch.trim().toLowerCase();
-    if (!query) return false;
+    if (!query) return true;
     return [customer.name, customer.phone, customer.customerCode].some((value) => String(value || "").toLowerCase().includes(query));
   });
   const filteredProducts = products.filter((product: any) => {
     const query = productSearch.trim().toLowerCase();
-    if (!query) return false;
+    if (!query) return true;
     return [product.name, product.sku, product.categoryName].some((value) => String(value || "").toLowerCase().includes(query));
   });
   const quickCustomers = filteredCustomers.slice(0, 5);
@@ -1286,6 +1296,29 @@ export function OwnerWorkspaceModern(props: any) {
       amount: suggestion.amount || current.amount,
       referenceNote: [current.referenceNote, customerBillScan.text].filter(Boolean).join("\n\n").slice(0, 1200),
     }));
+  };
+
+  const confirmVoidBill = async () => {
+    const reason = voidBillReason.trim();
+    if (!voidBillTarget || !reason) return;
+    setVoidBillBusy(true);
+    try {
+      await props.api(`/admin/invoices/${voidBillTarget.id}/void`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      setVoidBillTarget(null);
+      setVoidBillReason("");
+      await props.reloadOwnerData?.();
+      showFeedback("success", lang === "ne" ? "बिल रद्द भयो। हिसाब मिलाइयो।" : "Bill voided. The balance has been corrected.");
+    } catch (error) {
+      showFeedback(
+        "error",
+        error instanceof Error ? error.message : lang === "ne" ? "रद्द गर्न सकिएन।" : "Could not void the bill.",
+      );
+    } finally {
+      setVoidBillBusy(false);
+    }
   };
 
   const createCategory = async () => {
@@ -1704,6 +1737,25 @@ export function OwnerWorkspaceModern(props: any) {
                           {invoice.note ? (
                             <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{invoice.note}</p>
                           ) : null}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCustomerId(Number(invoice.customerId))}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                            >
+                              👤 {lang === "ne" ? "ग्राहक खोल्नुहोस्" : "Open customer"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVoidBillReason("");
+                                setVoidBillTarget(invoice);
+                              }}
+                              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
+                            >
+                              {lang === "ne" ? "गलत भयो? बिल रद्द गर्नुहोस्" : "Made a mistake? Void this bill"}
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -2626,11 +2678,12 @@ export function OwnerWorkspaceModern(props: any) {
                     </div>
                   </article>
                 ))}
-                {customerSearch.trim() && filteredCustomers.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-slate-500">{lang === "ne" ? "ग्राहक भेटिएन।" : "No matching customer found."}</p>
-                ) : null}
-                {!customerSearch.trim() ? (
-                  <p className="py-6 text-center text-sm text-slate-500">{lang === "ne" ? "ग्राहक हेर्न पहिले खोज्नुहोस्।" : "Search a customer to view details."}</p>
+                {filteredCustomers.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">
+                    {customerSearch.trim()
+                      ? (lang === "ne" ? "ग्राहक भेटिएन।" : "No matching customer found.")
+                      : (lang === "ne" ? "अहिलेसम्म कुनै ग्राहक छैन।" : "No customers yet.")}
+                  </p>
                 ) : null}
               </div>
             </CollapsibleSection>
@@ -3674,6 +3727,63 @@ export function OwnerWorkspaceModern(props: any) {
                 className="flex-1 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white"
               >
                 {confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Same shape as the one on the customer screen: the bill is named and
+          priced before anything happens, and a reason is required. */}
+      {voidBillTarget ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => (voidBillBusy ? null : setVoidBillTarget(null))}
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-900">{lang === "ne" ? "यो बिल रद्द गर्ने?" : "Void this bill?"}</h3>
+            <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">
+              {voidBillTarget.invoiceNumber} · {voidBillTarget.customerName} ·{" "}
+              {money(num(voidBillTarget.amountPaid) + num(voidBillTarget.dueAmount))}
+            </p>
+            <p className="mt-3 text-sm text-slate-600">
+              {lang === "ne"
+                ? "सामान स्टकमा फर्किन्छ, उधारो हिसाब मिल्छ र यसबाट पाएको अंक फिर्ता हुन्छ। बिल मेटिँदैन — रद्द भएको देखिन्छ।"
+                : "Stock goes back, the udharo balance is corrected, and points from this bill are taken back. The bill is not deleted — it stays visible, marked voided."}
+            </p>
+            <label className="mt-4 block text-sm font-semibold text-slate-700">
+              {lang === "ne" ? "किन रद्द गर्दै हुनुहुन्छ?" : "Why are you voiding it?"}
+            </label>
+            <input
+              autoFocus
+              value={voidBillReason}
+              onChange={(e) => setVoidBillReason(e.target.value)}
+              placeholder={lang === "ne" ? "जस्तै: गलत ग्राहकलाई हालियो" : "e.g. entered for the wrong customer"}
+              className={shellInput()}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              {lang === "ne" ? "यो कारण रेकर्डमा सधैं देखिन्छ।" : "This reason stays on the record permanently."}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setVoidBillTarget(null)}
+                disabled={voidBillBusy}
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+              >
+                {lang === "ne" ? "पर्दैन" : "Keep it"}
+              </button>
+              <button
+                type="button"
+                onClick={confirmVoidBill}
+                disabled={voidBillBusy || !voidBillReason.trim()}
+                className="rounded-2xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {voidBillBusy
+                  ? (lang === "ne" ? "रद्द गर्दै..." : "Voiding...")
+                  : (lang === "ne" ? "हो, रद्द गर्नुहोस्" : "Yes, void it")}
               </button>
             </div>
           </div>
