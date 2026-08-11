@@ -16,32 +16,6 @@ import { db } from "@workspace/db";
  * tiny — a handful of rows per window — and the table is self-cleaning.
  */
 
-const WINDOW_TABLE = "rate_limit_counters";
-
-let ensured: Promise<void> | null = null;
-function ensureTable() {
-  if (!ensured) {
-    ensured = db
-      .execute(
-        sql`CREATE TABLE IF NOT EXISTS rate_limit_counters (
-              bucket_key text NOT NULL,
-              window_start timestamptz NOT NULL,
-              hits integer NOT NULL DEFAULT 0,
-              PRIMARY KEY (bucket_key, window_start)
-            )`,
-      )
-      .then(() => undefined)
-      .catch((error) => {
-        // A limiter that cannot reach the database must not take the shop down
-        // with it; it falls back to allowing the request, which is what the
-        // memory store did anyway.
-        console.error("Could not create the rate limit table:", error);
-        ensured = null;
-      });
-  }
-  return ensured;
-}
-
 class PostgresStore implements Store {
   private windowMs = 60_000;
 
@@ -57,7 +31,6 @@ class PostgresStore implements Store {
     const start = this.windowStart();
     const resetTime = new Date(start.getTime() + this.windowMs);
     try {
-      await ensureTable();
       const result: any = await db.execute(
         sql`INSERT INTO rate_limit_counters (bucket_key, window_start, hits)
             VALUES (${key}, ${start.toISOString()}, 1)
@@ -65,8 +38,12 @@ class PostgresStore implements Store {
             DO UPDATE SET hits = rate_limit_counters.hits + 1
             RETURNING hits`,
       );
-      const rows = result?.rows ?? result ?? [];
-      const totalHits = Number(rows[0]?.hits ?? 1);
+      const rows = Array.isArray(result) ? result : (result?.rows ?? []);
+      const raw = rows[0]?.hits;
+      if (raw === undefined || raw === null) {
+        throw new Error("rate limit upsert returned no count");
+      }
+      const totalHits = Number(raw);
 
       // Old windows are worthless once passed. Clearing them occasionally
       // keeps the table from growing without needing a scheduled job.
@@ -130,4 +107,3 @@ export const ownerLoginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-export { WINDOW_TABLE };

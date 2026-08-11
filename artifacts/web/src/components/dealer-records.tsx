@@ -591,7 +591,59 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
                 </button>
 
                 {isOpen ? (
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-3">
+                    {/* Opening a supplier should answer the questions actually
+                        asked about them — how much have we bought, how much
+                        have we paid, what is still owed — before the list of
+                        individual papers. */}
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[
+                        [ne ? "कुल बिल" : "Total billed", money(dealer.totalBilled), "text-slate-900"],
+                        [ne ? "तिरेको" : "Paid", money(dealer.totalPaid), "text-emerald-700"],
+                        [ne ? "तिर्न बाँकी" : "Still owed", money(dealer.totalDue), dealer.totalDue > 0 ? "text-rose-700" : "text-emerald-700"],
+                      ].map(([label, value, cls]) => (
+                        <div key={String(label)} className="rounded-xl bg-white px-3 py-2">
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
+                          <p className={`mt-0.5 text-lg font-extrabold ${cls}`}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {dealer.phone ? (
+                        <a
+                          href={`tel:${dealer.phone}`}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                        >
+                          📞 {dealer.phone}
+                        </a>
+                      ) : null}
+                      {dealer.totalDue > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPayForm((current) => ({
+                              ...current,
+                              dealerName: dealer.name,
+                              dealerPhone: dealer.phone || "",
+                              amount: String(dealer.totalDue),
+                            }));
+                            setMessage(
+                              ne
+                                ? `${dealer.name} लाई तिर्ने फारम माथि भरियो — रकम मिलाएर सेभ गर्नुहोस्।`
+                                : `The payment form above is filled in for ${dealer.name} — adjust the amount and save.`,
+                            );
+                          }}
+                          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white"
+                        >
+                          {ne ? "यसलाई तिर्नुहोस्" : "Pay this dealer"}
+                        </button>
+                      ) : null}
+                      <span className="text-xs text-slate-500">
+                        {ne ? "अन्तिम कारोबार" : "Last activity"}: {new Date(dealer.lastActivity).toLocaleDateString()}
+                      </span>
+                    </div>
+
                     {dealer.entries.map((entry) => (
                       <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
                         <div className="flex flex-wrap justify-between gap-2">

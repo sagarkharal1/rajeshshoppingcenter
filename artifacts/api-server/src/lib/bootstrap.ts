@@ -68,6 +68,16 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS stamp_path TEXT`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_path TEXT`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_name TEXT`,
+    // 2026-08: Rate limit counters, shared by every instance. Created here
+    // with everything else rather than lazily on first use — a table that only
+    // appears when a limiter fires is a table that silently never appears, and
+    // the limiter then counts every request as the first one.
+    `CREATE TABLE IF NOT EXISTS rate_limit_counters (
+       bucket_key text NOT NULL,
+       window_start timestamptz NOT NULL,
+       hits integer NOT NULL DEFAULT 0,
+       PRIMARY KEY (bucket_key, window_start)
+     )`,
     // 2026-08: Dealer bills and payments in their own right. They lived on the
     // stock ledger, which forced every entry to name a product; a supplier's
     // bill is a debt, and stock arrives through the product screen instead.
