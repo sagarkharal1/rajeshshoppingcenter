@@ -127,12 +127,22 @@ const labels = {
     credit: "Credit",
     reason: "Reason",
   },
+  // Missing keys fall through to English, so anything absent here is a word the
+  // shopkeeper reads in English while using the app in Nepali — which is how
+  // "Product Due", "Transport Due" and "Total Due" stayed untranslated on the
+  // screen he opens most.
   ne: {
     title: "ग्राहकको विवरण",
     close: "बन्द गर्नुहोस्",
     orders: "अर्डर",
     bookings: "बुकिङ",
     payments: "भुक्तानी",
+    invoices: "सामानका बिल",
+    allActivity: "सबै कारोबार",
+    productDue: "सामानको बाँकी",
+    transportDue: "यातायातको बाँकी",
+    totalDue: "कुल बाँकी",
+    noInvoices: "अझै कुनै बिल छैन",
     creditHistory: "उधारो इतिहास",
     totalSpent: "कुल खर्च",
     rewardPoints: "पुरस्कार अंक",
@@ -356,7 +366,7 @@ export function CustomerDetailModal({
         ...(customer.invoices || []).map((invoice) => ({
           id: `invoice-${invoice.id}`,
           date: invoice.createdAt,
-          title: `Bill ${invoice.invoiceNumber}`,
+          title: `${lang === "ne" ? "बिल" : "Bill"} ${invoice.invoiceNumber}`,
           meta: `${invoice.paymentMethod} - ${invoice.paymentStatus}`,
           amount: Number(invoice.totalAmount || 0),
           due: Number(invoice.dueAmount || 0),
@@ -655,7 +665,7 @@ export function CustomerDetailModal({
                         );
                       })
                     ) : (
-                      <p className="text-center py-8 text-gray-500">No account activity yet</p>
+                      <p className="text-center py-8 text-gray-500">{lang === "ne" ? "अहिलेसम्म कुनै कारोबार छैन" : "No account activity yet"}</p>
                     )}
                   </div>
                 )}
@@ -687,7 +697,7 @@ export function CustomerDetailModal({
                                   {lang === "ne" ? "यसपछिको बाँकी" : "Balance after"}: Rs. {invoice.dueAmount.toLocaleString()}
                                 </p>
                               ) : (
-                                <p className="text-sm font-bold text-emerald-700">Paid</p>
+                                <p className="text-sm font-bold text-emerald-700">{lang === "ne" ? "भुक्तानी भयो" : "Paid"}</p>
                               )}
                             </div>
                           </div>
@@ -763,7 +773,7 @@ export function CustomerDetailModal({
                           >
                             <div className="flex-1 text-left">
                               <p className="font-semibold text-gray-900">
-                                Order #{order.id}
+                                {lang === "ne" ? "अर्डर" : "Order"} #{order.id}
                               </p>
                               <p className="text-sm text-gray-600">
                                 {new Date(order.createdAt).toLocaleString()}

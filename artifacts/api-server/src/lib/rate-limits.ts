@@ -1,4 +1,4 @@
-import rateLimit, { type Store, type ClientRateLimitInfo } from "express-rate-limit";
+import rateLimit, { MemoryStore, type Store, type ClientRateLimitInfo } from "express-rate-limit";
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 
@@ -18,9 +18,18 @@ import { db } from "@workspace/db";
 
 class PostgresStore implements Store {
   private windowMs = 60_000;
+  // If the shared count is unavailable for any reason, counting falls back to
+  // this process's own memory rather than waving the request through. Worst
+  // case that is the old per-instance behaviour; the previous version returned
+  // "first request of the window" on failure, which is no limit at all — and
+  // it reported a healthy "19 remaining" while doing it.
+  private readonly fallback = new MemoryStore();
+  private fallbackReady = false;
 
   init(options: { windowMs: number }) {
     this.windowMs = options.windowMs;
+    this.fallback.init(options as any);
+    this.fallbackReady = true;
   }
 
   private windowStart(now = Date.now()) {
@@ -55,7 +64,8 @@ class PostgresStore implements Store {
 
       return { totalHits, resetTime };
     } catch (error) {
-      console.error("Rate limit counter failed, allowing the request:", error);
+      console.error("Shared rate limit counter unavailable, counting in memory instead:", error);
+      if (this.fallbackReady) return this.fallback.increment(key);
       return { totalHits: 1, resetTime };
     }
   }
