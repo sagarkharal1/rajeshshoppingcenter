@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- app_name is the label under the launcher icon. The Pixel launcher cuts
+         it at 10 characters — "Rajesh Shop" came out as "Rajesh Sho…" on a real
+         device — so keep this short and let the icon carry the recognition.
+         The full name lives on the title instead. See values-ne for Nepali. -->
+    <string name="app_name">Rajesh</string>
+    <string name="title_activity_main">Rajesh Shopping Center</string>
+    <string name="package_name">np.com.rajeshshoppingcenter.app</string>
+    <string name="custom_url_scheme">np.com.rajeshshoppingcenter.app</string>
+</resources>

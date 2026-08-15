@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "wouter";
 import { useGetCategories, useGetProducts } from "@workspace/api-client-react";
 import { ProductCard } from "@/components/product-card";
 import { CategoryIcon } from "@/components/category-icon";
@@ -7,10 +8,28 @@ import { useLanguage } from "@/lib/language";
 
 export default function CatalogModern() {
   const { lang } = useLanguage();
-  const urlParams = new URLSearchParams(window.location.search);
-  const initialCategory = urlParams.get("category");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(initialCategory ? Number(initialCategory) : null);
+  // Read through the router rather than window.location. Arriving from a
+  // category chip on the home screen, wouter has not finished pushing the query
+  // string when this first renders, so reading window.location directly left
+  // the filter silently unapplied — the customer tapped किराना and got
+  // everything.
+  const search = useSearch();
+  const urlParams = useMemo(() => new URLSearchParams(search), [search]);
+
+  const [searchTerm, setSearchTerm] = useState(() => urlParams.get("search") ?? "");
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(() => {
+    const value = urlParams.get("category");
+    return value ? Number(value) : null;
+  });
+
+  // Keep the filters in step with the URL. Local changes (typing, tapping a
+  // filter button) still work — this only re-syncs when the URL itself moves.
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const category = params.get("category");
+    setSearchTerm(params.get("search") ?? "");
+    setSelectedCategory(category ? Number(category) : null);
+  }, [search]);
   const { data: products, isLoading: loadingProducts, isError: productsFailed, refetch: refetchProducts } = useGetProducts();
   const { data: categories, isLoading: loadingCategories } = useGetCategories();
   const visibleCategories = useMemo(

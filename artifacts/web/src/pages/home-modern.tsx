@@ -1,16 +1,19 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { useGetCategories, useGetProducts, useGetSettings } from "@workspace/api-client-react";
 import { getImageUrl } from "@/lib/utils";
 import { useLanguage } from "@/lib/language";
 import { ProductCard } from "@/components/product-card";
 import { salePriceInfo } from "@/lib/sale-price";
 import { CategoryIcon } from "@/components/category-icon";
-import { ArrowRight, Megaphone, MessageCircle, Phone, ShoppingBag, Star, Truck } from "lucide-react";
+import { ArrowRight, Megaphone, MessageCircle, Phone, Search, ShoppingBag, Star, Truck } from "lucide-react";
 
 const DEFAULT_SHOP_BANNER = "/shop-banner-default.jpeg";
 
 export default function HomeModern() {
   const { lang } = useLanguage();
+  const [, navigate] = useLocation();
+  const [query, setQuery] = useState("");
   const { data: settings, isLoading: loadingSettings } = useGetSettings();
   const { data: categories, isLoading: loadingCategories } = useGetCategories();
   const { data: featuredProducts, isLoading: loadingProducts } = useGetProducts({ featured: true });
@@ -31,7 +34,9 @@ export default function HomeModern() {
   const visibleCategories = (categories ?? []).filter(
     (category) => !hiddenCustomerCategories.has(category.name.trim().toLowerCase()),
   );
-  const categoriesToShow = visibleCategories.slice(0, 6);
+  // Shown as a scrolling chip row now rather than a grid at the foot of the
+  // page, so there is room for more of them.
+  const categoriesToShow = visibleCategories.slice(0, 10);
   const featuredToShow = (featuredProducts ?? [])
     .filter((product) => !hiddenCustomerCategories.has((product.categoryName || "").trim().toLowerCase()))
     .slice(0, 4);
@@ -73,6 +78,12 @@ export default function HomeModern() {
   const whatsappPhone = shopPhone.replace(/[^\d+]/g, "").replace(/^\+/, "");
 
   const copy = {
+    searchPlaceholder: lang === "ne" ? "सामान खोज्नुहोस्…" : "Search for products…",
+    shopTile: lang === "ne" ? "सामान किन्नुहोस्" : "Shop products",
+    shopTileDesc: lang === "ne" ? "किराना, तरकारी, हार्डवेयर" : "Groceries, veg, hardware",
+    bookTile: lang === "ne" ? "गाडी बुक" : "Book transport",
+    bookTileDesc: lang === "ne" ? "बोलेरो र ट्र्याक्टर" : "Bolero and tractor",
+    aboutShop: lang === "ne" ? "पसलको बारेमा" : "About the shop",
     easyOrder: lang === "ne" ? "सजिलो अर्डर" : "Easy Order",
     heroDesc:
       lang === "ne"
@@ -119,50 +130,119 @@ export default function HomeModern() {
 
   return (
     <div className="pb-10">
+      {/* Kept, but slim. homeBannerPath is owner-configurable, so it stays a
+          real feature — it just no longer costs half the first screen. */}
       <section className="mx-auto max-w-6xl px-4 pt-3 sm:px-6">
-        <div className="overflow-hidden rounded-[1.35rem] border border-[#d69e10]/30 bg-[linear-gradient(135deg,#fff8ef_0%,#f7ecd9_44%,#ead0a2_100%)] shadow-[0_12px_28px_-24px_rgba(15,23,42,0.24)]">
-          <div className="grid gap-0 lg:grid-cols-[1.55fr_0.45fr]">
-            <div className="p-4 sm:p-4 lg:p-4">
-              <div className="inline-flex rounded-full bg-[#0f3d7a] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-white">
-                {copy.easyOrder}
-              </div>
-              <h1 className="mt-2 text-xl font-bold leading-tight text-slate-950 sm:text-[1.65rem]">
-                {lang === "ne" ? (settings?.shopName || "राजेश सिपिङ् सेन्टर") : "Rajesh Shopping Center"}
-              </h1>
-              <p className="mt-1.5 max-w-xl text-sm leading-6 text-slate-800">
-                {copy.heroDesc}
-              </p>
-
-              <div className="mt-3 flex flex-wrap gap-2.5">
-                <Link href="/catalog" className="inline-flex min-w-[190px] items-center justify-between gap-3 rounded-xl bg-[#d69e10] px-4 py-2.5 font-bold text-white shadow-[0_10px_20px_-14px_rgba(214,158,16,0.9)]">
-                  <span>{copy.browseProducts}</span>
-                  <ShoppingBag className="h-5 w-5" />
-                </Link>
-                <Link href="/book" className="inline-flex min-w-[190px] items-center justify-between gap-3 rounded-xl bg-[#0f3d7a] px-4 py-2.5 font-bold text-white shadow-[0_10px_20px_-16px_rgba(15,61,122,0.9)]">
-                  <span>{copy.bookTransport}</span>
-                  <Truck className="h-5 w-5" />
-                </Link>
-                <a href={`tel:${shopPhone}`} className="inline-flex min-w-[190px] items-center justify-between gap-3 rounded-xl border border-[#0f3d7a]/20 bg-white px-4 py-2.5 font-bold text-[#0f3d7a]">
-                  <span>{lang === "ne" ? "अहिले फोन गर्नुहोस्" : "Call now"}</span>
-                  <Phone className="h-5 w-5" />
-                </a>
-                <a href={`https://wa.me/${whatsappPhone}`} target="_blank" rel="noreferrer" className="inline-flex min-w-[190px] items-center justify-between gap-3 rounded-xl bg-[#22c55e] px-4 py-2.5 font-bold text-white shadow-[0_10px_20px_-14px_rgba(34,197,94,0.8)]">
-                  <span>{lang === "ne" ? "व्हाट्सएप" : "WhatsApp"}</span>
-                  <MessageCircle className="h-5 w-5" />
-                </a>
-              </div>
-            </div>
-
-            <div className="relative min-h-[132px] bg-[linear-gradient(160deg,#f2c14f,#a86d0f)] lg:min-h-full">
-              {heroImage ? (
-                <img src={heroImage} alt="Shop" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full min-h-[132px] items-center justify-center">
-                  <ShoppingBag className="h-10 w-10 text-white/85" />
-                </div>
-              )}
-            </div>
+        <div className="relative h-24 overflow-hidden rounded-2xl bg-[linear-gradient(160deg,#f2c14f,#a86d0f)] sm:h-32">
+          {heroImage ? (
+            <img src={heroImage} alt="" className="h-full w-full object-cover" />
+          ) : null}
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,0.68)_0%,rgba(15,23,42,0.15)_75%)]" />
+          <div className="absolute inset-0 flex flex-col justify-center px-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200">
+              {copy.easyOrder}
+            </p>
+            <h1 className="mt-0.5 text-lg font-bold leading-tight text-white sm:text-2xl">
+              {lang === "ne" ? (settings?.shopName || "राजेश सिपिङ् सेन्टर") : "Rajesh Shopping Center"}
+            </h1>
           </div>
+        </div>
+      </section>
+
+      {/* Search next. Customers arrive wanting a specific thing, and the old
+          layout made them scroll past the whole shop history to look for it. */}
+      <section className="mx-auto mt-3 max-w-6xl px-4 sm:px-6">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const term = query.trim();
+            navigate(term ? `/catalog?search=${encodeURIComponent(term)}` : "/catalog");
+          }}
+          className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm"
+        >
+          <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={copy.searchPlaceholder}
+            aria-label={copy.searchPlaceholder}
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+          />
+        </form>
+      </section>
+
+      {/* Categories, one tap from opening the app rather than buried at the
+          bottom of the page. Scrolls sideways so a long list costs no height. */}
+      {categoriesToShow.length > 0 ? (
+        <section className="mt-3">
+          <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-1 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Link
+              href="/catalog"
+              className="flex shrink-0 items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              {copy.all}
+            </Link>
+            {categoriesToShow.map((category) => (
+              <Link
+                key={category.id}
+                href={`/catalog?category=${category.id}`}
+                className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm"
+              >
+                <CategoryIcon icon={category.icon} className="h-4 w-4 text-primary" />
+                {category.name}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* The two things the shop actually sells: goods and transport. The old
+          hero stacked four equal-weight buttons, which read as a menu rather
+          than a choice. */}
+      <section className="mx-auto mt-3 max-w-6xl px-4 sm:px-6">
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href="/catalog"
+            className="flex flex-col justify-between rounded-2xl bg-[#d69e10] p-4 text-white shadow-[0_10px_20px_-14px_rgba(214,158,16,0.9)]"
+          >
+            <ShoppingBag className="h-7 w-7" />
+            <div className="mt-4">
+              <p className="text-base font-bold leading-tight">{copy.shopTile}</p>
+              <p className="mt-0.5 text-xs text-white/85">{copy.shopTileDesc}</p>
+            </div>
+          </Link>
+          <Link
+            href="/book"
+            className="flex flex-col justify-between rounded-2xl bg-[#0f3d7a] p-4 text-white shadow-[0_10px_20px_-16px_rgba(15,61,122,0.9)]"
+          >
+            <Truck className="h-7 w-7" />
+            <div className="mt-4">
+              <p className="text-base font-bold leading-tight">{copy.bookTile}</p>
+              <p className="mt-0.5 text-xs text-white/85">{copy.bookTileDesc}</p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Calling and WhatsApp still matter here, but they are how you ask a
+            question — not the main way to order. Sized to match. */}
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <a
+            href={`tel:${shopPhone}`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#0f3d7a]/20 bg-card px-4 py-3 text-sm font-bold text-[#0f3d7a]"
+          >
+            <Phone className="h-4 w-4" />
+            {lang === "ne" ? "फोन" : "Call"}
+          </a>
+          <a
+            href={`https://wa.me/${whatsappPhone}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#22c55e] px-4 py-3 text-sm font-bold text-white"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {lang === "ne" ? "व्हाट्सएप" : "WhatsApp"}
+          </a>
         </div>
       </section>
 
@@ -323,29 +403,6 @@ export default function HomeModern() {
         </div>
       </section>
 
-      {categoriesToShow.length > 0 ? (
-        <section className="mx-auto mt-8 max-w-6xl px-4 sm:px-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">{copy.mainCategories}</h2>
-              <p className="text-sm text-muted-foreground">{copy.oneTap}</p>
-            </div>
-            <Link href="/catalog" className="text-sm font-bold text-primary">
-              {copy.all}
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {categoriesToShow.map((category) => (
-              <Link key={category.id} href={`/catalog?category=${category.id}`} className="rounded-[1.5rem] border border-border bg-card px-4 py-5 text-center shadow-sm">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/8 text-primary">
-                  <CategoryIcon icon={category.icon} className="h-6 w-6" />
-                </div>
-                <p className="mt-3 text-sm font-bold text-foreground">{category.name}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

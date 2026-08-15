@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, Smartphone, X } from "lucide-react";
 import { DeferredInstallPromptEvent } from "@/lib/pwa";
 import { useLanguage } from "@/lib/language";
+import { canInstallApk } from "@/lib/platform";
 
 export const INSTALL_APP_EVENT = "rajesh-shopping-center:install-app";
 
@@ -45,6 +46,11 @@ export function InstallAppBanner() {
   }, [install]);
 
   if (dismissed) return null;
+
+  // On Android the real APK is the better offer, and AndroidApkBanner makes it.
+  // Showing "add to home screen" beside "download the app" reads as two
+  // competing choices for the same thing.
+  if (canInstallApk()) return null;
 
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const showPrompt = Boolean(promptEvent);

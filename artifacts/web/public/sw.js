@@ -1,5 +1,7 @@
-const CACHE_NAME = "rajesh-shopping-center-v3";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon.svg"];
+// Bumped to v4 when the header stopped loading the 1.7 MB logo and moved to
+// the generated icons — old caches still hold the heavy file.
+const CACHE_NAME = "rajesh-shopping-center-v4";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/app-icon.svg", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

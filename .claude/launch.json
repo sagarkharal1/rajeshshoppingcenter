@@ -12,6 +12,12 @@
         "5180"
       ],
       "port": 5180
+    },
+    {
+      "name": "apk-payload",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["artifacts/android/scripts/serve-www.mjs"],
+      "port": 4173
     }
   ]
 }

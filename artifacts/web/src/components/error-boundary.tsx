@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[linear-gradient(180deg,#fffdf9_0%,#f5ede1_100%)] px-4 text-center">
           <img
-            src="/rajesh-logo.png"
+            src="/icons/icon-192.png"
             alt="Rajesh Shopping Center"
             className="h-20 w-20 rounded-2xl object-cover shadow-md"
           />

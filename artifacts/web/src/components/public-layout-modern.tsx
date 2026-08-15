@@ -7,6 +7,8 @@ import { useCart } from "@/lib/cart";
 import { useLanguage } from "@/lib/language";
 import { cn } from "@/lib/utils";
 import { INSTALL_APP_EVENT, InstallAppBanner } from "@/components/install-app-banner";
+import { AndroidApkBanner } from "@/components/android-apk-banner";
+import { APK_GUIDE_PATH, canInstallApk } from "@/lib/platform";
 import { GaneshBlessing } from "@/components/ganesh-blessing";
 import { NepalDateTime } from "@/components/nepal-date-time";
 
@@ -71,11 +73,19 @@ export function PublicLayoutModern({
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link href="/" className="flex min-w-0 items-center gap-3 outline-none" onClick={handleLogoSecretTap}>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <img src="/rajesh-logo.png" alt="Rajesh Shopping Center logo" className="h-full w-full object-cover" />
+              <img src="/icons/icon-192.png" alt="Rajesh Shopping Center logo" className="h-full w-full object-cover" />
             </div>
+            {/* On a phone the shop's own name was being cut to "राजेश सपि…".
+                It now wraps to two lines instead, and the phone number — which
+                is not tappable here, and sits on the home screen as a Call
+                button and again in the footer — gives up its line to make room. */}
             <div className="min-w-0">
-              <p className="truncate font-serif text-lg font-bold text-primary sm:text-xl">{shopName}</p>
-              <p className="truncate text-xs font-medium text-muted-foreground">{settings?.phone || "+9779814401716"}</p>
+              <p className="line-clamp-2 font-serif text-base font-bold leading-tight text-primary sm:truncate sm:text-xl">
+                {shopName}
+              </p>
+              <p className="hidden truncate text-xs font-medium text-muted-foreground sm:block">
+                {settings?.phone || "+9779814401716"}
+              </p>
             </div>
           </Link>
 
@@ -143,14 +153,9 @@ export function PublicLayoutModern({
             >
               <RefreshCw className="h-4 w-4" />
             </button>
-            <Link href="/cart" className="relative rounded-full bg-secondary p-2.5 text-foreground outline-none">
-              <ShoppingBag className="h-5 w-5" />
-              {totalItems > 0 ? (
-                <span className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                  {totalItems}
-                </span>
-              ) : null}
-            </Link>
+            {/* No cart button here on mobile: the bottom bar already carries
+                one, with the same badge, on every screen. Two of them cost the
+                width that was truncating the shop's own name in the header. */}
             <button onClick={() => setIsMobileMenuOpen((value) => !value)} className="rounded-full bg-card p-2.5 text-foreground" aria-label="Toggle menu">
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -180,16 +185,31 @@ export function PublicLayoutModern({
                     {link.label}
                   </Link>
                 ))}
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    handleDownloadApp();
-                  }}
-                  className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base font-bold text-amber-950"
-                >
-                  <Download className="h-5 w-5" />
-                  {downloadAppLabel}
-                </button>
+                {/* On Android this opens the APK page, which is a real install
+                    rather than a home-screen shortcut — and stays reachable
+                    after the banner has been dismissed. Everywhere else it
+                    keeps triggering the browser's own install prompt. */}
+                {canInstallApk() ? (
+                  <a
+                    href={APK_GUIDE_PATH}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base font-bold text-amber-950"
+                  >
+                    <Download className="h-5 w-5" />
+                    {lang === "ne" ? "एन्ड्रोइड एप डाउनलोड" : "Download Android app"}
+                  </a>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleDownloadApp();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-base font-bold text-amber-950"
+                  >
+                    <Download className="h-5 w-5" />
+                    {downloadAppLabel}
+                  </button>
+                )}
               </nav>
             </motion.div>
           ) : null}
@@ -198,21 +218,26 @@ export function PublicLayoutModern({
 
       <main className="flex-1 pb-24 md:pb-0">
         <div className="pt-3">
+          <AndroidApkBanner />
           <InstallAppBanner />
         </div>
+        {/* One slim row. As three stacked blocks this filled most of a phone
+            screen on every page, so products never appeared without scrolling.
+            The blessing, the image and the Nepali date all stay — they are just
+            on one line now. */}
         <div className="mx-auto max-w-6xl px-4 pt-3 sm:px-6">
-          <div className="grid items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-[linear-gradient(135deg,#fff8ef_0%,#f4e0ba_100%)] px-4 py-3 shadow-sm lg:grid-cols-[0.9fr_1.3fr_0.9fr]">
-            <div className="flex h-12 items-center justify-center rounded-[1rem] bg-[rgba(88,28,0,0.9)] px-3 text-center text-sm font-bold leading-tight text-amber-50 shadow-sm sm:h-14 sm:text-base">
+          <div className="flex items-center gap-2.5 overflow-hidden rounded-[1rem] border border-amber-200 bg-[rgba(88,28,0,0.92)] px-3 py-2 shadow-sm sm:gap-3 sm:px-4">
+            <img
+              src="/ganesh-banner.png"
+              alt="Shree Ganesh"
+              className="h-8 w-8 shrink-0 rounded-full object-cover sm:h-9 sm:w-9"
+            />
+            <span className="truncate text-xs font-bold text-amber-50 sm:text-sm">
               ॐ श्री गणेशाय नमः
-            </div>
-            <div className="flex items-center justify-center">
-              <img
-                src="/ganesh-banner.png"
-                alt="Shree Ganesh"
-                className="h-14 w-full max-w-[420px] rounded-[1rem] object-cover shadow-sm sm:h-16"
-              />
-            </div>
-            <NepalDateTime lang={lang} compact />
+            </span>
+            <span className="ml-auto">
+              <NepalDateTime lang={lang} inline />
+            </span>
           </div>
         </div>
         {children}
@@ -251,7 +276,7 @@ export function PublicLayoutModern({
         <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
           <div>
             <div className="mb-4 flex items-center gap-3">
-              <img src="/rajesh-logo.png" alt="Rajesh Shopping Center logo" className="h-10 w-10 rounded-xl object-cover ring-1 ring-white/20" />
+              <img src="/icons/icon-192.png" alt="Rajesh Shopping Center logo" className="h-10 w-10 rounded-xl object-cover ring-1 ring-white/20" />
               <span className="font-serif text-xl font-bold">{shopName}</span>
             </div>
             <p className="max-w-sm text-sm leading-6 text-primary-foreground/80">{t.nav.servingCommunity}</p>

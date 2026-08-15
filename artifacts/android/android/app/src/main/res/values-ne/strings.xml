@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- Shown on phones set to Nepali, which is most of the shop's customers.
+         Kept short for the same truncation reason as the English label. -->
+    <string name="app_name">राजेश</string>
+    <string name="title_activity_main">राजेश सिपिङ् सेन्टर</string>
+</resources>

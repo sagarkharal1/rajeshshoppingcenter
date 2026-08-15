@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/android",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Android shell that packages the web storefront as an installable APK for sideloading.",
+  "scripts": {
+    "prepare-web": "node scripts/prepare-web.mjs",
+    "sync": "pnpm run prepare-web && cap sync android",
+    "build:debug": "pnpm run sync && node scripts/gradle.mjs assembleDebug",
+    "build:release": "pnpm run sync && node scripts/gradle.mjs assembleRelease",
+    "publish-apk": "node scripts/publish-apk.mjs",
+    "make-keystore": "node scripts/make-keystore.mjs",
+    "serve-www": "node scripts/serve-www.mjs",
+    "open": "cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/cli": "8.5.0",
+    "@capacitor/core": "8.5.0"
+  }
+}

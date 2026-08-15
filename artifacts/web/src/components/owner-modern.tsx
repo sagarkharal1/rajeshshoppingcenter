@@ -182,7 +182,7 @@ export function OwnerLoginModern({
           </div>
           <div className="mt-5 flex items-center gap-4">
             <img
-              src="/rajesh-logo.png"
+              src="/icons/icon-192.png"
               alt="Rajesh Shopping Center logo"
               className="h-16 w-16 rounded-2xl object-cover ring-2 ring-white/30"
             />
@@ -214,7 +214,7 @@ export function OwnerLoginModern({
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <img
-                src="/rajesh-logo.png"
+                src="/icons/icon-192.png"
                 alt="Rajesh Shopping Center logo"
                 className="h-12 w-12 rounded-2xl object-cover ring-1 ring-slate-200"
               />
@@ -1363,7 +1363,7 @@ export function OwnerWorkspaceModern(props: any) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <img
-              src="/rajesh-logo.png"
+              src="/icons/icon-192.png"
               alt="Rajesh Shopping Center logo"
               className="h-14 w-14 shrink-0 rounded-2xl object-cover ring-1 ring-slate-200"
             />

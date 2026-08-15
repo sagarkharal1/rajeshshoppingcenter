@@ -17,10 +17,17 @@ export function NepalDateTime({
   lang = "en",
   compact = false,
   centered = false,
+  inline = false,
 }: {
   lang?: "en" | "ne";
   compact?: boolean;
   centered?: boolean;
+  /**
+   * Single line, no heading, no card of its own — for sitting inside another
+   * strip. The default stays the boxed version so existing callers are
+   * unaffected.
+   */
+  inline?: boolean;
 }) {
   const now = useNepalNow();
 
@@ -32,11 +39,26 @@ export function NepalDateTime({
         timeZone: "Asia/Kathmandu",
         hour: "numeric",
         minute: "2-digit",
-        second: compact ? undefined : "2-digit",
+        second: compact || inline ? undefined : "2-digit",
         hour12: true,
       }).format(now),
-    [compact, lang, now],
+    [compact, inline, lang, now],
   );
+
+  if (inline) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-2 text-[11px] font-semibold text-amber-50 sm:text-xs">
+        <span className="inline-flex items-center gap-1">
+          <CalendarDays className="h-3.5 w-3.5 text-amber-200" />
+          {dateText}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock3 className="h-3.5 w-3.5 text-amber-200" />
+          {timeText}
+        </span>
+      </span>
+    );
+  }
 
   return (
     <div

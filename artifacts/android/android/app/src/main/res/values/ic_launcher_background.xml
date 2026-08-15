@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The crest artwork is drawn on black. An adaptive icon composites the
+         foreground over this colour, so anything else shows as a square of
+         backing colour around the art once the launcher applies its mask. -->
+    <color name="ic_launcher_background">#000000</color>
+</resources>

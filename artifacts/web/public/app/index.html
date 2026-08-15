@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ne">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>एप डाउनलोड — राजेश सिपिङ् सेन्टर</title>
+    <meta name="theme-color" content="#173563" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <meta
+      name="description"
+      content="Download the Rajesh Shopping Center Android app. राजेश सिपिङ् सेन्टरको एप डाउनलोड गर्नुहोस्।"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: #fff9f1;
+        color: #1c1917;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.65;
+      }
+
+      .wrap { max-width: 34rem; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
+
+      header { text-align: center; padding-top: 1.5rem; }
+      header img { width: 92px; height: 92px; border-radius: 22px; }
+      h1 { font-size: 1.4rem; margin: 0.75rem 0 0.25rem; }
+      .sub { color: #57534e; font-size: 0.95rem; margin: 0; }
+
+      .langbar { display: flex; justify-content: center; gap: 0.5rem; margin: 1.25rem 0; }
+      .langbar button {
+        border: 1px solid #d6d3d1; background: #fff; color: #1c1917;
+        padding: 0.45rem 1.1rem; border-radius: 999px; font: inherit;
+        font-size: 0.85rem; cursor: pointer;
+      }
+      .langbar button[aria-pressed="true"] { background: #173563; border-color: #173563; color: #fff; font-weight: 700; }
+
+      .cta {
+        display: block; text-align: center; text-decoration: none;
+        background: #f5b301; color: #173563; font-weight: 800; font-size: 1.05rem;
+        padding: 1.05rem; border-radius: 18px; margin: 1.25rem 0 0.5rem;
+        box-shadow: 0 8px 20px rgba(23, 53, 99, 0.18);
+      }
+      .meta { text-align: center; color: #78716c; font-size: 0.82rem; margin: 0 0 1.75rem; }
+
+      .step {
+        background: #fff; border: 1px solid #e7e5e4; border-radius: 18px;
+        padding: 1rem 1.1rem; margin-bottom: 0.85rem; display: flex; gap: 0.9rem;
+      }
+      .num {
+        flex: 0 0 1.9rem; height: 1.9rem; border-radius: 50%;
+        background: #173563; color: #fff; font-weight: 700; font-size: 0.9rem;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .step h3 { margin: 0.1rem 0 0.3rem; font-size: 1rem; }
+      .step p { margin: 0; font-size: 0.92rem; color: #44403c; }
+
+      .warn {
+        background: #fffbeb; border: 1px solid #fcd34d; border-radius: 18px;
+        padding: 1.1rem; margin: 1.5rem 0;
+      }
+      .warn h3 { margin: 0 0 0.4rem; font-size: 1rem; color: #92400e; }
+      .warn p { margin: 0 0 0.5rem; font-size: 0.92rem; color: #78350f; }
+      .warn p:last-child { margin-bottom: 0; }
+      .quote {
+        background: #fff; border-radius: 12px; padding: 0.6rem 0.8rem;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        font-size: 0.85rem; color: #44403c; margin: 0.5rem 0;
+      }
+
+      .alt { text-align: center; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e7e5e4; }
+      .alt a { color: #173563; font-weight: 600; }
+      .foot { text-align: center; color: #a8a29e; font-size: 0.8rem; margin-top: 2rem; }
+
+      [data-lang] { display: none; }
+      body[data-active="ne"] [data-lang="ne"] { display: block; }
+      body[data-active="en"] [data-lang="en"] { display: block; }
+      .step [data-lang], .warn [data-lang] { display: none; }
+      body[data-active="ne"] .step [data-lang="ne"],
+      body[data-active="ne"] .warn [data-lang="ne"] { display: block; }
+      body[data-active="en"] .step [data-lang="en"],
+      body[data-active="en"] .warn [data-lang="en"] { display: block; }
+    </style>
+  </head>
+
+  <body data-active="ne">
+    <div class="wrap">
+      <header>
+        <img src="/icons/icon-192.png" alt="Rajesh Shopping Center" />
+        <h1 data-lang="ne">राजेश सिपिङ् सेन्टर एप</h1>
+        <h1 data-lang="en">Rajesh Shopping Center app</h1>
+        <p class="sub" data-lang="ne">फोनमा एप जस्तै — इन्टरनेट ढिलो भए पनि चल्छ।</p>
+        <p class="sub" data-lang="en">A real app on your phone — works even when the internet is slow.</p>
+      </header>
+
+      <div class="langbar">
+        <button type="button" data-set="ne" aria-pressed="true">नेपाली</button>
+        <button type="button" data-set="en" aria-pressed="false">English</button>
+      </div>
+
+      <a class="cta" id="download" href="/download/rajesh-shop.apk" download>
+        <span data-lang="ne">एप डाउनलोड गर्नुहोस्</span>
+        <span data-lang="en">Download the app</span>
+      </a>
+      <p class="meta">
+        Android · <span id="size">~10 MB</span> ·
+        <span data-lang="ne">संस्करण <span class="ver">1.0.0</span></span>
+        <span data-lang="en">version <span class="ver">1.0.0</span></span>
+      </p>
+
+      <div class="step">
+        <div class="num">१</div>
+        <div>
+          <h3 data-lang="ne">डाउनलोड थिच्नुहोस्</h3>
+          <h3 data-lang="en">Tap download</h3>
+          <p data-lang="ne">फाइल फोनको <b>Downloads</b> मा जान्छ। सकिएपछि त्यसैलाई थिच्नुहोस्।</p>
+          <p data-lang="en">The file lands in your <b>Downloads</b>. Tap it when it finishes.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">२</div>
+        <div>
+          <h3 data-lang="ne">अनुमति दिनुहोस्</h3>
+          <h3 data-lang="en">Allow the install</h3>
+          <p data-lang="ne">
+            फोनले <b>“Allow from this source”</b> सोध्न सक्छ। अनुमति दिनुहोस् — यो एक पटक मात्र सोध्छ।
+          </p>
+          <p data-lang="en">
+            Android may ask to <b>“Allow from this source”</b>. Turn it on — it only asks once.
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">३</div>
+        <div>
+          <h3 data-lang="ne">Install थिच्नुहोस्</h3>
+          <h3 data-lang="en">Tap Install</h3>
+          <p data-lang="ne">केही सेकेन्डमा सकिन्छ। त्यसपछि होम स्क्रिनमा आइकन देखिन्छ।</p>
+          <p data-lang="en">It takes a few seconds, then the icon appears on your home screen.</p>
+        </div>
+      </div>
+
+      <div class="warn">
+        <h3 data-lang="ne">⚠️ चेतावनी देखिए नआत्तिनुहोस्</h3>
+        <h3 data-lang="en">⚠️ If you see a warning, don't panic</h3>
+
+        <p data-lang="ne">
+          फोनले यस्तो देखाउन सक्छ:
+        </p>
+        <p data-lang="en">Your phone may show something like:</p>
+
+        <div class="quote">“Unsafe app blocked” / “Play Protect ले रोक्यो”</div>
+
+        <p data-lang="ne">
+          यो एप बिग्रेको भएर होइन। Play Store बाट नआएको जुनसुकै एपलाई Android ले यसै भन्छ।
+          <b>More details</b> → <b>Install anyway</b> थिच्नुहोस्।
+        </p>
+        <p data-lang="en">
+          Nothing is wrong with the app. Android says this about every app that did not come from
+          the Play Store. Tap <b>More details</b>, then <b>Install anyway</b>.
+        </p>
+
+        <p data-lang="ne">
+          पत्याउन नसके पसलमा फोन गर्नुहोस् — तलको नम्बरमा।
+        </p>
+        <p data-lang="en">
+          If you would rather check first, call the shop on the number below.
+        </p>
+      </div>
+
+      <div class="alt">
+        <p data-lang="ne">
+          डाउनलोड गर्न मन छैन? वेबसाइट फोनमै एप जस्तै राख्न सकिन्छ —
+          <a href="/">यहाँ खोल्नुहोस्</a> र ब्राउजरको मेनुबाट <b>“Add to Home screen”</b> रोज्नुहोस्।
+        </p>
+        <p data-lang="en">
+          Would rather not download? The website can sit on your home screen like an app —
+          <a href="/">open it here</a> and choose <b>“Add to Home screen”</b> from the browser menu.
+          This is the only option on iPhone.
+        </p>
+      </div>
+
+      <p class="foot">राजेश सिपिङ् सेन्टर · मुसिकोट-५, आँपचौर, गुल्मी</p>
+    </div>
+
+    <script>
+      (function () {
+        var body = document.body;
+
+        // Match whatever language the shop's website is already set to, so the
+        // page does not flip to English for someone who set Nepali there.
+        try {
+          if (localStorage.getItem("rajesh_web_lang_v2") === "en") {
+            body.dataset.active = "en";
+          }
+        } catch (error) {
+          // Private mode or blocked storage: the Nepali default stands.
+        }
+
+        function apply(lang) {
+          body.dataset.active = lang;
+          document.documentElement.lang = lang;
+          buttons.forEach(function (button) {
+            button.setAttribute("aria-pressed", String(button.dataset.set === lang));
+          });
+          try {
+            localStorage.setItem("rajesh_web_lang_v2", lang);
+          } catch (error) {
+            /* Nothing to do — the choice just will not persist. */
+          }
+        }
+
+        var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-set]"));
+        buttons.forEach(function (button) {
+          button.addEventListener("click", function () {
+            apply(button.dataset.set);
+          });
+        });
+
+        apply(body.dataset.active);
+
+        // Keep the advertised version honest without anyone editing this page:
+        // app-version.json is written by the Android build.
+        fetch("/app-version.json", { cache: "no-store" })
+          .then(function (response) {
+            return response.ok ? response.json() : null;
+          })
+          .then(function (info) {
+            if (!info || !info.versionName) return;
+            Array.prototype.forEach.call(document.querySelectorAll(".ver"), function (node) {
+              node.textContent = info.versionName;
+            });
+          })
+          .catch(function () {
+            /* Offline: the built-in number stays. */
+          });
+
+        // Report the real download size rather than a guess that rots.
+        fetch("/download/rajesh-shop.apk", { method: "HEAD" })
+          .then(function (response) {
+            var bytes = Number(response.headers.get("content-length"));
+            if (!bytes) return;
+            document.getElementById("size").textContent =
+              (bytes / (1024 * 1024)).toFixed(1) + " MB";
+          })
+          .catch(function () {
+            /* Leave the estimate in place. */
+          });
+      })();
+    </script>
+  </body>
+</html>
