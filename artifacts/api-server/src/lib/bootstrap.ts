@@ -72,6 +72,26 @@ async function runMigrations(): Promise<void> {
     // 2026-08: Dealer bills and payments in their own right. They lived on the
     // stock ledger, which forced every entry to name a product; a supplier's
     // bill is a debt, and stock arrives through the product screen instead.
+    // 2026-08: exactly one settings row, enforced by the database.
+    //
+    // The owner's password hash, the TOTP secret and the payment IDs all live
+    // on this row, and every read took whichever row Postgres felt like
+    // returning. Two rows is not hypothetical: the seed below inserts defaults
+    // when it finds none, and on serverless several cold instances can find
+    // none at the same moment and all insert. That happened here — one row
+    // held the real password and eSewa details, the other was bare defaults,
+    // and the old password kept working whenever a login read the wrong one.
+    //
+    // Skipped rather than attempted when duplicates already exist: the index
+    // cannot be created then, and a throw here fails bootstrap, which fails
+    // every request. Consolidate first, and the guard takes hold on the next
+    // start.
+    `DO $$
+     BEGIN
+       IF (SELECT count(*) FROM settings) <= 1 THEN
+         CREATE UNIQUE INDEX IF NOT EXISTS settings_single_row ON settings ((true));
+       END IF;
+     END $$`,
     `CREATE TABLE IF NOT EXISTS dealer_transactions (
        id serial PRIMARY KEY,
        entry_type text NOT NULL DEFAULT 'purchase',
@@ -103,7 +123,16 @@ export async function ensureBootstrapData(): Promise<void> {
 
       const [settings] = await db.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
       if (!settings) {
-        await db.insert(settingsTable).values(DEFAULT_SETTINGS as any);
+        try {
+          await db.insert(settingsTable).values(DEFAULT_SETTINGS as any);
+        } catch (error) {
+          // Another instance seeded it between the check above and here. With
+          // the single-row index in place that now raises a unique violation
+          // instead of quietly creating a second row — which is the point, but
+          // it must not take the losing instance down with it.
+          const code = (error as any)?.cause?.code ?? (error as any)?.code;
+          if (code !== "23505") throw error;
+        }
       }
 
       const categories = await db.select().from(categoriesTable).limit(1);
