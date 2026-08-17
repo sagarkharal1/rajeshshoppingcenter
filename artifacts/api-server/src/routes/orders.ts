@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable, stockLedgerTable } from "@workspace/db/schema";
 import { effectivePrice } from "../lib/pricing";
 import { desc, eq, inArray, sql } from "drizzle-orm";
-import { sendTelegramMessage, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
+import { sendOwnerNotification, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
 import { customerLookupLimiter } from "../lib/rate-limits.js";
@@ -295,7 +295,9 @@ router.post("/orders", async (req, res) => {
       return { order, customer, rewardPointsEarned };
     });
 
-    sendTelegramMessage(formatTelegramOrderMessage({
+    // Awaited: serverless freezes this instance once the response is sent, so a
+    // fire-and-forget send never runs and the alert waits for the daily cron.
+    await sendOwnerNotification(formatTelegramOrderMessage({
       id: result.order.id,
       customerName: result.order.customerName,
       customerPhone: result.order.customerPhone,
@@ -566,7 +568,8 @@ router.post("/bookings", async (req, res) => {
       return createdBooking;
     });
 
-    sendTelegramMessage(formatTelegramBookingMessage({
+    // Awaited for the same reason as the order alert above.
+    await sendOwnerNotification(formatTelegramBookingMessage({
       id: booking.id,
       serviceType: booking.serviceType,
       customerName: booking.customerName,

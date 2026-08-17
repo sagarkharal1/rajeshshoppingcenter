@@ -63,7 +63,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-async function trySendNow(chatId: string, message: string): Promise<boolean> {
+async function trySendNow(chatId: string, message: string, timeoutMs = 10_000): Promise<boolean> {
   const token = getTelegramBotToken();
   if (!token) return false;
 
@@ -75,7 +75,7 @@ async function trySendNow(chatId: string, message: string): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "HTML", disable_web_page_preview: true }),
-    }, 10_000);
+    }, timeoutMs);
 
     if (res.ok) return true;
 
@@ -84,7 +84,7 @@ async function trySendNow(chatId: string, message: string): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text: plainText, disable_web_page_preview: true }),
-    }, 10_000);
+    }, timeoutMs);
 
     return fallback.ok;
   } catch {
@@ -211,6 +211,67 @@ export async function diagnoseTelegram(sendTest: boolean): Promise<TelegramDiagn
 
   result.ok = true;
   return result;
+}
+
+// A customer is waiting on the order confirmation while this runs, so the
+// notification gets a shorter budget than a login code does. Past it we stop
+// waiting and leave the message queued for the next cron run rather than
+// holding up the checkout.
+const NOTIFY_TIMEOUT_MS = 6_000;
+
+/**
+ * Tell the owner about something that just happened, and wait long enough to
+ * know whether it worked.
+ *
+ * `sendTelegramMessage()` below queues and returns immediately, leaving the
+ * send to a floating promise. On a long-running server that is fine — the
+ * process is still there, and a 30-second worker retries. On serverless it is
+ * not: the instance is frozen the moment the response goes out, so the send
+ * usually never runs at all, and the only thing that would drain the queue is
+ * the daily cron at 01:45 Nepal time. A new order the shopkeeper hears about
+ * the following night is not a notification.
+ *
+ * Failure leaves the row "pending", not "failed", so the cron still retries —
+ * `sendTelegramMessageNow()` marks failures terminal, which is right for a
+ * login code nobody wants resent hours later and wrong for an order.
+ *
+ * Never throws. Telegram being down must not fail a customer's order.
+ */
+export async function sendOwnerNotification(message: string): Promise<boolean> {
+  const chatIds = getTelegramChatIds();
+  const token = getTelegramBotToken();
+
+  if (!token || !chatIds.length) {
+    console.warn("[Telegram] Missing bot token or chat ID env var.");
+    return false;
+  }
+
+  let delivered = false;
+
+  for (const chatId of chatIds) {
+    let sent = false;
+    try {
+      sent = await trySendNow(chatId, message, NOTIFY_TIMEOUT_MS);
+    } catch (err) {
+      console.error("[Telegram] Notification attempt threw:", err);
+    }
+    if (sent) delivered = true;
+
+    try {
+      await db.insert(telegramQueueTable).values({
+        message,
+        chatId,
+        status: sent ? "sent" : "pending",
+        attempts: 1,
+        lastAttemptedAt: new Date(),
+        ...(sent ? { sentAt: new Date() } : {}),
+      });
+    } catch (err) {
+      console.error("[Telegram] Could not record a notification:", err);
+    }
+  }
+
+  return delivered;
 }
 
 // Enqueue message to DB then attempt immediately in background
