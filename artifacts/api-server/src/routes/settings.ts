@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { asc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { settingsTable } from "@workspace/db/schema";
 
@@ -155,7 +156,7 @@ function normalizePublicSettings(settings: Record<string, unknown>) {
 
 router.get("/settings", async (_req, res) => {
   try {
-    const [settings] = await db.select().from(settingsTable).limit(1);
+    const [settings] = await db.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
     if (!settings) {
       return res.json(stripSensitiveFields(DEFAULT_PUBLIC_SETTINGS));
     }

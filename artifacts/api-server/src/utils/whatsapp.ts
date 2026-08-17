@@ -1,3 +1,4 @@
+import { asc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { settingsTable } from "@workspace/db/schema";
 
@@ -17,7 +18,7 @@ async function getWhatsAppConfig(): Promise<{ phone: string; apiKey: string } | 
   const [settings] = await db.select({
     whatsappPhone: settingsTable.whatsappPhone,
     whatsappApiKey: settingsTable.whatsappApiKey,
-  }).from(settingsTable).limit(1);
+  }).from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
 
   if (!settings?.whatsappPhone || !settings?.whatsappApiKey) {
     cachedConfig = null;

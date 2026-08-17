@@ -19,7 +19,7 @@ import {
   dealerTransactionsTable,
   telegramQueueTable,
 } from "@workspace/db/schema";
-import { eq, sql, and, desc, ilike, inArray, or } from "drizzle-orm";
+import { asc, eq, sql, and, desc, ilike, inArray, or } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -158,7 +158,7 @@ async function isOwnerPasswordValid(password: string, storedHash: string | null)
 
 async function getSettings() {
   await ensureBootstrapData();
-  const [settings] = await db.select().from(settingsTable).limit(1);
+  const [settings] = await db.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
   return settings ?? null;
 }
 
@@ -1913,7 +1913,7 @@ const OWNER_ONLY_SECRETS = [
 
 router.get("/admin/settings", authMiddleware, async (_req, res) => {
   try {
-    const [settings] = await db.select().from(settingsTable).limit(1);
+    const [settings] = await db.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
     if (!settings) return res.json({});
     const safe: Record<string, unknown> = { ...settings };
     for (const key of OWNER_ONLY_SECRETS) delete safe[key];

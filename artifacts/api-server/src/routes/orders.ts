@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@workspace/db";
 import { bookingsTable, customerLedgerTable, customerPaymentsTable, invoicesTable, productsTable, rewardTransactionsTable, settingsTable, stockLedgerTable } from "@workspace/db/schema";
 import { effectivePrice } from "../lib/pricing";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { sendOwnerNotification, formatTelegramBookingMessage, formatTelegramOrderMessage } from "../utils/telegram-service.js";
 import { customersTable } from "../../../../lib/db/src/schema/business";
 import { ordersTable } from "../../../../lib/db/src/schema/orders";
@@ -198,7 +198,7 @@ router.post("/orders", async (req, res) => {
         customer = codedCustomer;
       }
 
-      const [settings] = await tx.select().from(settingsTable).limit(1);
+      const [settings] = await tx.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
       const rewardRate = Number(settings?.rewardRate ?? 1);
       const rewardUnitAmount = Number(settings?.rewardUnitAmount ?? 100);
       const rewardPointsEarned =

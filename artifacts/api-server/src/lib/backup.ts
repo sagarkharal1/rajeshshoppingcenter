@@ -16,7 +16,7 @@ import {
   settingsTable,
   telegramQueueTable,
 } from "@workspace/db/schema";
-import { getTableColumns, sql } from "drizzle-orm";
+import { asc, getTableColumns, sql } from "drizzle-orm";
 import { createWriteStream, existsSync, unlinkSync } from "fs";
 import { readFile } from "fs/promises";
 import { exec } from "child_process";
@@ -341,7 +341,7 @@ export async function restoreJsonBackup(
 
   await db.transaction(async (tx) => {
     // Keep the current admin credentials to carry across the restore.
-    const [currentSettings] = await tx.select().from(settingsTable).limit(1);
+    const [currentSettings] = await tx.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
 
     for (const entry of [...RESTORE_ORDER].reverse()) {
       await tx.delete(entry.table);

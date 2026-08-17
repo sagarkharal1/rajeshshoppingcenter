@@ -1,3 +1,4 @@
+import { asc } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import { categoriesTable, settingsTable } from "@workspace/db/schema";
 
@@ -100,7 +101,7 @@ export async function ensureBootstrapData(): Promise<void> {
     bootstrapPromise = (async () => {
       await runMigrations();
 
-      const [settings] = await db.select().from(settingsTable).limit(1);
+      const [settings] = await db.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
       if (!settings) {
         await db.insert(settingsTable).values(DEFAULT_SETTINGS as any);
       }

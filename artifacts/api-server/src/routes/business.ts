@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { asc, and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   customerLedgerTable,
@@ -960,7 +960,7 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
       // Clamped by what the customer actually holds and by the bill itself,
       // so points can never go negative and a discount can never exceed what
       // is owed (which would otherwise hand out cash).
-      const [rewardSettings] = await tx.select().from(settingsTable).limit(1);
+      const [rewardSettings] = await tx.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
       const pointValue = Math.max(asNumber(rewardSettings?.rewardPointValue ?? 1), 0);
       const pointsHeld = Number(customer.rewardPoints ?? 0);
       const requestedPoints = parsed.data.redeemPoints;
@@ -983,7 +983,7 @@ router.post("/admin/invoices", authMiddleware, async (req, res) => {
         throw new Error("WALK_IN_CREDIT_NOT_ALLOWED");
       }
 
-      const [settings] = await tx.select().from(settingsTable).limit(1);
+      const [settings] = await tx.select().from(settingsTable).orderBy(asc(settingsTable.id)).limit(1);
       const rewardRate = Number(settings?.rewardRate ?? 1);
       const rewardUnitAmount = asNumber(settings?.rewardUnitAmount ?? 100);
       const basePoints =
