@@ -685,10 +685,20 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
           totalCredit: num(data.combined?.totalCredit ?? data.summary?.totalCredit),
         },
         shop: {
-          invoiceCount: num(data.shop?.invoiceCount ?? data.summary?.totalInvoices ?? data.summary?.totalOrders),
-          totalBilled: num(data.shop?.totalBilled ?? data.summary?.totalInvoiceAmount ?? data.summary?.totalOrderAmount),
+          // The old fallbacks reached for order counts and order amounts when
+          // invoice figures were missing, which quietly showed website sales as
+          // counter sales. Online has its own block now.
+          invoiceCount: num(data.shop?.invoiceCount ?? data.summary?.totalInvoices),
+          totalBilled: num(data.shop?.totalBilled ?? data.summary?.totalInvoiceAmount),
           totalCollected: num(data.shop?.totalCollected ?? data.summary?.totalInvoicePaid),
           totalCredit: num(data.shop?.totalCredit ?? data.summary?.totalInvoiceCredit),
+        },
+        online: {
+          orderCount: num(data.online?.orderCount ?? data.summary?.totalOrders),
+          totalBilled: num(data.online?.totalBilled ?? data.summary?.totalOrderAmount),
+          totalCollected: num(data.online?.totalCollected),
+          totalCredit: num(data.online?.totalCredit),
+          linesWithoutCost: num(data.online?.linesWithoutCost),
         },
         transport: {
           bookingCount: num(data.transport?.bookingCount ?? data.summary?.totalBookings),
@@ -870,6 +880,39 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Online orders. Kept separate from Shop Sales rather than merged:
+              these never become bills, and the shopkeeper needs to see how much
+              of the day came through the website at all. */}
+          <div className="rounded-[1.5rem] border border-sky-100 bg-sky-50/30 p-5 shadow-sm">
+            <h4 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+              <span className="rounded-lg bg-sky-100 px-2 py-1 text-xs font-bold uppercase text-sky-800">
+                🌐 {lang === "ne" ? "अनलाइन बिक्री" : "Online sales"}
+              </span>
+              <span className="text-sm font-normal text-slate-400">
+                ({report?.online?.orderCount ?? 0} {lang === "ne" ? "अर्डर" : "orders"})
+              </span>
+            </h4>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: lang === "ne" ? "सामान बिक्री" : "Goods sold", value: fmt(report?.online?.totalBilled ?? 0) },
+                { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(report?.online?.totalCollected ?? 0), cls: "text-emerald-700" },
+                { label: lang === "ne" ? "बाँकी" : "Still owed", value: fmt(report?.online?.totalCredit ?? 0), cls: "text-rose-700" },
+              ].map(({ label, value, cls = "text-slate-950" }) => (
+                <div key={label} className="rounded-2xl bg-white px-4 py-3">
+                  <p className="text-xs text-slate-500">{label}</p>
+                  <p className={`mt-1 text-lg font-bold ${cls}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            {(report?.online?.linesWithoutCost ?? 0) > 0 ? (
+              <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-2 text-xs leading-relaxed text-amber-900">
+                {lang === "ne"
+                  ? `${report?.online?.linesWithoutCost ?? 0} वटा पुरानो अनलाइन बिक्रीमा किन्दाको मूल्य लेखिएको छैन, त्यसैले तिनको नाफा तलको हिसाबमा छैन। नयाँ अर्डरहरूमा हुनेछ।`
+                  : `${report?.online?.linesWithoutCost ?? 0} older online sale line(s) have no recorded buying price, so their profit is not in the figures below. New orders will have it.`}
+              </p>
+            ) : null}
           </div>
 
           {/* Transport breakdown */}

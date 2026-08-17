@@ -1598,6 +1598,9 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
           id: ordersTable.id,
           customerId: ordersTable.customerId,
           totalAmount: ordersTable.totalAmount,
+          amountPaid: ordersTable.amountPaid,
+          items: ordersTable.items,
+          status: ordersTable.status,
           paymentStatus: ordersTable.paymentStatus,
           paymentMethod: ordersTable.paymentMethod,
           createdAt: ordersTable.createdAt,
@@ -1606,7 +1609,9 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
         .from(ordersTable)
         .leftJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
         .where(
-          sqlRaw`${ordersTable.createdAt} >= ${startDate} AND ${ordersTable.createdAt} < ${endDate}`
+          // A cancelled order sold nothing and must not appear as revenue —
+          // the invoice side has the same exclusion for voided bills.
+          sqlRaw`${ordersTable.createdAt} >= ${startDate} AND ${ordersTable.createdAt} < ${endDate} AND ${ordersTable.status} <> 'cancelled'`
         );
     }
 
@@ -1770,6 +1775,38 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       (sum: number, o: any) => sum + Number(o.totalAmount || 0),
       0
     );
+    const totalOrderPaid = ordersData.reduce(
+      (sum: number, o: any) => sum + Number(o.amountPaid || 0),
+      0
+    );
+    const totalOrderCredit = ordersData.reduce(
+      (sum: number, o: any) =>
+        sum + Math.max(0, Number(o.totalAmount || 0) - Number(o.amountPaid || 0)),
+      0
+    );
+
+    // Cost of goods sold online, from the cost frozen on each order line.
+    //
+    // Orders placed before that was recorded carry no unitCost, and there is no
+    // way back to what those goods cost — today's buying price may be months
+    // out of date. They are counted as sales with unknown cost and reported
+    // separately, because a margin computed from a guessed cost is a made-up
+    // number on a screen the shop makes decisions from.
+    let onlineGoodsRevenue = 0;
+    let onlineGoodsCost = 0;
+    let onlineLinesWithoutCost = 0;
+
+    for (const order of ordersData) {
+      for (const line of (order.items ?? []) as Array<any>) {
+        const revenue = Number(line.price || 0) * Number(line.quantity || 0);
+        onlineGoodsRevenue += revenue;
+        if (line.unitCost === undefined || line.unitCost === null) {
+          onlineLinesWithoutCost += 1;
+          continue;
+        }
+        onlineGoodsCost += Number(line.unitCost) * Number(line.quantity || 0);
+      }
+    }
     const totalBookings = bookingsData.length;
     const totalBookingAmount = bookingsData.reduce(
       (sum: number, b: any) => sum + Number(b.chargedAmount || 0),
@@ -1799,11 +1836,27 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       totalCollected: totalBookingPaid,
       totalCredit: totalBookingCredit,
     };
+    // Website orders. They never become invoices, so without this the shop sold
+    // goods, shipped stock and took money with no sale recorded anywhere.
+    const online = {
+      orderCount: totalOrders,
+      totalBilled: totalOrderAmount,
+      totalCollected: totalOrderPaid,
+      totalCredit: totalOrderCredit,
+      goodsRevenue: onlineGoodsRevenue,
+      goodsCost: onlineGoodsCost,
+      // Sales whose cost was never recorded, so profit below excludes them.
+      linesWithoutCost: onlineLinesWithoutCost,
+    };
     const combined = {
-      totalBilled: shop.totalBilled + transport.totalBilled,
+      totalBilled: shop.totalBilled + transport.totalBilled + online.totalBilled,
+      // Deliberately NOT adding online.totalCollected. Confirming an online
+      // order writes a customer_payments row, so that money is already inside
+      // totalPaymentsMade — adding it here would count every online payment
+      // twice, which is the same mistake that made "Billed" wrong.
       totalCollected: shop.totalCollected + transport.totalCollected + totalPaymentsMade,
       totalCredit: currentCustomerCreditDue,
-      rawRecordCredit: shop.totalCredit + transport.totalCredit,
+      rawRecordCredit: shop.totalCredit + transport.totalCredit + online.totalCredit,
     };
 
     // ── Gross profit ──────────────────────────────────────────────────────
@@ -1878,6 +1931,7 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
       combined,
       shop,
       transport,
+      online,
       profit,
       dealer: {
         ...periodDealerTotals,

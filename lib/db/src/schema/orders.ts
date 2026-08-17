@@ -16,6 +16,11 @@ export const ordersTable = pgTable("orders", {
     price: number;
     quantity: number;
     unit: string;
+    // What the goods cost the shop, frozen when the order was placed — the
+    // same thing invoice lines record. Optional because orders taken before
+    // this existed have no cost, and inventing one from today's buying price
+    // would report a margin that never happened.
+    unitCost?: number;
   }>>(),
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   // How much has actually been received — supports partial payments

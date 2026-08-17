@@ -86,6 +86,13 @@ router.post("/orders", async (req, res) => {
         salePrice: productsTable.salePrice,
         saleStartsAt: productsTable.saleStartsAt,
         saleEndsAt: productsTable.saleEndsAt,
+        // What the goods cost the shop. Stored on the order line below, the
+        // same way an invoice line stores it, so profit is the real margin
+        // rather than a guess from whatever the buying price happens to be
+        // months later.
+        buyingPrice: productsTable.buyingPrice,
+        transportationCost: productsTable.transportationCost,
+        extraCost: productsTable.extraCost,
       })
       .from(productsTable)
       .where(inArray(productsTable.id, requestedItems.map((item) => item.productId)));
@@ -136,6 +143,14 @@ router.post("/orders", async (req, res) => {
         price: effectivePrice(product),
         quantity: item.quantity,
         unit: product.unit,
+        // Frozen here, like an invoice line. Without it an online sale had no
+        // recoverable margin: stock left the shop and money came in, but what
+        // the goods had cost was never written down, and a later report could
+        // only guess from a buying price that may have changed since.
+        unitCost:
+          Number(product.buyingPrice ?? 0) +
+          Number(product.transportationCost ?? 0) +
+          Number(product.extraCost ?? 0),
       };
     });
 
