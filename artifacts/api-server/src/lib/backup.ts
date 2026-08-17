@@ -23,6 +23,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { gzip, gunzip } from "zlib";
 import * as path from "path";
+import { getBackupDir } from "./backup-dir.js";
 
 const execAsync = promisify(exec);
 const gzipAsync = promisify(gzip);
@@ -110,7 +111,7 @@ export async function createJsonBackup(): Promise<BackupMetadata> {
   const jsonString = JSON.stringify(data, null, 2);
   const buffer = await gzipAsync(Buffer.from(jsonString, "utf-8"));
 
-  const backupDir = path.join(process.cwd(), "backups");
+  const backupDir = getBackupDir();
   if (!existsSync(backupDir)) {
     require("fs").mkdirSync(backupDir, { recursive: true });
   }
@@ -144,7 +145,7 @@ export async function createJsonBackup(): Promise<BackupMetadata> {
 export async function createSqlBackup(): Promise<BackupMetadata> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `backup-${timestamp}.sql.gz`;
-  const backupDir = path.join(process.cwd(), "backups");
+  const backupDir = getBackupDir();
 
   if (!existsSync(backupDir)) {
     require("fs").mkdirSync(backupDir, { recursive: true });
@@ -213,7 +214,7 @@ export async function createSqlBackup(): Promise<BackupMetadata> {
 }
 
 export async function listLocalBackups(): Promise<BackupMetadata[]> {
-  const backupDir = path.join(process.cwd(), "backups");
+  const backupDir = getBackupDir();
   if (!existsSync(backupDir)) {
     return [];
   }
@@ -250,7 +251,7 @@ export async function deleteLocalBackup(filename: string): Promise<void> {
     throw new Error("Invalid backup filename");
   }
 
-  const backupDir = path.join(process.cwd(), "backups");
+  const backupDir = getBackupDir();
   const filepath = path.join(backupDir, filename);
 
   if (!existsSync(filepath)) {
@@ -321,7 +322,7 @@ export async function restoreJsonBackup(
     throw new Error("Only JSON backups can be restored");
   }
 
-  const filepath = path.join(process.cwd(), "backups", filename);
+  const filepath = path.join(getBackupDir(), filename);
   if (!existsSync(filepath)) {
     throw new Error("Backup file not found");
   }

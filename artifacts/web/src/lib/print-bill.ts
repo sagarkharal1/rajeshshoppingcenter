@@ -15,9 +15,6 @@ export type BillShopInfo = {
   phone?: string;
   address?: string;
   pan?: string;
-  /** Optional images of the shop's rubber stamp and the owner's signature. */
-  stampPath?: string | null;
-  signaturePath?: string | null;
   /** Name printed under the signature line. Falls back to the shop name. */
   signatureName?: string | null;
 };
@@ -25,23 +22,18 @@ export type BillShopInfo = {
 /**
  * The sign-and-stamp footer, printed on every slip.
  *
- * A bill in this shop is proof of what was taken and what is owed, so it has
- * to be signable. This prints an empty ruled line and a stamp box by default —
- * paper the owner signs and stamps by hand, which needs no setup at all. If a
- * stamp or signature image has been uploaded it is printed in place of the
- * blank space, so reprints and emailed copies carry the same marks.
+ * A bill in this shop is proof of what was taken and what is owed, so it has to
+ * be signable. Deliberately blank: a ruled line and a dashed box, for the
+ * shopkeeper to sign and stamp the printed paper by hand. Storing an image of
+ * the stamp was tried and removed — it was never what was asked for, and it put
+ * the shop's own mark in a database that gets copied into every backup.
  */
 export function signStampBlock(shop: BillShopInfo, lang: "en" | "ne") {
   const ne = lang === "ne";
   const escape = (value: unknown) =>
     String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-  const signatureFill = shop.signaturePath
-    ? `<img src="${escape(shop.signaturePath)}" alt="" style="max-height:46px;max-width:100%;object-fit:contain">`
-    : "";
-  const stampFill = shop.stampPath
-    ? `<img src="${escape(shop.stampPath)}" alt="" style="max-height:74px;max-width:100%;object-fit:contain">`
-    : `<span style="font-size:10px;color:#cbd5e1">${ne ? "छाप यहाँ" : "Stamp here"}</span>`;
+  const stampFill = `<span style="font-size:10px;color:#cbd5e1">${ne ? "छाप यहाँ" : "Stamp here"}</span>`;
 
   return `
 <div style="display:flex;gap:14px;margin-top:26px;page-break-inside:avoid">
@@ -52,7 +44,7 @@ export function signStampBlock(shop: BillShopInfo, lang: "en" | "ne") {
     </div>
   </div>
   <div style="flex:1;min-width:0">
-    <div style="height:48px;display:flex;align-items:flex-end;justify-content:center">${signatureFill}</div>
+    <div style="height:48px"></div>
     <div style="border-top:1px solid #94a3b8;padding-top:5px;text-align:center;font-size:11px;color:#64748b">
       ${ne ? "पसलको तर्फबाट" : "For"} ${escape(shop.signatureName || shop.name)}
     </div>

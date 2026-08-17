@@ -10,8 +10,6 @@ export const ordersTable = pgTable("orders", {
   customerPhone: text("customer_phone").notNull(),
   customerEmail: text("customer_email"),
   customerAddress: text("customer_address").notNull(),
-  customerPhotoPath: text("customer_photo_path"), // Customer ID photo or profile picture
-  paymentScreenshotPath: text("payment_screenshot_path"), // Screenshot for eSewa / Khalti payment proof
   items: jsonb("items").notNull().$type<Array<{
     productId: number;
     productName: string;
@@ -46,7 +44,6 @@ export const bookingsTable = pgTable("bookings", {
   amountPaid: numeric("amount_paid", { precision: 12, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method").notNull().default("cash"),
   paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | partial | paid
-  proofPath: text("proof_path"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

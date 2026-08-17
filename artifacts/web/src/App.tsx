@@ -236,11 +236,11 @@ function OwnerApp() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [publicSettings, setPublicSettings] = useState<any>(null);
-  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
-  const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
+  const [customerForm, setCustomerForm] = useState({ name: "", phone: "", address: "", notes: "", customerCode: "" });
+  const [paymentForm, setPaymentForm] = useState({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
   const [productForm, setProductForm] = useState({ name: "", sku: "", description: "", price: "", buyingPrice: "", transportationCost: "", extraCost: "", stockQuantity: "", reorderLevel: "", unit: "piece", categoryId: "", expiryDate: "", salePrice: "", saleStartsAt: "", saleEndsAt: "" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "grocery", sortOrder: "1" });
-  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", proofPath: "", redeemPoints: "" });
+  const [invoiceForm, setInvoiceForm] = useState({ customerId: 0, paymentMethod: "cash", amountPaid: "", note: "", redeemPoints: "" });
   // Kept on the device rather than in shop settings: whether a printer is
   // attached depends on which counter machine is being used, not the shop.
   const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem("auto-print-bill") === "true");
@@ -646,9 +646,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       rewardBonusStartsAt: settingsData?.rewardBonusStartsAt ? String(settingsData.rewardBonusStartsAt).slice(0, 10) : "",
       rewardBonusEndsAt: settingsData?.rewardBonusEndsAt ? String(settingsData.rewardBonusEndsAt).slice(0, 10) : "",
       invoiceFooter: settingsData?.invoiceFooter ?? "",
-      stampPath: settingsData?.stampPath ?? "",
-      signaturePath: settingsData?.signaturePath ?? "",
-      signatureName: settingsData?.signatureName ?? "",
       aboutText: settingsData?.aboutText ?? "",
       deliveryPolicy: settingsData?.deliveryPolicy ?? "",
       termsConditions: settingsData?.termsConditions ?? "",
@@ -951,7 +948,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
         await api("/admin/customers", { method: "POST", body: JSON.stringify(customerForm) });
       }
       setEditingCustomerId(null);
-      setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
+      setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "" });
       await load();
       showOwnerFeedback("success", lang === "ne" ? "ग्राहक सुरक्षित भयो।" : "Customer saved.");
     } catch (err) {
@@ -967,7 +964,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
     }
     try {
       await api("/admin/payments", { method: "POST", body: JSON.stringify({ ...paymentForm, amount: num(paymentForm.amount) }) });
-      setPaymentForm({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "", proofPath: "" });
+      setPaymentForm({ customerId: 0, amount: "", paymentMethod: "cash", referenceNote: "" });
       await load();
       showOwnerFeedback("success", lang === "ne" ? "भुक्तानी सुरक्षित भयो।" : "Payment saved.");
     } catch (err) {
@@ -1053,9 +1050,9 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       return;
     }
     try {
-      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, redeemPoints: preview.redeemPoints, note: invoiceForm.note, proofPath: invoiceForm.proofPath, items: lines }) });
+      const result = await api<any>("/admin/invoices", { method: "POST", body: JSON.stringify({ customerId: invoiceForm.customerId, paymentMethod: invoiceForm.paymentMethod, amountPaid: preview.amountPaid, redeemPoints: preview.redeemPoints, note: invoiceForm.note, items: lines }) });
       setLastInvoice(result);
-      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash", proofPath: "", redeemPoints: "" });
+      setInvoiceForm({ customerId: 0, amountPaid: "", note: "", paymentMethod: "cash", redeemPoints: "" });
       setLines([]);
       await load();
       showOwnerFeedback("success", lang === "ne" ? "बिक्री सुरक्षित भयो।" : "Sale saved.");
@@ -1145,7 +1142,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       address: customer.address ?? "",
       notes: customer.notes ?? "",
       customerCode: customer.customerCode ?? "",
-      photoPath: customer.photoPath ?? "",
     });
     setTab("customers");
   };
@@ -1156,7 +1152,7 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
       await api(`/admin/customers/${customerId}`, { method: "DELETE" });
       if (editingCustomerId === customerId) {
         setEditingCustomerId(null);
-        setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "", photoPath: "" });
+        setCustomerForm({ name: "", phone: "", address: "", notes: "", customerCode: "" });
       }
       await load();
       showOwnerFeedback("success", lang === "ne" ? "ग्राहक हटाइयो।" : "Customer removed.");
@@ -1221,9 +1217,6 @@ const [ownerFeedback, setOwnerFeedback] = useState<{ type: "success" | "error"; 
           rewardBonusStartsAt: settingsForm.rewardBonusStartsAt || null,
           rewardBonusEndsAt: settingsForm.rewardBonusEndsAt || null,
           invoiceFooter: settingsForm.invoiceFooter || null,
-          stampPath: settingsForm.stampPath || null,
-          signaturePath: settingsForm.signaturePath || null,
-          signatureName: settingsForm.signatureName || null,
           aboutText: settingsForm.aboutText || null,
           deliveryPolicy: settingsForm.deliveryPolicy || null,
           termsConditions: settingsForm.termsConditions || null,

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Printer, ArrowUp, ArrowDown, Phone, MapPin, Gift, ReceiptText, Truck, CreditCard } from "lucide-react";
 import { printBill, type BillShopInfo } from "@/lib/print-bill";
-import { printOrderSlip, printBookingSlip, printPaymentReceipt, openProofDocument } from "@/lib/print-slips";
+import { printOrderSlip, printBookingSlip, printPaymentReceipt } from "@/lib/print-slips";
 
 interface Order {
   id: number;
@@ -33,7 +33,6 @@ interface Booking {
   destination: string;
   bookingDate: string;
   customerName: string;
-  proofPath?: string | null;
 }
 
 interface Payment {
@@ -42,7 +41,6 @@ interface Payment {
   method: string;
   date: string;
   referenceNote?: string;
-  proofPath?: string | null;
   voidedAt?: string | null;
   voidReason?: string | null;
 }
@@ -59,7 +57,6 @@ interface Invoice {
   paymentMethod: string;
   createdAt: string;
   note?: string | null;
-  proofPath?: string | null;
   voidedAt?: string | null;
   voidReason?: string | null;
 }
@@ -740,13 +737,6 @@ export function CustomerDetailModal({
                               </button>
                             )}
                           </div>
-                          {invoice.proofPath ? (
-                            // Tap to see it full size — a thumbnail of a payment
-                            // screenshot is too small to read a reference from.
-                            <button type="button" onClick={() => openProofDocument(invoice.proofPath as string, `${invoice.invoiceNumber} — ${lang === "ne" ? "भुक्तानीको प्रमाण" : "payment proof"}`, lang)} className="mt-3 block w-full">
-                              <img src={invoice.proofPath} alt="Invoice proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
-                            </button>
-                          ) : null}
                         </div>
                       ))
                     ) : (
@@ -887,11 +877,6 @@ export function CustomerDetailModal({
                               </p>
                             )}
                           </div>
-                          {booking.proofPath ? (
-                            <button type="button" onClick={() => openProofDocument(booking.proofPath as string, `Booking #${booking.id} — ${lang === "ne" ? "भुक्तानीको प्रमाण" : "payment proof"}`, lang)} className="mt-3 block w-full">
-                              <img src={booking.proofPath} alt="Booking proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
-                            </button>
-                          ) : null}
                           <button
                             type="button"
                             onClick={() => openBooking(booking)}
@@ -966,11 +951,6 @@ export function CustomerDetailModal({
                               </button>
                             )}
                           </div>
-                          {payment.proofPath ? (
-                            <button type="button" onClick={() => openProofDocument(payment.proofPath as string, `${lang === "ne" ? "भुक्तानीको प्रमाण" : "Payment proof"} — Rs. ${payment.amount.toLocaleString()}`, lang, new Date(payment.date).toLocaleString())} className="mt-3 block w-full">
-                              <img src={payment.proofPath} alt="Payment proof" className="max-h-56 w-full rounded-xl border border-gray-200 bg-gray-50 object-contain p-2" />
-                            </button>
-                          ) : null}
                         </div>
                       ))
                     ) : (

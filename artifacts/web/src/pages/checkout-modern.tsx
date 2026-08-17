@@ -35,8 +35,6 @@ export default function CheckoutModern() {
     email: "",
     address: "",
     notes: "",
-    customerPhotoPath: "",
-    paymentScreenshotPath: "",
   });
   const [paymentMethod, setPaymentMethod] = useState<"bank" | "esewa" | "khalti">("bank");
   const [isSuccess, setIsSuccess] = useState(false);
@@ -88,75 +86,6 @@ export default function CheckoutModern() {
     if (formData.notes.trim()) lines.push(`${t.checkout.notes}: ${formData.notes.trim()}`);
     const normalizedPhone = ownerPhone.replace(/[^\d+]/g, "");
     return `https://wa.me/${normalizedPhone.replace(/^\+/, "")}?text=${encodeURIComponent(lines.filter(Boolean).join("\n"))}`;
-  };
-
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-
-  // Phone screenshots are far larger than the server accepts, so shrink them
-  // in the browser first. Without this a normal screenshot is rejected and the
-  // customer sees an unexplained validation error at the last step.
-  const readImageCompressed = async (file: File, maxSide = 1280, quality = 0.72) => {
-    const original = await readFileAsDataUrl(file);
-    try {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const element = new Image();
-        element.onload = () => resolve(element);
-        element.onerror = () => reject(new Error("Could not read image"));
-        element.src = original;
-      });
-
-      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.width * scale);
-      canvas.height = Math.round(image.height * scale);
-      const context = canvas.getContext("2d");
-      if (!context) return original;
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-      let output = canvas.toDataURL("image/jpeg", quality);
-      // Keep well inside the server's limit even for busy screenshots.
-      for (let step = 0; step < 3 && output.length > 400_000; step++) {
-        output = canvas.toDataURL("image/jpeg", quality - 0.15 * (step + 1));
-      }
-      return output.length < original.length ? output : original;
-    } catch {
-      return original;
-    }
-  };
-
-  // Every image the customer attaches goes through here. Compression can still
-  // fall short — an already-tiny file it cannot improve on, or a browser where
-  // the canvas step failed — so the size is checked while they are still
-  // looking at the upload box. Left unchecked, an oversized photo passed
-  // validation only at submit, and the whole order failed with no clue why.
-  const MAX_UPLOAD_CHARS = 480_000;
-  const attachImage = async (
-    file: File,
-    field: "customerPhotoPath" | "paymentScreenshotPath",
-  ) => {
-    setSubmitError("");
-    try {
-      const dataUrl = await readImageCompressed(file);
-      if (dataUrl.length > MAX_UPLOAD_CHARS) {
-        setSubmitError(
-          lang === "ne"
-            ? "यो फोटो धेरै ठूलो भयो। कृपया अर्को सानो फोटो छान्नुहोस्, वा फोटो नराखी अर्डर गर्नुहोस्।"
-            : "That photo is too large. Please pick a smaller one, or place the order without a photo.",
-        );
-        return;
-      }
-      setFormData((current) => ({ ...current, [field]: dataUrl }));
-    } catch {
-      setSubmitError(
-        lang === "ne" ? "फोटो पढ्न सकिएन। अर्को फोटो प्रयास गर्नुहोस्।" : "Could not read that photo. Try another one.",
-      );
-    }
   };
 
   if (items.length === 0 && !isSuccess) {
@@ -214,8 +143,6 @@ export default function CheckoutModern() {
           customerEmail: cleanedEmail || undefined,
           customerAddress: cleanedAddress,
           notes: cleanedNotes || undefined,
-          customerPhotoPath: formData.customerPhotoPath || undefined,
-          paymentScreenshotPath: formData.paymentScreenshotPath || undefined,
           paymentMethod,
           paymentStatus: "unpaid",
           items: validItems,
@@ -511,53 +438,6 @@ export default function CheckoutModern() {
                       ? "पुरानो ग्राहक भए यही फोन नम्बर वा इमेल भएको खातामा अर्डर जोडिन्छ। फोन नम्बर वा इमेल फरक भए एउटै नाम भए पनि छुट्टै ग्राहकको रूपमा सुरक्षित हुन्छ।"
                       : "This order automatically creates or updates the customer record. The app uses phone number and email as identifiers, so customers with the same name are stored separately when their phone or email is different."}
                   </p>
-                  <label className="mt-4 block rounded-xl border border-dashed border-border bg-background px-4 py-4 text-sm text-muted-foreground">
-                    <span className="font-semibold text-foreground">{lang === "ne" ? "📸 आईडी फोटो / प्रोफाइल (वैकल्पिक)" : "📸 ID Photo / Profile (optional)"}</span>
-                    <p className="mt-1 text-xs text-muted-foreground">{lang === "ne" ? "आपको पहिचान पत्र वा प्रोफाइल फोटो" : "Your ID card or profile photo"}</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      className="mt-3 block w-full text-sm"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        await attachImage(file, "customerPhotoPath");
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {formData.customerPhotoPath ? (
-                    <img src={formData.customerPhotoPath} alt="Customer preview" className="mt-4 h-32 w-32 rounded-2xl object-cover border border-border" />
-                  ) : null}
-
-                  {/* Payment screenshot — only for eSewa and Khalti */}
-                  {(paymentMethod === "esewa" || paymentMethod === "khalti") ? (
-                    <label className="mt-4 block rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                      <span className="font-semibold">{lang === "ne" ? "📱 भुक्तानीको स्क्रीनशट (राखे छिटो हुन्छ)" : "📱 Payment screenshot (speeds up confirmation)"}</span>
-                      <p className="mt-1 text-xs text-amber-700">{lang === "ne" ? `${paymentMethod === "esewa" ? "eSewa" : "Khalti"} ट्रान्जेक्शन सफल भएको स्क्रीनशट` : `Screenshot showing successful ${paymentMethod === "esewa" ? "eSewa" : "Khalti"} transaction`}</p>
-                      {/* No `capture` attribute: the proof is a screenshot the
-                          customer already has in their gallery, so forcing the
-                          camera would make it impossible to attach. */}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="mt-3 block w-full text-sm"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          await attachImage(file, "paymentScreenshotPath");
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  ) : null}
-                  {formData.paymentScreenshotPath ? (
-                    <div className="mt-3">
-                      <p className="text-xs font-semibold text-emerald-700 mb-2">✅ {lang === "ne" ? "स्क्रीनशट अपलोड भयो" : "Screenshot uploaded"}</p>
-                      <img src={formData.paymentScreenshotPath} alt="Payment proof" className="h-32 w-32 rounded-2xl object-cover border border-emerald-200 bg-emerald-50" />
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </div>

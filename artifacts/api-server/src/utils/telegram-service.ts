@@ -138,50 +138,125 @@ export function sendTelegramMessage(message: string): void {
   }
 }
 
-// Background worker — call once on server startup
-export function startTelegramQueueWorker(): void {
-  const INTERVAL_MS = 30_000; // check every 30 seconds
-  const MAX_ATTEMPTS = 240;   // give up after 2 hours
+/**
+ * Sends now, waits for the result, and reports whether Telegram actually took
+ * the message.
+ *
+ * `sendTelegramMessage()` above queues and returns immediately, leaning on
+ * `startTelegramQueueWorker()` to retry every 30 seconds. That is the right
+ * trade for a new-order notification, and the wrong one for a login code:
+ *
+ * - On serverless there is no worker, and the queue is drained once a day. A
+ *   queued login code is a lock-out, not a delayed message.
+ * - Even with the worker running, the caller could not tell the owner whether
+ *   the code was on its way, so the login screen said "code sent" either way.
+ *
+ * Anything a person is sitting and waiting for goes through here instead.
+ */
+export async function sendTelegramMessageNow(message: string): Promise<boolean> {
+  const chatIds = getTelegramChatIds();
+  const token = getTelegramBotToken();
 
-  async function processPending() {
+  if (!token || !chatIds.length) {
+    console.warn("[Telegram] Missing bot token or chat ID env var.");
+    return false;
+  }
+
+  let delivered = false;
+
+  for (const chatId of chatIds) {
+    const sent = await trySendNow(chatId, message);
+    if (sent) delivered = true;
+
+    // Recorded so the attempt is visible alongside the queued messages. A
+    // database problem must never decide whether we tell the owner their code
+    // was sent — that answer comes from Telegram, above.
     try {
-      const pending = await db
-        .select()
-        .from(telegramQueueTable)
-        .where(
-          and(
-            eq(telegramQueueTable.status, "pending"),
-            lt(telegramQueueTable.attempts, MAX_ATTEMPTS),
-          )
-        )
-        .limit(20);
-
-      for (const item of pending) {
-        const sent = await trySendNow(item.chatId, item.message);
-        const newAttempts = item.attempts + 1;
-
-        if (sent) {
-          await db.update(telegramQueueTable)
-            .set({ status: "sent", sentAt: new Date(), attempts: newAttempts, lastAttemptedAt: new Date() })
-            .where(eq(telegramQueueTable.id, item.id));
-          console.info(`[Telegram] Queue #${item.id} sent on attempt ${newAttempts}`);
-        } else if (newAttempts >= MAX_ATTEMPTS) {
-          await db.update(telegramQueueTable)
-            .set({ status: "failed", attempts: newAttempts, lastAttemptedAt: new Date() })
-            .where(eq(telegramQueueTable.id, item.id));
-          console.error(`[Telegram] Queue #${item.id} permanently failed after ${newAttempts} attempts`);
-        } else {
-          await db.update(telegramQueueTable)
-            .set({ attempts: newAttempts, lastAttemptedAt: new Date() })
-            .where(eq(telegramQueueTable.id, item.id));
-        }
-      }
+      await db.insert(telegramQueueTable).values({
+        message,
+        chatId,
+        status: sent ? "sent" : "failed",
+        attempts: 1,
+        lastAttemptedAt: new Date(),
+        ...(sent ? { sentAt: new Date() } : {}),
+      });
     } catch (err) {
-      console.error("[Telegram] Queue worker error:", err);
+      console.error("[Telegram] Could not record a direct send:", err);
     }
   }
 
-  setInterval(processPending, INTERVAL_MS);
+  return delivered;
+}
+
+const QUEUE_MAX_ATTEMPTS = 240; // 2 hours at one attempt every 30 seconds
+
+/**
+ * Drains one batch of the pending queue.
+ *
+ * Exported so it can be driven two ways: on a 30-second interval by
+ * `startTelegramQueueWorker()` where a process stays alive, or once per run
+ * from `/api/cron/daily` on serverless, where nothing does.
+ *
+ * Returns a small summary so the cron route can report what it did.
+ */
+export async function processTelegramQueueOnce(): Promise<{
+  attempted: number;
+  sent: number;
+  failed: number;
+}> {
+  const summary = { attempted: 0, sent: 0, failed: 0 };
+
+  try {
+    const pending = await db
+      .select()
+      .from(telegramQueueTable)
+      .where(
+        and(
+          eq(telegramQueueTable.status, "pending"),
+          lt(telegramQueueTable.attempts, QUEUE_MAX_ATTEMPTS),
+        )
+      )
+      .limit(20);
+
+    for (const item of pending) {
+      const sent = await trySendNow(item.chatId, item.message);
+      const newAttempts = item.attempts + 1;
+      summary.attempted += 1;
+
+      if (sent) {
+        await db.update(telegramQueueTable)
+          .set({ status: "sent", sentAt: new Date(), attempts: newAttempts, lastAttemptedAt: new Date() })
+          .where(eq(telegramQueueTable.id, item.id));
+        summary.sent += 1;
+        console.info(`[Telegram] Queue #${item.id} sent on attempt ${newAttempts}`);
+      } else if (newAttempts >= QUEUE_MAX_ATTEMPTS) {
+        await db.update(telegramQueueTable)
+          .set({ status: "failed", attempts: newAttempts, lastAttemptedAt: new Date() })
+          .where(eq(telegramQueueTable.id, item.id));
+        summary.failed += 1;
+        console.error(`[Telegram] Queue #${item.id} permanently failed after ${newAttempts} attempts`);
+      } else {
+        await db.update(telegramQueueTable)
+          .set({ attempts: newAttempts, lastAttemptedAt: new Date() })
+          .where(eq(telegramQueueTable.id, item.id));
+      }
+    }
+  } catch (err) {
+    console.error("[Telegram] Queue worker error:", err);
+  }
+
+  return summary;
+}
+
+// Background worker — call once on server startup. Has no effect on serverless,
+// where the process does not outlive the response; `/api/cron/daily` covers it.
+export function startTelegramQueueWorker(): void {
+  const INTERVAL_MS = 30_000; // check every 30 seconds
+
+  setInterval(() => {
+    void processTelegramQueueOnce();
+  }, INTERVAL_MS);
+
   console.info("[Telegram] Queue worker started (checks every 30s)");
 }
 

@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "crypto";
 import { readFile } from "fs/promises";
 import path from "path";
+import { getBackupDir } from "./backup-dir.js";
 
 type RemoteBackupConfig = {
   configured: boolean;
@@ -85,7 +86,7 @@ export async function uploadBackupToRemote(filename: string): Promise<UploadResu
   const endpoint = config.endpoint!;
   const bucket = config.bucket!;
   const key = `${config.prefix}/${filename}`;
-  const filePath = path.resolve(process.cwd(), "backups", filename);
+  const filePath = path.resolve(getBackupDir(), filename);
   const body = await readFile(filePath);
   const payloadHash = createHash("sha256").update(body).digest("hex");
   const now = new Date();

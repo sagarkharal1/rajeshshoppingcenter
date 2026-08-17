@@ -18,7 +18,6 @@ export const customersTable = pgTable("customers", {
   phone: text("phone"),
   email: text("email"),
   address: text("address"),
-  photoPath: text("photo_path"),
   rewardPoints: integer("reward_points").notNull().default(0),
   creditBalance: numeric("credit_balance", { precision: 12, scale: 2 })
     .notNull()
@@ -55,7 +54,6 @@ export const invoicesTable = pgTable("invoices", {
     .notNull()
     .default("0"),
   note: text("note"),
-  proofPath: text("proof_path"),
   printedAt: timestamp("printed_at"),
   // Voided invoices are kept for the audit trail but excluded from balances,
   // stock, and every revenue report.
@@ -88,7 +86,6 @@ export const customerPaymentsTable = pgTable("customer_payments", {
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull().default("cash"),
   referenceNote: text("reference_note"),
-  proofPath: text("proof_path"),
   voidedAt: timestamp("voided_at"),
   voidReason: text("void_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

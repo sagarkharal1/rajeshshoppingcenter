@@ -24,8 +24,6 @@ export const dealerTransactionsTable = pgTable("dealer_transactions", {
   billNumber: text("bill_number"),
   billAmount: numeric("bill_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   paidAmount: numeric("paid_amount", { precision: 12, scale: 2 }).notNull().default("0"),
-  /** Photo of the supplier's own bill or receipt. */
-  proofPath: text("proof_path"),
   note: text("note"),
   // Kept rather than deleted, like every other money record in this shop, so a
   // correction leaves a trail instead of a hole.

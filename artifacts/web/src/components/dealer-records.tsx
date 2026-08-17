@@ -21,8 +21,6 @@ type DealerEntry = {
   paidAmount: number;
   dealerDue: number;
   note?: string | null;
-  /** Photo of the bill the supplier handed over. */
-  proofPath?: string | null;
   canVoid?: boolean;
   // Only on older records, which were tied to a product.
   productName?: string | null;
@@ -79,7 +77,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
     billNumber: "",
     billAmount: "",
     paidAmount: "",
-    proofPath: "",
     note: "",
   });
 
@@ -89,7 +86,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
     amount: "",
     billNumber: "",
     note: "",
-    proofPath: "",
   });
 
   // Returns and damage really are stock leaving the shop, so unlike a bill
@@ -101,16 +97,7 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
     quantity: "",
     kind: "return" as "return" | "damaged",
     reason: "",
-    proofPath: "",
   });
-
-  const readProofImage = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Failed to read proof image"));
-      reader.readAsDataURL(file);
-    });
 
   const load = async () => {
     const data = await api("/admin/dealers");
@@ -175,37 +162,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
     </select>
   );
 
-  const PhotoPicker = ({
-    label,
-    value,
-    onPick,
-  }: {
-    label: string;
-    value: string;
-    onPick: (dataUrl: string) => void;
-  }) => (
-    <>
-      <label className="block rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600">
-        {label}
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="mt-2 block w-full text-sm"
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            onPick(await readProofImage(file));
-            event.target.value = "";
-          }}
-        />
-      </label>
-      {value ? (
-        <img src={value} alt="" className="max-h-48 w-full rounded-2xl border border-slate-200 bg-slate-50 object-contain p-2" />
-      ) : null}
-    </>
-  );
-
   const submit = async (run: () => Promise<any>, done: string) => {
     setBusy(true);
     setMessage("");
@@ -242,13 +198,12 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
             billNumber: billForm.billNumber.trim() || undefined,
             billAmount: Number(billForm.billAmount),
             paidAmount: Number(billForm.paidAmount || 0),
-            proofPath: billForm.proofPath || undefined,
             note: billForm.note.trim() || undefined,
           }),
         }),
       ne ? "डिलरको बिल सेभ भयो।" : "Dealer bill saved.",
     ).then(() =>
-      setBillForm({ dealerName: "", dealerPhone: "", billNumber: "", billAmount: "", paidAmount: "", proofPath: "", note: "" }),
+      setBillForm({ dealerName: "", dealerPhone: "", billNumber: "", billAmount: "", paidAmount: "", note: "" }),
     );
   };
 
@@ -268,12 +223,11 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
             dealerPhone: payForm.dealerPhone.trim() || undefined,
             billNumber: payForm.billNumber.trim() || undefined,
             paidAmount: Number(payForm.amount),
-            proofPath: payForm.proofPath || undefined,
             note: payForm.note.trim() || undefined,
           }),
         }),
       ne ? "भुक्तानी सेभ भयो।" : "Payment saved.",
-    ).then(() => setPayForm({ dealerName: "", dealerPhone: "", amount: "", billNumber: "", note: "", proofPath: "" }));
+    ).then(() => setPayForm({ dealerName: "", dealerPhone: "", amount: "", billNumber: "", note: "" }));
   };
 
   const saveReturn = (event: React.FormEvent) => {
@@ -301,14 +255,13 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
             dealerPhone: returnForm.dealerPhone.trim(),
             billAmount: 0,
             paidAmount: 0,
-            proofPath: returnForm.proofPath || undefined,
             returnStatus: isDamage ? "" : reason,
             damagedReason: isDamage ? reason : "",
           }),
         }),
       isDamage ? (ne ? "ड्यामेज रेकर्ड भयो।" : "Damage recorded.") : ne ? "फिर्ता रेकर्ड भयो।" : "Return recorded.",
     ).then(() =>
-      setReturnForm({ dealerName: "", dealerPhone: "", productId: 0, quantity: "", kind: "return", reason: "", proofPath: "" }),
+      setReturnForm({ dealerName: "", dealerPhone: "", productId: 0, quantity: "", kind: "return", reason: "" }),
     );
   };
 
@@ -395,11 +348,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
                 </span>
               </p>
             ) : null}
-            <PhotoPicker
-              label={ne ? "बिलको फोटो" : "Photo of the bill"}
-              value={billForm.proofPath}
-              onPick={(dataUrl) => setBillForm((current) => ({ ...current, proofPath: dataUrl }))}
-            />
             <input
               className={field}
               value={billForm.note}
@@ -445,11 +393,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
               value={payForm.billNumber}
               onChange={(event) => setPayForm((current) => ({ ...current, billNumber: event.target.value }))}
               placeholder={ne ? "कुन बिलको हो (वैकल्पिक)" : "Against which bill (optional)"}
-            />
-            <PhotoPicker
-              label={ne ? "रसिद / भौचरको फोटो" : "Photo of the receipt or voucher"}
-              value={payForm.proofPath}
-              onPick={(dataUrl) => setPayForm((current) => ({ ...current, proofPath: dataUrl }))}
             />
             <input
               className={field}
@@ -527,11 +470,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
             placeholder={ne ? "कारण (वैकल्पिक)" : "Reason (optional)"}
           />
           <div className="grid gap-3 lg:col-span-2">
-            <PhotoPicker
-              label={ne ? "फोटो (वैकल्पिक)" : "Photo (optional)"}
-              value={returnForm.proofPath}
-              onPick={(dataUrl) => setReturnForm((current) => ({ ...current, proofPath: dataUrl }))}
-            />
           </div>
           <button disabled={busy} className="rounded-2xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 lg:col-span-2">
             {returnForm.kind === "damaged"
@@ -694,25 +632,6 @@ export function DealerRecords({ products, api, onRefresh, lang = "en", focusDeal
                             <ShieldAlert className="h-4 w-4" />
                             {entry.damagedReason}
                           </p>
-                        ) : null}
-                        {entry.proofPath ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openProofDocument(
-                                entry.proofPath as string,
-                                `${dealer.name}${entry.billNumber ? ` • ${ne ? "बिल" : "Bill"} ${entry.billNumber}` : ""}`,
-                                lang,
-                                `${new Date(entry.date).toLocaleDateString()} · ${money(entry.billAmount || entry.paidAmount)}`,
-                              )
-                            }
-                            className="mt-3 flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2 text-left hover:bg-slate-100"
-                          >
-                            <img src={entry.proofPath} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-slate-200 bg-white object-cover" />
-                            <span className="text-xs font-bold text-slate-800">
-                              {ne ? "डिलरले दिएको कागज हेर्नुहोस्" : "View the dealer's paper"}
-                            </span>
-                          </button>
                         ) : null}
                       </div>
                     ))}

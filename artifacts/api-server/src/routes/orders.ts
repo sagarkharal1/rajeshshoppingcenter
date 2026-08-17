@@ -37,8 +37,6 @@ const createOrderSchema = z.object({
   notes: z.string().max(1000).transform(s => s.trim()).optional(),
   paymentMethod: z.enum(["bank", "esewa", "khalti"]).default("bank"),
   paymentStatus: z.enum(["paid", "unpaid"]).default("unpaid"),
-  customerPhotoPath: z.string().max(500000).optional(), // Customer ID or profile photo
-  paymentScreenshotPath: z.string().max(500000).optional(), // eSewa / Khalti payment proof screenshot
 });
 
 function normalizePhone(phone: string) {
@@ -74,7 +72,7 @@ router.post("/orders", async (req, res) => {
   }
 
   try {
-    const { customerName, customerPhone, customerEmail, customerAddress, items: requestedItems, notes, paymentMethod, paymentStatus, customerPhotoPath, paymentScreenshotPath } = parsed.data;
+    const { customerName, customerPhone, customerEmail, customerAddress, items: requestedItems, notes, paymentMethod, paymentStatus } = parsed.data;
 
     const catalog = await db
       .select({
@@ -169,7 +167,6 @@ router.post("/orders", async (req, res) => {
             phone: customerPhone,
             email: normalizedEmail || customer.email || null,
             address: customerAddress,
-            photoPath: customerPhotoPath?.trim() || customer.photoPath || null,
             notes: notes || customer.notes || null,
             totalSpent: (Number(customer.totalSpent) + totalAmount).toFixed(2),
             updatedAt: new Date(),
@@ -185,7 +182,6 @@ router.post("/orders", async (req, res) => {
             phone: customerPhone,
             email: normalizedEmail || null,
             address: customerAddress,
-            photoPath: customerPhotoPath?.trim() || null,
             notes: notes || null,
             totalSpent: totalAmount.toFixed(2),
           } as any)
@@ -227,8 +223,6 @@ router.post("/orders", async (req, res) => {
           customerPhone,
           customerEmail: normalizedEmail || customer.email || null,
           customerAddress,
-          customerPhotoPath: customerPhotoPath?.trim() || customer.photoPath || null,
-          paymentScreenshotPath: paymentScreenshotPath?.trim() || null,
           items,
           totalAmount: totalAmount.toString(),
           status: "order-received",
@@ -325,7 +319,6 @@ router.post("/orders", async (req, res) => {
         phone: result.customer.phone,
         email: (result.customer as any).email ?? null,
         address: result.customer.address,
-        photoPath: result.customer.photoPath,
         rewardPoints: Number(result.customer.rewardPoints ?? 0),
       },
       rewardPointsEarned: result.rewardPointsEarned,
@@ -431,7 +424,6 @@ router.get("/customer-portal/profile", customerLookupLimiter, async (req, res) =
         phone: customer.phone,
         email: customer.email,
         address: customer.address,
-        photoPath: customer.photoPath,
         rewardPoints: Number(customer.rewardPoints ?? 0),
         creditBalance: Number(customer.creditBalance ?? 0),
         totalSpent: Number(customer.totalSpent ?? 0),

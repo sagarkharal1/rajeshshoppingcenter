@@ -32,12 +32,6 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash'`,
     `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid'`,
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS proof_path TEXT`,
-    // 2026-04: Add payment screenshot column to orders for digital payment proof
-    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_screenshot_path TEXT`,
-    // 2026-05: Persist proof images on shop invoices and customer payments
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS proof_path TEXT`,
-    `ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS proof_path TEXT`,
     // 2026-07: Allow a mistyped invoice or payment to be voided instead of
     // leaving a customer's balance permanently wrong.
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`,
@@ -64,10 +58,6 @@ async function runMigrations(): Promise<void> {
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price NUMERIC(10,2)`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_starts_at TIMESTAMP`,
     `ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_ends_at TIMESTAMP`,
-    // 2026-08: Shop stamp and signature printed on bills and receipts.
-    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS stamp_path TEXT`,
-    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_path TEXT`,
-    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS signature_name TEXT`,
     // 2026-08: Rate limit counters, shared by every instance. Created here
     // with everything else rather than lazily on first use — a table that only
     // appears when a limiter fires is a table that silently never appears, and
@@ -89,7 +79,6 @@ async function runMigrations(): Promise<void> {
        bill_number text,
        bill_amount numeric(12,2) NOT NULL DEFAULT 0,
        paid_amount numeric(12,2) NOT NULL DEFAULT 0,
-       proof_path text,
        note text,
        voided_at timestamp,
        void_reason text,

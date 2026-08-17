@@ -15,7 +15,15 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // Two entry points for two hosting shapes:
+    //   index.ts      — long-running server (listens, runs the background workers)
+    //   serverless.ts — request handler only, for Vercel
+    // Building both keeps them from drifting; whichever host is in use, the
+    // same bundling rules and externals apply.
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      path.resolve(artifactDir, "src/serverless.ts"),
+    ],
     platform: "node",
     bundle: true,
     format: "esm",

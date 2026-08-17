@@ -125,9 +125,6 @@ type ShopInfo = {
   phone: string;
   address: string;
   pan: string;
-  // Optional marks printed on slips; blank means "leave room to sign by hand".
-  stampPath?: string;
-  signaturePath?: string;
   signatureName?: string;
 };
 
@@ -448,11 +445,11 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
   shopInfo: ShopInfo;
   onEditBooking?: (id: number) => void;
 }) {
-  const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string; proofPath: string }>>({});
+  const [paymentForms, setPaymentForms] = useState<Record<number, { charged: string; paid: string; method: string }>>({});
   const [showCompletedBookings, setShowCompletedBookings] = useState(false);
 
-  const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash", proofPath: "" };
-  const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string; proofPath: string }>) =>
+  const getForm = (id: number) => paymentForms[id] ?? { charged: "", paid: "", method: "cash" };
+  const setForm = (id: number, patch: Partial<{ charged: string; paid: string; method: string }>) =>
     setPaymentForms((prev) => ({ ...prev, [id]: { ...getForm(id), ...patch } }));
   const readProof = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -552,25 +549,6 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
                     {["cash", "esewa", "khalti", "bank", "credit"].map((m) => <option key={m} value={m}>{methodDisplayName(m, lang)}</option>)}
                   </select>
                 </div>
-                <label className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 sm:col-span-3">
-                  {lang === "ne" ? "भुक्तानी प्रमाण / भौचर फोटो" : "Payment proof / voucher photo"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="mt-2 block w-full text-xs"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const dataUrl = await readProof(file);
-                      setForm(booking.id, { proofPath: dataUrl });
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-                {form.proofPath || booking.proofPath ? (
-                  <img src={form.proofPath || booking.proofPath} alt="Transport proof" className="max-h-40 w-full rounded-xl border border-slate-200 bg-slate-50 object-contain p-2 sm:col-span-3" />
-                ) : null}
               </div>
             ) : null}
 
@@ -583,7 +561,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
                     const chargedAmt = Number(form.charged) || charged;
                     const paidAmt = Number(form.paid) || 0;
                     runOwnerAction(
-                      () => updateBookingStatus(booking.id, "confirmed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method, proofPath: form.proofPath }),
+                      () => updateBookingStatus(booking.id, "confirmed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
                       lang === "ne" ? "बुकिङ पुष्टि भयो" : "Booking confirmed",
                       lang === "ne" ? "बुकिङ पुष्टि गर्न सकिएन।" : "Could not confirm the booking.",
                     );
@@ -601,7 +579,7 @@ function BookingList({ bookings, lang, updateBookingStatus, runOwnerAction, conf
                     const chargedAmt = Number(form.charged) || charged;
                     const paidAmt = Number(form.paid) || paid;
                     runOwnerAction(
-                      () => updateBookingStatus(booking.id, "completed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method, proofPath: form.proofPath }),
+                      () => updateBookingStatus(booking.id, "completed", { chargedAmount: chargedAmt, amountPaid: paidAmt, paymentMethod: form.method }),
                       lang === "ne" ? "डेलिभर सम्पन्न भयो" : "Marked delivered",
                       lang === "ne" ? "सम्पन्न गर्न सकिएन।" : "Could not complete.",
                     );
@@ -1029,10 +1007,10 @@ export function OwnerWorkspaceModern(props: any) {
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
   useEffect(() => {
-    if (!invoiceForm?.proofPath && !paymentForm?.proofPath && customerBillScan.image) {
+    if (!invoiceForm?.note && customerBillScan.image) {
       setCustomerBillScan(createBillScanState());
     }
-  }, [invoiceForm?.proofPath, paymentForm?.proofPath]);
+  }, [invoiceForm?.note]);
 
   // With no search term these used to return nothing, so the customer list
   // read "Search a customer to view details" over an empty screen — indis-
@@ -1061,8 +1039,6 @@ export function OwnerWorkspaceModern(props: any) {
     phone: shopPhone || settingsForm?.phone || "+977-9814401716",
     address: shopAddress || settingsForm?.address || "Musikot-5, Gulmi",
     pan: settingsForm?.panNumber || "302951817",
-    stampPath: settingsForm?.stampPath || "",
-    signaturePath: settingsForm?.signaturePath || "",
     signatureName: settingsForm?.signatureName || "",
   };
 
@@ -2088,7 +2064,6 @@ export function OwnerWorkspaceModern(props: any) {
                           error: "",
                           suggestion: {},
                         });
-                        setInvoiceForm((current: any) => ({ ...current, proofPath: dataUrl }));
                         e.target.value = "";
                       }}
                     />
@@ -2339,21 +2314,14 @@ export function OwnerWorkspaceModern(props: any) {
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
                         {lang === "ne" ? "अधिकृत दस्तखत र छाप" : "Authorised Signature & Stamp"}
                       </p>
-                      {/* An uploaded stamp prints itself; with none uploaded
-                          the dashed box is simply room for the rubber stamp. */}
-                      <div className="ml-auto mt-1 h-20 w-28 overflow-hidden rounded border-2 border-dashed border-slate-300 flex items-center justify-center">
-                        {settingsForm?.stampPath ? (
-                          <img src={settingsForm.stampPath} alt="" className="max-h-full max-w-full object-contain" />
-                        ) : (
-                          <p className="text-[10px] text-slate-300">{lang === "ne" ? "छाप" : "STAMP"}</p>
-                        )}
+                      {/* Room for the rubber stamp and a hand signature — the
+                          shop marks the printed paper itself. */}
+                      <div className="ml-auto mt-1 h-20 w-28 rounded border-2 border-dashed border-slate-300 flex items-center justify-center">
+                        <p className="text-[10px] text-slate-300">{lang === "ne" ? "छाप" : "STAMP"}</p>
                       </div>
-                      {settingsForm?.signaturePath ? (
-                        <img src={settingsForm.signaturePath} alt="" className="ml-auto mt-1 h-10 max-w-[9rem] object-contain" />
-                      ) : null}
-                      <div className="mt-1 border-b border-slate-400"></div>
+                      <div className="mt-8 border-b border-slate-400"></div>
                       <p className="mt-1 text-xs text-slate-400">
-                        {settingsForm?.signatureName || (lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center")}
+                        {lang === "ne" ? "राजेश सिपिङ् सेन्टर" : "Rajesh Shopping Center"}
                       </p>
                     </div>
                   </div>

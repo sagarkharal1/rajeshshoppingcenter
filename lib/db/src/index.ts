@@ -12,25 +12,40 @@ if (!process.env.DATABASE_URL) {
 
 const rawUrl = process.env.DATABASE_URL ?? "";
 
-// pg-connection-string v3 now maps sslmode=require → verify-full (rejectUnauthorized: true).
-// Strip sslmode from the URL so the parser cannot force rejectUnauthorized: true,
-// then pass ssl: { rejectUnauthorized: false } directly so DigitalOcean's
-// self-signed CA certificate is accepted.
-const connectionString = rawUrl
-  .replace(/&sslmode=[^&]*/i, "")   // sslmode is not the first query param
-  .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
-  .replace(/\?$/, "");               // remove trailing ? if nothing left
+// DigitalOcean served a self-signed CA, which meant the certificate could not be
+// verified and `rejectUnauthorized: false` was the only way to connect. Set
+// DATABASE_SSL_NO_VERIFY=true to get that behaviour back for a host that needs
+// it. Supabase presents a normally trusted certificate, so the default now
+// verifies — turning verification off silently is how a connection ends up
+// open to interception without anyone noticing.
+const skipSslVerify = process.env.DATABASE_SSL_NO_VERIFY === "true";
 
-// DATABASE_POOL_MAX caps concurrent connections — useful when the database
-// allows only a small number (managed plans, or a local test server).
+// pg-connection-string maps sslmode=require → verify-full. When verification is
+// deliberately off, sslmode has to come out of the URL or the parser forces it
+// back on.
+const connectionString = skipSslVerify
+  ? rawUrl
+      .replace(/&sslmode=[^&]*/i, "")   // sslmode is not the first query param
+      .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
+      .replace(/\?$/, "")                // remove trailing ? if nothing left
+  : rawUrl;
+
+// DATABASE_POOL_MAX caps concurrent connections.
+//
+// On serverless every instance opens its own pool, and a few hundred cold
+// instances will exhaust the database's connection limit between them. Set this
+// to 1 on Vercel, and point DATABASE_URL at Supabase's transaction pooler
+// (port 6543) rather than the direct connection (5432).
 const poolMax = Number(process.env.DATABASE_POOL_MAX);
 
 export const pool = new Pool({
   connectionString,
   ...(Number.isFinite(poolMax) && poolMax > 0 ? { max: poolMax } : {}),
-  ssl: rawUrl.toLowerCase().includes("sslmode=")
+  ssl: skipSslVerify
     ? { rejectUnauthorized: false }
-    : undefined,
+    : rawUrl.toLowerCase().includes("sslmode=")
+      ? { rejectUnauthorized: true }
+      : undefined,
 });
 export const db = drizzle(pool, { schema });
 

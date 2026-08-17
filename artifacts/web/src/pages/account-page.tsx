@@ -14,7 +14,6 @@ type CustomerProfileResponse = {
     phone: string;
     email?: string | null;
     address?: string | null;
-    photoPath?: string | null;
     rewardPoints: number;
     creditBalance: number;
     totalSpent: number;
@@ -433,17 +432,9 @@ export default function AccountPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                {profile.customer.photoPath ? (
-                  <img
-                    src={getImageUrl(profile.customer.photoPath) || profile.customer.photoPath}
-                    alt={profile.customer.name}
-                    className="h-12 w-12 rounded-full border border-slate-200 object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                    <UserRound className="h-5 w-5 text-primary" />
-                  </div>
-                )}
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                  <UserRound className="h-5 w-5 text-primary" />
+                </div>
                 <p className="font-semibold text-slate-900">{profile.customer.name}</p>
               </div>
               <p className="mt-3 text-sm text-slate-500">{profile.customer.customerCode}</p>

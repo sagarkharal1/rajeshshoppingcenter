@@ -25,7 +25,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import { invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
-import { sendTelegramMessage } from "../utils/telegram-service.js";
+import { sendTelegramMessageNow } from "../utils/telegram-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
@@ -40,6 +40,7 @@ import {
   restoreJsonBackup,
 } from "../lib/backup.js";
 import { getScheduledBackupStatus, runScheduledBackup } from "../lib/scheduled-backup.js";
+import { getBackupDir } from "../lib/backup-dir.js";
 
 const scryptAsync = promisify(scrypt);
 const router: IRouter = Router();
@@ -344,19 +345,16 @@ router.post("/admin/login/request-otp", async (req, res) => {
     adminOtpExpiry: expiry,
   });
 
-  sendTelegramMessage(buildLoginOtpMessage(otp));
-
-  const hasTelegramDelivery = Boolean(
-    process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || process.env.TELEGRAM_TOKEN
-  ) && Boolean(
-    process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID
-  );
+  // Awaited, not queued. The owner is standing at the login screen waiting for
+  // this code, and the previous check only proved the env vars existed — it
+  // said "code sent" even when Telegram had refused it.
+  const delivered = await sendTelegramMessageNow(buildLoginOtpMessage(otp));
 
   res.json({
-    message: hasTelegramDelivery
+    message: delivered
       ? "A login code was sent to your Telegram."
-      : "Telegram is not configured — the login code could not be delivered. Please configure Telegram in settings.",
-    recoveryChannel: hasTelegramDelivery ? "telegram" : "none",
+      : "The login code could not be delivered. Check the Telegram settings, or use the phone-lost recovery option.",
+    recoveryChannel: delivered ? "telegram" : "none",
   });
 });
 
@@ -524,19 +522,15 @@ router.post("/admin/forgot-password", async (req, res) => {
     adminOtpExpiry: expiry,
   });
 
-  sendTelegramMessage(buildRecoveryMessage(otp));
-
-  const hasTelegramDelivery = Boolean(
-    process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT || process.env.TELEGRAM_TOKEN
-  ) && Boolean(
-    process.env.TELEGRAM_CHAT_IDS || process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID
-  );
+  // Awaited for the same reason as the login code: this is the path the owner
+  // uses when they are already locked out, so "we tried" is not good enough.
+  const delivered = await sendTelegramMessageNow(buildRecoveryMessage(otp));
 
   res.json({
-    message: hasTelegramDelivery
+    message: delivered
       ? "A password reset code was sent to your Telegram."
-      : "Telegram is not configured — the reset code could not be delivered. Please configure Telegram in settings.",
-    recoveryChannel: hasTelegramDelivery ? "telegram" : "none",
+      : "The reset code could not be delivered. Check the Telegram bot token and chat ID.",
+    recoveryChannel: delivered ? "telegram" : "none",
   });
 });
 
@@ -1272,7 +1266,6 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
     chargedAmount,
     amountPaid,
     paymentMethod,
-    proofPath,
   } = req.body;
 
   try {
@@ -1297,7 +1290,6 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
         chargedAmount: chargedAmount !== undefined ? chargedAmount : booking.chargedAmount,
         amountPaid: amountPaid !== undefined ? amountPaid : booking.amountPaid,
         paymentMethod: paymentMethod ?? booking.paymentMethod,
-        proofPath: typeof proofPath === "string" ? proofPath.trim() || null : (booking as any).proofPath,
       } as Record<string, any>;
 
       const nextCharged = Number(updates.chargedAmount ?? 0);
@@ -1364,7 +1356,6 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
             chargedAmount: booking.chargedAmount,
             amountPaid: booking.amountPaid,
             paymentMethod: booking.paymentMethod,
-            proofPath: (booking as any).proofPath,
           },
           newValues: updates,
           metadata: {
@@ -1391,7 +1382,6 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
           amountPaid: Number(updatedBooking.amountPaid || 0),
           paymentMethod: updatedBooking.paymentMethod,
           paymentStatus: updatedBooking.paymentStatus,
-          proofPath: (updatedBooking as any).proofPath || null,
         },
       });
 
@@ -1411,7 +1401,7 @@ router.put("/admin/bookings/:id", authMiddleware, async (req, res) => {
 
 router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
   const id = Number(req.params.id);
-  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit, proofPath } = req.body ?? {};
+  const { status, chargedAmount, amountPaid, paymentMethod, paymentStatus, addToCredit } = req.body ?? {};
 
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: "Invalid booking ID" });
@@ -1445,7 +1435,6 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
       if (amountPaid !== undefined || addToCredit) updates.amountPaid = nextPaid.toFixed(2);
       if (paymentMethod !== undefined || addToCredit) updates.paymentMethod = paymentMethod || booking.paymentMethod;
       if (paymentStatus !== undefined) updates.paymentStatus = paymentStatus;
-      if (typeof proofPath === "string") updates.proofPath = proofPath.trim() || null;
 
       if (updates.chargedAmount !== undefined && updates.amountPaid !== undefined && paymentStatus === undefined) {
         const charged = Number(updates.chargedAmount);
@@ -1489,7 +1478,6 @@ router.put("/admin/bookings/:id/status", authMiddleware, async (req, res) => {
           amountPaid: Number(updatedBooking.amountPaid || 0),
           paymentMethod: updatedBooking.paymentMethod,
           paymentStatus: updatedBooking.paymentStatus,
-          proofPath: (updatedBooking as any).proofPath || null,
         },
       });
 
@@ -1999,7 +1987,6 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
       billNumber,
       billAmount,
       paidAmount,
-      proofPath,
       returnStatus,
       damagedReason,
     } = req.body;
@@ -2064,7 +2051,6 @@ router.put("/admin/products/:id/adjust-stock", authMiddleware, async (req, res) 
           billAmount: dealerBill,
           paidAmount: dealerPaid,
           dealerDue: Math.max(0, dealerBill - dealerPaid),
-          proofPath: typeof proofPath === "string" ? proofPath.trim() || null : null,
           returnStatus: typeof returnStatus === "string" ? returnStatus.trim() || null : null,
           damagedReason: typeof damagedReason === "string" ? damagedReason.trim() || null : null,
         },
@@ -2319,8 +2305,8 @@ router.get("/admin/backup/:filename/download", authMiddleware, async (req, res) 
       return res.status(400).json({ error: "Invalid backup filename" });
     }
 
-    const backupPath = path.resolve(process.cwd(), "backups", filename);
-    const backupDir = path.resolve(process.cwd(), "backups");
+    const backupPath = path.resolve(getBackupDir(), filename);
+    const backupDir = path.resolve(getBackupDir());
     if (!backupPath.startsWith(backupDir) || !existsSync(backupPath)) {
       return res.status(404).json({ error: "Backup not found" });
     }
@@ -2399,7 +2385,6 @@ router.get("/admin/dealers", authMiddleware, async (_req, res) => {
         billAmount,
         paidAmount,
         dealerDue: isPayment ? 0 : Math.max(0, billAmount - paidAmount),
-        proofPath: row.proofPath || null,
         note: row.note || null,
         canVoid: true,
         productName: null,
@@ -2456,7 +2441,6 @@ router.get("/admin/dealers", authMiddleware, async (_req, res) => {
         billAmount,
         paidAmount,
         dealerDue: isPayment ? 0 : Math.max(0, billAmount - paidAmount),
-        proofPath: metadata.proofPath || null,
         note: entry.reason || null,
         canVoid: false,
         productName: entry.productName,
@@ -2514,7 +2498,6 @@ const dealerEntrySchema = z.object({
   billNumber: z.string().max(120).optional(),
   billAmount: z.number().nonnegative().max(100000000).default(0),
   paidAmount: z.number().nonnegative().max(100000000).default(0),
-  proofPath: z.string().max(500000).optional(),
   note: z.string().max(500).optional(),
 });
 
@@ -2527,7 +2510,7 @@ router.post("/admin/dealer-entries", authMiddleware, async (req, res) => {
     });
   }
 
-  const { entryType, dealerName, dealerPhone, billNumber, proofPath, note } = parsed.data;
+  const { entryType, dealerName, dealerPhone, billNumber, note } = parsed.data;
   const billAmount = entryType === "payment" ? 0 : parsed.data.billAmount;
   const paidAmount = parsed.data.paidAmount;
 
@@ -2551,7 +2534,6 @@ router.post("/admin/dealer-entries", authMiddleware, async (req, res) => {
         billNumber: billNumber?.trim() || null,
         billAmount: billAmount.toFixed(2),
         paidAmount: paidAmount.toFixed(2),
-        proofPath: proofPath?.trim() || null,
         note: note?.trim() || null,
       })
       .returning();
