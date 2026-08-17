@@ -13,7 +13,7 @@ import { ChevronDown } from "lucide-react";
  * starts shut and opens on a tap.
  */
 
-type Tone = "default" | "violet" | "rose" | "emerald" | "amber";
+type Tone = "default" | "violet" | "rose" | "emerald" | "amber" | "sky";
 
 const TONES: Record<Tone, { wrap: string; icon: string }> = {
   default: { wrap: "border-slate-200 bg-white", icon: "bg-slate-100 text-slate-600" },
@@ -21,6 +21,7 @@ const TONES: Record<Tone, { wrap: string; icon: string }> = {
   rose: { wrap: "border-2 border-rose-200 bg-rose-50/40", icon: "bg-rose-100 text-rose-700" },
   emerald: { wrap: "border-emerald-200 bg-emerald-50/40", icon: "bg-emerald-100 text-emerald-700" },
   amber: { wrap: "border-amber-200 bg-amber-50/40", icon: "bg-amber-100 text-amber-700" },
+  sky: { wrap: "border-sky-200 bg-sky-50/40", icon: "bg-sky-100 text-sky-700" },
 };
 
 type CollapsibleSectionProps = {
@@ -45,7 +46,11 @@ export function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const toneStyle = TONES[tone];
+  // Fall back rather than index blindly. A tone this map does not know gives
+  // `undefined`, and reading `.wrap` off it throws — which took the whole
+  // Settings screen down to the error boundary over nothing but a colour name.
+  // The build does not catch it either: Vite does not typecheck.
+  const toneStyle = TONES[tone] ?? TONES.default;
 
   return (
     <section className={`rounded-[1.5rem] border shadow-sm ${toneStyle.wrap}`}>
