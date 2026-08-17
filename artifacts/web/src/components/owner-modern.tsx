@@ -976,6 +976,31 @@ export function OwnerWorkspaceModern(props: any) {
   const [totpSetup, setTotpSetup] = useState<{ secret: string; uri: string; qrDataUrl: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [totpBusy, setTotpBusy] = useState(false);
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramResult, setTelegramResult] = useState<
+    null | { ok: boolean; problem: string | null; botUsername: string | null; delivered: number }
+  >(null);
+
+  const testTelegram = async () => {
+    setTelegramTesting(true);
+    setTelegramResult(null);
+    try {
+      const result = await props.api("/admin/telegram-test", {
+        method: "POST",
+        body: JSON.stringify({ send: true }),
+      });
+      setTelegramResult(result);
+    } catch (error) {
+      setTelegramResult({
+        ok: false,
+        problem: error instanceof Error ? error.message : String(error),
+        botUsername: null,
+        delivered: 0,
+      });
+    } finally {
+      setTelegramTesting(false);
+    }
+  };
   // Which field a scan should fill: the product's SKU, or the billing search.
   const [scanTarget, setScanTarget] = useState<null | "sku" | "search">(null);
   const [labelsOpen, setLabelsOpen] = useState(false);
@@ -3434,6 +3459,51 @@ export function OwnerWorkspaceModern(props: any) {
               tone="emerald"
             >
               <BackupExportPanel lang={lang as "en" | "ne"} api={props.api} token={token} onRestored={props.reloadOwnerData} />
+            </CollapsibleSection>
+
+            {/* Order alerts are queued and sent in the background, so a wrong
+                token or chat ID is invisible: orders arrive and the phone stays
+                quiet. This is the only way to find out without reading logs. */}
+            <CollapsibleSection
+              title={lang === "ne" ? "टेलिग्राम सूचना जाँच" : "Check Telegram alerts"}
+              description={lang === "ne" ? "नयाँ अर्डरको खबर फोनमा आउँछ कि आउँदैन परीक्षण गर्नुहोस्" : "Test whether new-order alerts actually reach your phone"}
+              icon={Bell}
+              tone="sky"
+            >
+              <p className="mt-2 text-sm leading-relaxed text-slate-700">
+                {lang === "ne"
+                  ? "यसले तपाईंको टेलिग्राममा एउटा परीक्षण सन्देश पठाउँछ। नआएमा किन आएन भन्ने कारण देखाउँछ।"
+                  : "Sends one test message to your Telegram. If it does not arrive, this says why."}
+              </p>
+              <button
+                type="button"
+                disabled={telegramTesting}
+                onClick={testTelegram}
+                className="mt-3 rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {telegramTesting
+                  ? (lang === "ne" ? "पठाउँदै…" : "Sending…")
+                  : (lang === "ne" ? "परीक्षण सन्देश पठाउनुहोस्" : "Send test message")}
+              </button>
+              {telegramResult ? (
+                <div
+                  className={`mt-3 rounded-2xl border p-3 text-sm ${
+                    telegramResult.ok
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                      : "border-rose-200 bg-rose-50 text-rose-900"
+                  }`}
+                >
+                  {telegramResult.ok ? (
+                    <p className="font-semibold">
+                      {lang === "ne"
+                        ? `पठाइयो — ${telegramResult.delivered} ठाउँमा। बोट: @${telegramResult.botUsername}`
+                        : `Sent to ${telegramResult.delivered} chat(s). Bot: @${telegramResult.botUsername}`}
+                    </p>
+                  ) : (
+                    <p className="leading-relaxed">{telegramResult.problem}</p>
+                  )}
+                </div>
+              ) : null}
             </CollapsibleSection>
 
             <CollapsibleSection

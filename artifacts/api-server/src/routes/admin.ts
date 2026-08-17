@@ -25,7 +25,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import { invalidateWhatsAppCache } from "../utils/whatsapp-service.js";
-import { sendTelegramMessageNow } from "../utils/telegram-service.js";
+import { sendTelegramMessageNow, diagnoseTelegram } from "../utils/telegram-service.js";
 import { z } from "zod";
 import { ensureBootstrapData, getOrCreateDefaultCategoryId } from "../lib/bootstrap.js";
 import { logAuditEntry, createAuditEntry } from "../lib/audit.js";
@@ -405,6 +405,22 @@ router.post("/admin/login", async (req, res) => {
     // so the UI must push the owner to change it.
     mustChangePassword: !storedHash,
   });
+});
+
+/**
+ * Why Telegram is silent.
+ *
+ * Order alerts are queued and sent in the background, so a wrong token or chat
+ * ID produces no error anywhere the owner can see — orders simply arrive and
+ * the phone stays quiet. This checks the token and the chat ID separately,
+ * because a good token pointed at the wrong chat fails identically to a bad one.
+ *
+ * Owner-only, and it returns no credential: the token never appears in the
+ * response, not even inside an error message from Telegram.
+ */
+router.post("/admin/telegram-test", authMiddleware, async (req, res) => {
+  const diagnosis = await diagnoseTelegram(req.body?.send !== false);
+  res.json(diagnosis);
 });
 
 router.get("/admin/totp-setup", authMiddleware, async (_req, res) => {

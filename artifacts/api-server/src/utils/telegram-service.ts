@@ -92,6 +92,127 @@ async function trySendNow(chatId: string, message: string): Promise<boolean> {
   }
 }
 
+// A real bot token is "<digits>:<35-ish letters, digits, _ and ->". Worth
+// checking separately, because the commonest way to get this wrong is not a
+// typo: DigitalOcean stores secrets encrypted and shows them as "EV[1:...]",
+// so copying what is on screen carries the ciphertext across, not the token.
+const TOKEN_SHAPE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/;
+
+/**
+ * Never let the token into a string that gets returned or logged.
+ *
+ * A failed fetch reports the URL it tried, and the URL contains the token —
+ * so the diagnostic built to explain a broken token would have published a
+ * working one.
+ */
+function scrub(text: string): string {
+  const token = getTelegramBotToken();
+  return token ? text.split(token).join("<token>") : text;
+}
+
+export type TelegramDiagnosis = {
+  tokenPresent: boolean;
+  tokenLooksValid: boolean;
+  chatIdCount: number;
+  chatIdsLookValid: boolean;
+  botUsername: string | null;
+  ok: boolean;
+  problem: string | null;
+  delivered: number;
+};
+
+/**
+ * Answer "why is nothing arriving in Telegram?" without ever revealing the
+ * credentials. Telegram's getMe validates a token without sending anything,
+ * so the token and the chat ID can be diagnosed separately — which matters,
+ * because a good token with a wrong chat ID fails identically to a bad token.
+ */
+export async function diagnoseTelegram(sendTest: boolean): Promise<TelegramDiagnosis> {
+  const token = getTelegramBotToken();
+  const chatIds = getTelegramChatIds();
+
+  const result: TelegramDiagnosis = {
+    tokenPresent: Boolean(token),
+    tokenLooksValid: TOKEN_SHAPE.test(token),
+    chatIdCount: chatIds.length,
+    chatIdsLookValid: chatIds.length > 0 && chatIds.every((id) => /^-?\d+$/.test(id)),
+    botUsername: null,
+    ok: false,
+    problem: null,
+    delivered: 0,
+  };
+
+  if (!result.tokenPresent) {
+    result.problem = "TELEGRAM_BOT_TOKEN is not set.";
+    return result;
+  }
+
+  if (!result.tokenLooksValid) {
+    result.problem =
+      "TELEGRAM_BOT_TOKEN is not shaped like a Telegram token. If it was copied " +
+      "from DigitalOcean it is probably the encrypted 'EV[1:...]' text rather " +
+      "than the token itself. Get the real one from @BotFather.";
+    return result;
+  }
+
+  try {
+    const res = await fetchWithTimeout(
+      `https://api.telegram.org/bot${token}/getMe`,
+      { method: "GET" },
+      10_000,
+    );
+    const body = (await res.json().catch(() => ({}))) as any;
+
+    if (!res.ok || !body?.ok) {
+      result.problem = scrub(
+        `Telegram rejected the token: ${body?.description || `HTTP ${res.status}`}`,
+      );
+      return result;
+    }
+
+    result.botUsername = body.result?.username ?? null;
+  } catch (error) {
+    result.problem = scrub(
+      `Could not reach Telegram: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return result;
+  }
+
+  if (!result.chatIdCount) {
+    result.problem =
+      "The token works, but TELEGRAM_CHAT_ID is not set, so there is nobody to send to.";
+    return result;
+  }
+
+  if (!result.chatIdsLookValid) {
+    result.problem =
+      "The token works, but a chat ID is not a number. A chat ID looks like " +
+      "123456789 for a person or -1001234567890 for a group.";
+    return result;
+  }
+
+  if (sendTest) {
+    for (const chatId of chatIds) {
+      const sent = await trySendNow(
+        chatId,
+        "✅ Rajesh Shopping Center — test message. Notifications are working.",
+      );
+      if (sent) result.delivered += 1;
+    }
+
+    if (!result.delivered) {
+      result.problem =
+        "The token is valid but the message was not accepted. The usual cause " +
+        "is the chat ID: open a chat with the bot and send it /start, because " +
+        "a bot cannot message someone who has never messaged it.";
+      return result;
+    }
+  }
+
+  result.ok = true;
+  return result;
+}
+
 // Enqueue message to DB then attempt immediately in background
 export function sendTelegramMessage(message: string): void {
   const chatIds = getTelegramChatIds();
