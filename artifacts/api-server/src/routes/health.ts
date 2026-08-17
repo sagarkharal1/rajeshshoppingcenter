@@ -18,19 +18,36 @@ const router: IRouter = Router();
  * authentication failed" tells a stranger more than it tells the owner. The
  * detail goes to the log, which is where someone debugging is already looking.
  */
-router.get("/healthz", async (_req, res) => {
+router.get("/healthz", async (req, res) => {
   try {
     await db.execute(sql`select 1`);
     res.json({ status: "ok", database: "ok" });
   } catch (error) {
+    console.error("Health check: database unreachable", error);
+
+    // The reason is withheld by default — "password authentication failed"
+    // tells a stranger more than it tells the owner. Someone holding
+    // CRON_SECRET is already trusted with the scheduled job, so they can ask
+    // for it: /api/healthz?debug=<CRON_SECRET>. Without this the only place
+    // the message exists is the hosting provider's log viewer, which is a
+    // miserable place to be when the shop is down.
+    const secret = process.env.CRON_SECRET;
+    const asked = typeof req.query.debug === "string" ? req.query.debug : "";
+    const trusted = Boolean(secret) && asked === secret;
+
     // 200, not 503: the web service answered. Saying otherwise makes an
     // unreachable database look like a dead site.
     res.status(200).json({
       status: "degraded",
       database: "unreachable",
-      hint: "The site is running but cannot reach its database. Check DATABASE_URL and the server logs.",
+      hint: "The site is running but cannot reach its database. Check DATABASE_URL.",
+      ...(trusted
+        ? {
+            reason: error instanceof Error ? error.message : String(error),
+            code: (error as { code?: string })?.code ?? null,
+          }
+        : {}),
     });
-    console.error("Health check: database unreachable", error);
   }
 });
 
