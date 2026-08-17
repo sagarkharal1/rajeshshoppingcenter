@@ -10,6 +10,7 @@ import { CustomerDetailModal } from "@/components/customer-detail-modal";
 import { CollapsibleSection } from "@/components/collapsible-section";
 import { ProductProfileModal } from "@/components/product-profile-modal";
 import { printOrderSlip, printBookingSlip } from "@/lib/print-slips";
+import { normalizeUnit } from "@/lib/quantity";
 import { TransactionHistory } from "@/components/transaction-history";
 import { EditOrderModal } from "@/components/edit-order-modal";
 import { EditBookingModal } from "@/components/edit-booking-modal";
@@ -2856,8 +2857,38 @@ export function OwnerWorkspaceModern(props: any) {
                           className={shellInput()}
                           value={(productForm as any).unit}
                           onChange={(e) => setProductForm((v: any) => ({ ...v, unit: e.target.value }))}
+                          // Typing "1 ltr" is the natural mistake — it made every
+                          // screen read "1 1 ltr". Cleaned when the field is left,
+                          // not while typing, so nobody fights the cursor.
+                          onBlur={(e) => setProductForm((v: any) => ({ ...v, unit: normalizeUnit(e.target.value) }))}
                           placeholder={lang === "ne" ? "केजी / गोटा / बोरा" : "kg / piece / bora"}
                         />
+                        <span className="flex flex-wrap gap-1.5">
+                          {(lang === "ne"
+                            ? ["केजी", "ग्राम", "लिटर", "मिलि", "गोटा", "प्याकेट", "बोरा", "दर्जन"]
+                            : ["kg", "gram", "ltr", "ml", "piece", "packet", "bora", "dozen"]
+                          ).map((choice) => (
+                            <button
+                              key={choice}
+                              type="button"
+                              onClick={() => setProductForm((v: any) => ({ ...v, unit: choice }))}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                normalizeUnit((productForm as any).unit).toLowerCase() === choice.toLowerCase()
+                                  ? "border-amber-500 bg-amber-50 text-amber-900"
+                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                              }`}
+                            >
+                              {choice}
+                            </button>
+                          ))}
+                        </span>
+                        {normalizeUnit((productForm as any).unit) ? (
+                          <span className="text-xs font-normal text-slate-500">
+                            {lang === "ne"
+                              ? `ग्राहकलाई देखिन्छ: “५ ${normalizeUnit((productForm as any).unit)}”`
+                              : `Customers will see: “5 ${normalizeUnit((productForm as any).unit)}”`}
+                          </span>
+                        ) : null}
                       </label>
                     </div>
                   </div>
