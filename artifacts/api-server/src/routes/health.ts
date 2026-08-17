@@ -30,6 +30,34 @@ function describe(error: unknown) {
   };
 }
 
+// Certificate failures are the one cause worth naming without the debug key.
+// The code says nothing secret — it does not reveal a host, a user or a
+// password — and it cost hours to identify from "Failed query: select 1". The
+// next person to see this deserves the answer in the response, not a hunt.
+const TLS_CODES = new Set([
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "CERT_HAS_EXPIRED",
+]);
+
+function hintFor(error: unknown): string {
+  let root: any = error;
+  while (root?.cause) root = root.cause;
+
+  if (TLS_CODES.has(root?.code)) {
+    return (
+      "The database's certificate could not be verified. Supabase and " +
+      "DigitalOcean sign with their own root, which Node does not ship. Put " +
+      "that root in DATABASE_CA_CERT (Supabase: Settings → Database → SSL " +
+      "Configuration), or set DATABASE_SSL_NO_VERIFY=true to connect " +
+      "encrypted but unverified."
+    );
+  }
+
+  return "The site is running but cannot reach its database. Check DATABASE_URL.";
+}
+
 /**
  * Is the service alive, and can it reach its database?
  *
@@ -66,7 +94,7 @@ router.get("/healthz", async (req, res) => {
     res.status(200).json({
       status: "degraded",
       database: "unreachable",
-      hint: "The site is running but cannot reach its database. Check DATABASE_URL.",
+      hint: hintFor(error),
       ...(trusted ? describe(error) : {}),
     });
   }

@@ -12,23 +12,42 @@ if (!process.env.DATABASE_URL) {
 
 const rawUrl = process.env.DATABASE_URL ?? "";
 
-// DigitalOcean served a self-signed CA, which meant the certificate could not be
-// verified and `rejectUnauthorized: false` was the only way to connect. Set
-// DATABASE_SSL_NO_VERIFY=true to get that behaviour back for a host that needs
-// it. Supabase presents a normally trusted certificate, so the default now
-// verifies — turning verification off silently is how a connection ends up
-// open to interception without anyone noticing.
+// Neither DigitalOcean nor Supabase's pooler chains to a CA that Node ships
+// with: both present a certificate signed by their own root, so verifying
+// against the default bundle fails with SELF_SIGNED_CERT_IN_CHAIN.
+//
+// There are two honest ways out, and one dishonest one.
+//
+//   DATABASE_CA_CERT — the provider's own root, in PEM. Verification stays on
+//     and now succeeds, because Node finally has the certificate it needs to
+//     check against. This is the right answer. Supabase publishes it under
+//     Settings → Database → SSL Configuration.
+//
+//   DATABASE_SSL_NO_VERIFY — encrypt, but believe whatever certificate the
+//     other end offers. The traffic is unreadable to an eavesdropper, but
+//     nothing proves the other end is really the database. A fallback for
+//     getting a deployment moving, not somewhere to stay.
+//
+// The dishonest one is defaulting to no verification because it always works.
+// That is how a connection carrying every invoice and phone number ends up
+// open to interception with nobody aware it happened.
 const skipSslVerify = process.env.DATABASE_SSL_NO_VERIFY === "true";
 
-// pg-connection-string maps sslmode=require → verify-full. When verification is
-// deliberately off, sslmode has to come out of the URL or the parser forces it
-// back on.
-const connectionString = skipSslVerify
-  ? rawUrl
-      .replace(/&sslmode=[^&]*/i, "")   // sslmode is not the first query param
-      .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
-      .replace(/\?$/, "")                // remove trailing ? if nothing left
-  : rawUrl;
+// Vercel's environment editor keeps real newlines, but plenty of tools flatten
+// a pasted certificate to a single line with literal \n. Accept both rather
+// than fail on a difference nobody can see in the input box.
+const caCert = process.env.DATABASE_CA_CERT
+  ? process.env.DATABASE_CA_CERT.replace(/\\n/g, "\n").trim()
+  : "";
+
+// sslmode comes out of the URL unconditionally. It is a second, quieter switch
+// on the same thing this file decides explicitly below — pg-connection-string
+// reads it and can override the config, and its mapping has changed between
+// driver versions. One place decides TLS; it is here.
+const connectionString = rawUrl
+  .replace(/&sslmode=[^&]*/i, "")   // sslmode is not the first query param
+  .replace(/\?sslmode=[^&]*/i, "?") // sslmode is the first query param
+  .replace(/\?$/, "");               // remove trailing ? if nothing left
 
 // DATABASE_POOL_MAX caps concurrent connections.
 //
@@ -45,14 +64,23 @@ const poolMax = Number(process.env.DATABASE_POOL_MAX);
 // does not fail it sends every invoice and phone number unencrypted.
 const isLocalDatabase = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/i.test(rawUrl);
 
+function sslOptions() {
+  // A database on this machine is not crossing a network to be intercepted on.
+  if (isLocalDatabase) return undefined;
+  // Explicitly asked for encryption without proof of identity.
+  if (skipSslVerify) return { rejectUnauthorized: false };
+  // The provider's root supplied: verify properly, against that.
+  if (caCert) return { ca: caCert, rejectUnauthorized: true };
+  // Nothing supplied: verify against Node's bundled roots. Hosts that need
+  // their own CA fail here rather than quietly connecting unverified, and the
+  // error names which of the two variables above is missing.
+  return { rejectUnauthorized: true };
+}
+
 export const pool = new Pool({
   connectionString,
   ...(Number.isFinite(poolMax) && poolMax > 0 ? { max: poolMax } : {}),
-  ssl: skipSslVerify
-    ? { rejectUnauthorized: false }
-    : isLocalDatabase
-      ? undefined
-      : { rejectUnauthorized: true },
+  ssl: sslOptions(),
 });
 export const db = drizzle(pool, { schema });
 

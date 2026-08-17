@@ -125,11 +125,40 @@ Serverless opens a pool per instance. Use Supabase's **transaction pooler** (por
 and set `DATABASE_POOL_MAX=1`. That env var already exists
 (`lib/db/src/index.ts`), so this is configuration, not code.
 
-### 3.5 Drop the DigitalOcean SSL workaround — small
+### 3.5 SSL — this one bit us
 
-`lib/db/src/index.ts` strips `sslmode` and sets `rejectUnauthorized: false` to accept
-DO's self-signed CA. Supabase presents a valid certificate; verification should be
-turned back on rather than inherited.
+The original claim here was that "Supabase presents a valid certificate", so verification
+could simply be turned back on. **That is wrong**, and turning it on broke the first
+deployment: every `/api/*` route returned 503 while pages served fine, and the driver's
+real complaint — `SELF_SIGNED_CERT_IN_CHAIN` — was buried under Drizzle's
+`Failed query: select 1`.
+
+Supabase's pooler signs with Supabase's own root, which Node does not ship. Two ways out,
+both in `lib/db/src/index.ts`:
+
+| Variable | Effect | Use |
+|---|---|---|
+| `DATABASE_CA_CERT` | Verification on, checked against the supplied root | **Preferred.** Supabase → Settings → Database → SSL Configuration |
+| `DATABASE_SSL_NO_VERIFY=true` | Encrypted, identity unverified | Unblocking a deployment |
+
+Neither is the default: an unverifiable certificate fails loudly rather than connecting
+in the weaker mode on its own. `/api/healthz` names whichever variable is missing.
+
+### 3.5b The schema does not create itself
+
+Bootstrap only runs `ALTER TABLE … ADD COLUMN IF NOT EXISTS` against tables it assumes
+exist. Against a brand-new Supabase project there are none, so the first statement fails
+and every request returns *"Service is starting"* — with `/api/healthz` cheerfully
+reporting `database: ok`, because `select 1` needs no tables.
+
+A restored `pg_dump` brings the schema. **Starting empty, it must be pushed once:**
+
+```
+$env:DATABASE_URL="<pooler url>"; pnpm --filter @workspace/db run push-force
+```
+
+`push-force` skips the interactive confirmation, which is otherwise invisible when output
+is redirected to a log.
 
 ### 3.6 Express as one serverless function — small
 
