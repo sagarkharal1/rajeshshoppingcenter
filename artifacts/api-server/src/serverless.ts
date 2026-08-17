@@ -42,14 +42,29 @@ export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  try {
-    await bootstrapOnce();
-  } catch (error) {
-    logger.error({ err: error }, "Bootstrap failed on cold start");
-    res.statusCode = 503;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: "Service is starting. Please try again." }));
-    return;
+  // The health check has to answer when the rest cannot — that is the whole
+  // point of it. Behind this gate it returned "Service is starting" like
+  // everything else, so the one endpoint able to report a broken database was
+  // the one thing that could not be reached to ask.
+  const isHealthCheck = (req.url || "").split("?")[0].endsWith("/healthz");
+
+  if (!isHealthCheck) {
+    try {
+      await bootstrapOnce();
+    } catch (error) {
+      logger.error({ err: error }, "Bootstrap failed on cold start");
+      res.statusCode = 503;
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          error: "Service is starting. Please try again.",
+          // Somewhere to look, rather than a message that describes a slow
+          // start when the real cause is usually a database it cannot reach.
+          hint: "If this persists, open /api/healthz — it reports whether the database is reachable.",
+        }),
+      );
+      return;
+    }
   }
 
   // Express instances are themselves (req, res) handlers.
