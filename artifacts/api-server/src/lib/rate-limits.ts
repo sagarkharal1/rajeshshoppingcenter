@@ -107,11 +107,22 @@ export const customerLookupLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** Guessing the owner's password, counted across every instance. */
+/**
+ * Guessing the owner's password, counted across every instance.
+ *
+ * Only failures count. Without `skipSuccessfulRequests` every login spent the
+ * same budget as a guess, and the limit is per IP — which in a shop is one
+ * connection shared by the counter phone, the laptop and whoever else is on the
+ * wifi. Ten logins across a morning and the till locks itself for a quarter of
+ * an hour, with no way in from inside the shop.
+ *
+ * It costs an attacker nothing, because every attempt they make is a failure.
+ */
 export const ownerLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
   store: new PostgresStore(),
+  skipSuccessfulRequests: true,
   message: { error: "Too many login attempts. Please wait 15 minutes and try again." },
   standardHeaders: true,
   legacyHeaders: false,
