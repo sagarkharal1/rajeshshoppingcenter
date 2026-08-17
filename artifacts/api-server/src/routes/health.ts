@@ -5,6 +5,32 @@ import { db } from "@workspace/db";
 const router: IRouter = Router();
 
 /**
+ * The real error, not the wrapper around it.
+ *
+ * Drizzle reports a failed query as "Failed query: select 1" and keeps the
+ * driver's actual complaint — wrong password, unreachable host, rejected
+ * certificate — in `cause`. Reporting the outer message says only that a
+ * query failed, which was never in doubt.
+ */
+function describe(error: unknown) {
+  let root: any = error;
+  const chain: string[] = [];
+
+  while (root) {
+    if (root?.message) chain.push(String(root.message).split("\n")[0]);
+    if (!root.cause) break;
+    root = root.cause;
+  }
+
+  return {
+    reason: root?.message ? String(root.message) : String(root),
+    code: root?.code ?? null,
+    // Everything on the way down, in case the useful part is not the deepest.
+    chain,
+  };
+}
+
+/**
  * Is the service alive, and can it reach its database?
  *
  * This used to answer `{status:"ok"}` without touching anything, and sat
@@ -41,12 +67,7 @@ router.get("/healthz", async (req, res) => {
       status: "degraded",
       database: "unreachable",
       hint: "The site is running but cannot reach its database. Check DATABASE_URL.",
-      ...(trusted
-        ? {
-            reason: error instanceof Error ? error.message : String(error),
-            code: (error as { code?: string })?.code ?? null,
-          }
-        : {}),
+      ...(trusted ? describe(error) : {}),
     });
   }
 });
