@@ -38,14 +38,21 @@ const connectionString = skipSslVerify
 // (port 6543) rather than the direct connection (5432).
 const poolMax = Number(process.env.DATABASE_POOL_MAX);
 
+// A database reached across the internet is always encrypted; only a local one
+// is not. This used to key off `sslmode=` appearing in the URL, which meant a
+// connection string without it — Supabase's pooler string, for one — connected
+// in plain text. Against a managed database that fails outright, and where it
+// does not fail it sends every invoice and phone number unencrypted.
+const isLocalDatabase = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/i.test(rawUrl);
+
 export const pool = new Pool({
   connectionString,
   ...(Number.isFinite(poolMax) && poolMax > 0 ? { max: poolMax } : {}),
   ssl: skipSslVerify
     ? { rejectUnauthorized: false }
-    : rawUrl.toLowerCase().includes("sslmode=")
-      ? { rejectUnauthorized: true }
-      : undefined,
+    : isLocalDatabase
+      ? undefined
+      : { rejectUnauthorized: true },
 });
 export const db = drizzle(pool, { schema });
 
