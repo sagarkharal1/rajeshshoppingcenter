@@ -1571,6 +1571,11 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
           customerId: invoicesTable.customerId,
           invoiceNumber: invoicesTable.invoiceNumber,
           totalAmount: invoicesTable.totalAmount,
+          // Needed to separate this visit's goods from debt carried onto the
+          // bill — see the sales total below.
+          subtotalAmount: invoicesTable.subtotalAmount,
+          previousDueAmount: invoicesTable.previousDueAmount,
+          rewardDiscount: invoicesTable.rewardDiscount,
           amountPaid: invoicesTable.amountPaid,
           dueAmount: invoicesTable.dueAmount,
           paymentStatus: invoicesTable.paymentStatus,
@@ -1724,16 +1729,40 @@ router.get("/admin/analytics", authMiddleware, async (req, res) => {
     // Calculate summary
     const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
     const totalInvoices = invoicesData.length;
+    // What was sold in this period, which is not what the bill said.
+    //
+    // A khata bill carries the customer's existing debt onto it:
+    //
+    //   totalAmount = subtotalAmount + previousDueAmount - rewardDiscount
+    //
+    // Summing totalAmount therefore counted old debt as new sales, and counted
+    // it again every month it rolled onto another bill — so the yearly figure
+    // grew with every rollover. It also disagreed with the profit panel below,
+    // which adds up invoice lines and only ever saw the goods.
     const totalInvoiceAmount = invoicesData.reduce(
-      (sum: number, invoice: any) => sum + Number(invoice.totalAmount || 0),
+      (sum: number, invoice: any) =>
+        sum + Number(invoice.subtotalAmount || 0) - Number(invoice.rewardDiscount || 0),
       0
     );
     const totalInvoicePaid = invoicesData.reduce(
       (sum: number, invoice: any) => sum + Number(invoice.amountPaid || 0),
       0
     );
+    // How much of this period's selling went on the tab. dueAmount is the
+    // running balance at the moment of the bill — old debt included — so it
+    // answered "what did they owe in total", not "what did they add".
+    //
+    // Goods minus what they handed over is exactly how far the balance moved,
+    // which is the honest answer and reconciles with the two figures above.
     const totalInvoiceCredit = invoicesData.reduce(
-      (sum: number, invoice: any) => sum + Number(invoice.dueAmount || 0),
+      (sum: number, invoice: any) =>
+        sum +
+        Math.max(
+          0,
+          Number(invoice.subtotalAmount || 0) -
+            Number(invoice.rewardDiscount || 0) -
+            Number(invoice.amountPaid || 0),
+        ),
       0
     );
     const totalOrders = ordersData.length;

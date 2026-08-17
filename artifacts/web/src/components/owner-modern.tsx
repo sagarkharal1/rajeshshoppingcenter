@@ -856,9 +856,13 @@ function ReportsTab({ lang, api }: { lang: string; api: (url: string, opts?: any
             </h4>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
-                { label: lang === "ne" ? "बिल रकम" : "Billed", value: fmt(report?.shop.totalBilled ?? 0) },
+                // "Billed" read as the face value of the bills, which on a
+                // khata includes debt carried over from last time. These say
+                // what they mean: goods sold this period, cash taken, and the
+                // difference that went on the tab.
+                { label: lang === "ne" ? "सामान बिक्री" : "Goods sold", value: fmt(report?.shop.totalBilled ?? 0) },
                 { label: lang === "ne" ? "उठेको" : "Collected", value: fmt(report?.shop.totalCollected ?? 0), cls: "text-emerald-700" },
-                { label: lang === "ne" ? "उधारो" : "Credit", value: fmt(report?.shop.totalCredit ?? 0), cls: "text-rose-700" },
+                { label: lang === "ne" ? "उधारोमा थपियो" : "Added to udharo", value: fmt(report?.shop.totalCredit ?? 0), cls: "text-rose-700" },
               ].map(({ label, value, cls = "text-slate-950" }) => (
                 <div key={label} className="rounded-2xl bg-slate-50 px-4 py-3">
                   <p className="text-xs text-slate-500">{label}</p>
