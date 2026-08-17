@@ -27,6 +27,18 @@ export function BarcodeScanner({ open, onClose, onScanned, lang = "en", title }:
   const [error, setError] = useState("");
   const ne = lang === "ne";
 
+  // Held in a ref, and deliberately NOT a dependency of the effect below.
+  //
+  // The caller passes an inline arrow, so its identity changes on every parent
+  // render. As a dependency that tore the camera down and started it again each
+  // time — fast enough that the light stayed on and it looked like it was
+  // scanning, while the decoder never held a stream long enough to read
+  // anything. The camera worked; the scan could not.
+  const onScannedRef = useRef(onScanned);
+  useEffect(() => {
+    onScannedRef.current = onScanned;
+  }, [onScanned]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -39,21 +51,71 @@ export function BarcodeScanner({ open, onClose, onScanned, lang = "en", title }:
           throw new Error("NO_CAMERA_API");
         }
         // Loaded here, not at page load, so the main bundle stays small.
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
         if (cancelled) return;
 
-        const reader = new BrowserMultiFormatReader();
-        const controls = await reader.decodeFromVideoDevice(
-          undefined, // let the browser pick — the rear camera on a phone
-          videoRef.current!,
-          (result, _err, ctrl) => {
-            if (cancelled || !result) return;
-            const text = result.getText?.() ?? String(result);
-            if (!text) return;
-            ctrl.stop();
-            onScanned(text.trim());
-          },
-        );
+        // Without this the decoder tries every format it knows on every frame,
+        // most of which no shop ever sees. These are what is actually printed
+        // on packaged goods, plus CODE_128 for the labels this app prints
+        // itself. Fewer formats means more attempts per second on the ones
+        // that matter.
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.ITF,
+          BarcodeFormat.QR_CODE,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+
+        const reader = new BrowserMultiFormatReader(hints, {
+          // Default is half a second between attempts. A shopkeeper holding a
+          // packet steady for two seconds gets four tries at that rate.
+          delayBetweenScanAttempts: 100,
+        });
+
+        const handle = (result: any, ctrl: { stop: () => void }) => {
+          if (cancelled || !result) return;
+          const text = result.getText?.() ?? String(result);
+          if (!text) return;
+          ctrl.stop();
+          onScannedRef.current(text.trim());
+        };
+
+        let controls;
+        try {
+          // Ask for the back camera explicitly. Passing no device id picks the
+          // browser's default, which on a phone is usually the front-facing
+          // one — pointing the wrong way at a barcode held up to the back.
+          controls = await reader.decodeFromConstraints(
+            {
+              video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+              audio: false,
+            },
+            videoRef.current!,
+            (result, _err, ctrl) => handle(result, ctrl),
+          );
+        } catch {
+          // A laptop with only a front camera rejects those constraints
+          // outright. Better a front camera than no scanner.
+          controls = await reader.decodeFromVideoDevice(
+            undefined,
+            videoRef.current!,
+            (result, _err, ctrl) => handle(result, ctrl),
+          );
+        }
+
         if (cancelled) {
           controls.stop();
           return;
@@ -87,7 +149,8 @@ export function BarcodeScanner({ open, onClose, onScanned, lang = "en", title }:
       try { stopRef.current?.(); } catch { /* already stopped */ }
       stopRef.current = null;
     };
-  }, [open, onScanned, ne]);
+    // `onScanned` is read through a ref on purpose — see above.
+  }, [open, ne]);
 
   if (!open) return null;
 
@@ -114,6 +177,7 @@ export function BarcodeScanner({ open, onClose, onScanned, lang = "en", title }:
             ref={videoRef}
             className="h-56 w-full object-cover"
             muted
+            autoPlay
             playsInline
           />
         </div>
@@ -124,11 +188,21 @@ export function BarcodeScanner({ open, onClose, onScanned, lang = "en", title }:
           </p>
         ) : null}
         {status === "scanning" ? (
-          <p className="mt-3 text-center text-sm text-slate-600">
-            {ne
-              ? "प्याकेटको बारकोड क्यामेराअगाडि राख्नुहोस्।"
-              : "Hold the barcode on the packet in front of the camera."}
-          </p>
+          <div className="mt-3 space-y-1 text-center">
+            <p className="text-sm text-slate-600">
+              {ne
+                ? "प्याकेटको बारकोड क्यामेराअगाडि राख्नुहोस्।"
+                : "Hold the barcode on the packet in front of the camera."}
+            </p>
+            {/* A laptop webcam has fixed focus and reads a small printed
+                barcode poorly. Saying so beats letting someone conclude the
+                feature is broken. */}
+            <p className="text-xs text-slate-500">
+              {ne
+                ? "उज्यालोमा, करिब १५ सेन्टिमिटर टाढा, स्थिर राख्नुहोस्। ल्यापटपको क्यामेराले नपढे मोबाइलबाट चलाउनुहोस्।"
+                : "Good light, about 15 cm away, held steady. If a laptop webcam will not read it, try the same page on a phone."}
+            </p>
+          </div>
         ) : null}
         {status === "error" ? (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{error}</p>
